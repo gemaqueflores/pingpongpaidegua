@@ -2,12 +2,15 @@ import { buildEventScrapePolicy } from "@cbtm/shared";
 import { Queue, Worker } from "bullmq";
 import { config } from "./config";
 import { log } from "./logger";
+import { RawCaptureRetentionService } from "./pipeline/raw-capture-retention.service";
+import { ReadReplicaSyncService } from "./pipeline/read-replica-sync.service";
 import { ScrapeProcessor } from "./pipeline/scrape.processor";
 import { prisma } from "./prisma";
 
 type ScrapeJobData = {
   eventId?: number;
   reason?: string;
+  dryRun?: boolean;
 };
 
 async function bootstrap(): Promise<void> {
@@ -19,6 +22,8 @@ async function bootstrap(): Promise<void> {
 
   const queue = new Queue("scrape-event", { connection });
   const processor = new ScrapeProcessor();
+  const retention = new RawCaptureRetentionService();
+  const readReplicaSync = new ReadReplicaSyncService();
 
   const refreshLabel = `${Math.max(1, Math.round(config.refreshMs / (60 * 60 * 1000)))}h`;
 
@@ -37,14 +42,46 @@ async function bootstrap(): Promise<void> {
     },
   );
 
+  if (config.rawCaptureCleanupEnabled) {
+    await queue.add(
+      "cleanup-raw-captures",
+      { reason: "scheduled-daily-cleanup", dryRun: false },
+      {
+        jobId: "cleanup-raw-captures-repeat",
+        repeat: {
+          every: config.rawCaptureCleanupEveryMs,
+        },
+        removeOnComplete: {
+          age: 24 * 3600,
+          count: 30,
+        },
+      },
+    );
+  }
+
+  await queue.add(
+    "publish-open-events",
+    { reason: "scheduled-publish-open-events" },
+    {
+      jobId: `publish-open-events-every-${refreshLabel}`,
+      repeat: {
+        every: config.refreshMs,
+      },
+      removeOnComplete: {
+        age: 24 * 3600,
+        count: 120,
+      },
+    },
+  );
+
   const worker = new Worker<ScrapeJobData>(
     "scrape-event",
     async (job) => {
       if (job.name === "scan-open-events") {
         const events = await prisma.event.findMany({
-          where: { concluido: false },
           select: {
             id: true,
+            concluido: true,
             inicioInscricoes: true,
             fimInscricoes: true,
             inicioRealizacao: true,
@@ -55,7 +92,12 @@ async function bootstrap(): Promise<void> {
         });
 
         let eligibleEvents = 0;
+        let concludedBlocked = 0;
         for (const event of events) {
+          if (event.concluido) {
+            concludedBlocked += 1;
+            continue;
+          }
           const policy = buildEventScrapePolicy(event, {
             postEventGraceHours: config.postEventGraceHours,
           });
@@ -77,7 +119,38 @@ async function bootstrap(): Promise<void> {
           );
         }
 
-        log("info", "Scan concluido", { openEvents: events.length, eligibleEvents });
+        log("info", "Scan concluido", {
+          totalEvents: events.length,
+          eligibleEvents,
+          concludedBlocked,
+        });
+        return;
+      }
+
+      if (job.name === "cleanup-raw-captures") {
+        const result = await retention.cleanup({
+          dryRun: job.data?.dryRun === true,
+        });
+        log("info", "Cleanup de raw captures concluido", {
+          dryRun: result.dryRun,
+          ...result.summary,
+        });
+        return;
+      }
+
+      if (job.name === "publish-open-events") {
+        const result = await readReplicaSync.publishOpenEventsIncremental();
+        log("info", "Publicacao periodica de eventos abertos no DB_READONLY concluida", result);
+        return;
+      }
+
+      if (job.name === "publish-readonly-event" && job.data.eventId) {
+        const mode = job.data.reason === "full_event_rebuild" ? "FULL_EVENT_REBUILD" : "INCREMENTAL";
+        await readReplicaSync.publishEvent({
+          eventId: job.data.eventId,
+          mode,
+          sourceScrapeRunId: null,
+        });
         return;
       }
 
@@ -129,6 +202,8 @@ async function bootstrap(): Promise<void> {
   log("info", "Worker iniciado", {
     mode: config.scraperMode,
     refreshMs: config.refreshMs,
+    rawCaptureCleanupEnabled: config.rawCaptureCleanupEnabled,
+    rawCaptureCleanupEveryMs: config.rawCaptureCleanupEveryMs,
   });
 }
 

@@ -5,11 +5,13 @@ import { config } from "../config";
 import { log } from "../logger";
 import { prisma } from "../prisma";
 import { CaptureService } from "../scraper/capture.service";
+import { ReadReplicaSyncService } from "./read-replica-sync.service";
 import { UpsertService } from "./upsert.service";
 
 export class ScrapeProcessor {
   private readonly captureService = new CaptureService();
   private readonly upsertService = new UpsertService();
+  private readonly readReplicaSyncService = new ReadReplicaSyncService();
 
   async processEventJob(eventId: number, reason?: string): Promise<void> {
     log("info", "Iniciando processamento de scrape", {
@@ -38,6 +40,7 @@ export class ScrapeProcessor {
       log("info", "Evento concluido, scrape ignorado", {
         eventId,
         reason: reason ?? null,
+        blockedBy: "completed_event_requires_manual_scrape_now",
       });
       await this.releaseEventLock(eventId);
       return;
@@ -155,6 +158,20 @@ export class ScrapeProcessor {
           errorMessage: null,
         },
       });
+
+      try {
+        await this.readReplicaSyncService.publishEvent({
+          eventId,
+          mode: "INCREMENTAL",
+          sourceScrapeRunId: scrapeRun.id,
+        });
+      } catch (syncError) {
+        log("error", "Falha ao publicar snapshot no DB_READONLY", {
+          eventId,
+          scrapeRunId: scrapeRun.id,
+          error: String(syncError),
+        });
+      }
 
       log("info", "Scrape concluido", {
         eventId,

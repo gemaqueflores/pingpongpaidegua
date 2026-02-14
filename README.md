@@ -122,6 +122,8 @@ Admin:
 - `POST /admin/events/{id}/mark-completed`
 - `POST /admin/events/{id}/scrape-now`
 - `GET /admin/events/{id}/scrape-runs`
+- `POST /admin/events/raw-captures/cleanup`
+- `POST /admin/events/{id}/raw-captures/cleanup`
 - `GET /admin/events/{id}/athlete-conflicts`
 - `POST /admin/events/{id}/athlete-conflicts/{conflictId}/resolve`
 
@@ -198,6 +200,11 @@ Credenciais padrão:
    - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
    - `DATABASE_URL`
    - `REDIS_URL`
+   - `RAW_CAPTURE_RETENTION_DAYS_SUCCESS` (default `14`)
+   - `RAW_CAPTURE_RETENTION_DAYS_ERROR` (default `0`, preserva ERROR/PARTIAL sem limite de dias)
+   - `RAW_CAPTURE_MAX_RUNS_PER_EVENT` (default `20`)
+   - `RAW_CAPTURE_CLEANUP_ENABLED` (default `true` no worker)
+   - `RAW_CAPTURE_CLEANUP_EVERY_MS` (default `86400000`)
    - gerar hash: `node -e "console.log(require('bcryptjs').hashSync('SuaSenhaForte', 12))"`
 4. Suba os servicos:
    - `docker compose up --build -d`

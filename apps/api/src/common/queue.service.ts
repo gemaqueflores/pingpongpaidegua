@@ -48,6 +48,22 @@ export class QueueService implements OnModuleDestroy {
     return this.enqueueUnique("scrape-event", { eventId, reason }, jobId);
   }
 
+  async enqueuePublishReadonly(
+    eventId: number,
+    mode: "incremental" | "full_event_rebuild" = "incremental",
+  ): Promise<{ jobId: string; status: "queued"; deduplicated?: boolean }> {
+    const minuteBucket = Math.floor(Date.now() / 60000);
+    const reason = mode;
+    const jobId = `publish-readonly-${eventId}-${mode}-${minuteBucket}`;
+    return this.enqueueUnique("publish-readonly-event", { eventId, reason }, jobId);
+  }
+
+  async enqueuePublishOpenEvents(): Promise<{ jobId: string; status: "queued"; deduplicated?: boolean }> {
+    const minuteBucket = Math.floor(Date.now() / 60000);
+    const jobId = `publish-open-events-${minuteBucket}`;
+    return this.enqueueUnique("publish-open-events", { eventId: 0, reason: "incremental-open-events" }, jobId);
+  }
+
   private async enqueueUnique(
     name: string,
     data: { eventId: number; reason: string },

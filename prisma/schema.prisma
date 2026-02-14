@@ -37,6 +37,16 @@ enum RegistrationStatus {
   OUTRO
 }
 
+enum SyncMode {
+  INCREMENTAL
+  FULL_EVENT_REBUILD
+}
+
+enum SyncStatus {
+  SUCCESS
+  ERROR
+}
+
 model Event {
   id           Int         @id @default(autoincrement())
   cbtmEventId  Int         @unique @map("cbtm_event_id")
@@ -60,6 +70,8 @@ model Event {
   scrapeRuns    ScrapeRun[]
   rawCaptures   RawCapture[]
   athleteMatchConflicts AthleteMatchConflict[]
+  syncState     EventSyncState?
+  syncRuns      EventSyncRun[]
 
   @@map("events")
 }
@@ -101,6 +113,8 @@ model Athlete {
   @@unique([eventId, nameNormalized, clubId])
   @@index([eventId])
   @@index([clubId])
+  @@index([eventId, clubId])
+  @@index([eventId, nameDisplay])
   @@map("athletes")
 }
 
@@ -168,6 +182,7 @@ model Match {
   @@index([categoryId])
   @@index([cbtmMatchId])
   @@index([matchDatetime])
+  @@index([eventId, categoryId, matchDatetime])
   @@map("matches")
 }
 
@@ -199,6 +214,7 @@ model ScrapeRun {
   rawCaptures RawCapture[]
 
   @@index([eventId])
+  @@index([eventId, startedAt])
   @@map("scrape_runs")
 }
 
@@ -250,6 +266,7 @@ model RawCapture {
   scrapeRun ScrapeRun? @relation(fields: [scrapeRunId], references: [id])
 
   @@index([eventId])
+  @@index([eventId, scrapeRunId, capturedAt])
   @@map("raw_captures")
 }
 
@@ -274,5 +291,37 @@ model AdminCredential {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("admin_credentials")
+}
+
+model EventSyncState {
+  eventId              Int      @id @map("event_id")
+  lastPublishedAt      DateTime? @map("last_published_at")
+  lastSourceScrapeRunId Int?    @map("last_source_scrape_run_id")
+  lastStatus           SyncStatus? @map("last_status")
+  lastErrorMessage     String?  @map("last_error_message")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@map("event_sync_state")
+}
+
+model EventSyncRun {
+  id                  Int        @id @default(autoincrement())
+  eventId             Int        @map("event_id")
+  sourceScrapeRunId   Int?       @map("source_scrape_run_id")
+  mode                SyncMode
+  status              SyncStatus
+  startedAt           DateTime   @default(now()) @map("started_at")
+  finishedAt          DateTime?  @map("finished_at")
+  insertedCounts      Json       @default("{}") @map("inserted_counts")
+  updatedCounts       Json       @default("{}") @map("updated_counts")
+  deletedCounts       Json       @default("{}") @map("deleted_counts")
+  errorMessage        String?    @map("error_message")
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@index([eventId, startedAt])
+  @@map("event_sync_runs")
 }
 

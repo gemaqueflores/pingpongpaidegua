@@ -15,7 +15,15 @@ const scraperFixturePaths = fixturePathsEnv
 
 export const config = {
   nodeEnv: process.env.NODE_ENV ?? "development",
-  databaseUrl: process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/cbtm",
+  databaseWriteUrl:
+    process.env.DATABASE_URL_WRITE ??
+    process.env.DATABASE_URL ??
+    "postgresql://postgres:postgres@localhost:5432/cbtm",
+  databaseReadUrl:
+    process.env.DATABASE_URL_READ ??
+    process.env.DATABASE_URL_WRITE ??
+    process.env.DATABASE_URL ??
+    "postgresql://postgres:postgres@localhost:5432/cbtm",
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
   scraperMode: (process.env.SCRAPER_MODE ?? "live") as "fixture" | "live",
   scraperEventUrl:
@@ -31,4 +39,9 @@ export const config = {
   scrapeLockStaleMs: Number(process.env.SCRAPE_LOCK_STALE_MS ?? "900000"),
   refreshMs: Number(process.env.SCRAPER_REFRESH_CRON_MS ?? "7200000"),
   postEventGraceHours: Number(process.env.SCRAPER_POST_EVENT_GRACE_HOURS ?? "48"),
+  rawCaptureRetentionDaysSuccess: Number(process.env.RAW_CAPTURE_RETENTION_DAYS_SUCCESS ?? "14"),
+  rawCaptureRetentionDaysError: Number(process.env.RAW_CAPTURE_RETENTION_DAYS_ERROR ?? "0"),
+  rawCaptureMaxRunsPerEvent: Number(process.env.RAW_CAPTURE_MAX_RUNS_PER_EVENT ?? "20"),
+  rawCaptureCleanupEnabled: process.env.RAW_CAPTURE_CLEANUP_ENABLED !== "false",
+  rawCaptureCleanupEveryMs: Number(process.env.RAW_CAPTURE_CLEANUP_EVERY_MS ?? "86400000"),
 };

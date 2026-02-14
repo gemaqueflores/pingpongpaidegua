@@ -736,9 +736,32 @@ export class UpsertService {
     }
 
     for (const registration of dataset.registrations) {
+      const athleteNameDisplay = compactWhitespace(registration.athleteName);
+      const athleteNameNormalized =
+        normalizeText(registration.athleteNormalizedName) || normalizeText(athleteNameDisplay);
+      if (!athleteNameDisplay || !athleteNameNormalized) {
+        warnings.push(
+          `Inscricao ignorada por atleta invalido na categoria '${registration.categoryName}'.`,
+        );
+        continue;
+      }
+
+      const clubNameDisplay = compactWhitespace(registration.clubName) || "SEM CLUBE";
+      const clubNameNormalized =
+        normalizeText(registration.clubNormalizedName) || normalizeText(clubNameDisplay) || "sem clube";
+      const categoryNameDisplay = compactWhitespace(registration.categoryName);
+      const categoryNameNormalized =
+        normalizeText(registration.categoryNormalizedName) || normalizeText(categoryNameDisplay);
+      if (!categoryNameDisplay || !categoryNameNormalized) {
+        warnings.push(
+          `Inscricao ignorada por categoria invalida para atleta '${athleteNameDisplay}'.`,
+        );
+        continue;
+      }
+
       const club = await this.ensureClub(
-        registration.clubName,
-        registration.clubNormalizedName,
+        clubNameDisplay,
+        clubNameNormalized,
         clubsByNormalized,
         inserted,
         updated,
@@ -746,8 +769,8 @@ export class UpsertService {
 
       const category = await this.ensureCategory(
         eventId,
-        registration.categoryName,
-        registration.categoryNormalizedName,
+        categoryNameDisplay,
+        categoryNameNormalized,
         registration.categoryId ?? null,
         categoriesByNormalized,
         categoriesByCbtmId,
@@ -759,8 +782,8 @@ export class UpsertService {
         eventId,
         eventLevel,
         club,
-        nameDisplay: registration.athleteName,
-        nameNormalized: registration.athleteNormalizedName,
+        nameDisplay: athleteNameDisplay,
+        nameNormalized: athleteNameNormalized,
         rankingPoints: registration.rankingPoints,
         ratingPoints: registration.ratingPoints,
         inserted,
@@ -772,8 +795,8 @@ export class UpsertService {
 
       await this.ensureAthleteAlias({
         athleteId: athlete.id,
-        aliasDisplay: registration.athleteName,
-        aliasNormalized: registration.athleteNormalizedName,
+        aliasDisplay: athleteNameDisplay,
+        aliasNormalized: athleteNameNormalized,
         source: "INSCRICOES",
         inserted,
         updated,
@@ -782,8 +805,8 @@ export class UpsertService {
       });
 
       const registrationAliases = buildRegistrationAliases({
-        nameDisplay: registration.athleteName,
-        nameNormalized: registration.athleteNormalizedName,
+        nameDisplay: athleteNameDisplay,
+        nameNormalized: athleteNameNormalized,
       });
       for (const alias of registrationAliases) {
         await this.ensureAthleteAlias({

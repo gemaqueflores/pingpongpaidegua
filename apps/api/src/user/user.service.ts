@@ -508,28 +508,52 @@ export class UserService {
       },
     });
 
-    const simulations = [];
-    const omittedCategories: string[] = [];
-    for (const category of categories) {
-      const categoryLinks = await this.prisma.athleteCategory.findMany({
-        where: {
-          categoryId: category.id,
-          athlete: {
-            eventId,
-            createdFromWarning: false,
-          },
-        },
-        include: {
-          athlete: {
-            include: {
-              club: true,
+    const categoryIds = categories.map((category) => category.id);
+    const categoryLinksAll = categoryIds.length
+      ? await this.prisma.athleteCategory.findMany({
+          where: {
+            categoryId: { in: categoryIds },
+            athlete: {
+              eventId,
+              createdFromWarning: false,
             },
           },
-        },
-        orderBy: [{ athlete: { nameDisplay: "asc" } }],
-      });
+          include: {
+            athlete: {
+              include: {
+                club: true,
+              },
+            },
+          },
+          orderBy: [{ categoryId: "asc" }, { athlete: { nameDisplay: "asc" } }],
+        })
+      : [];
 
-      const typedLinks = categoryLinks as SimulationAthleteLink[];
+    const linksByCategory = new Map<number, SimulationAthleteLink[]>();
+    for (const link of categoryLinksAll as SimulationAthleteLink[]) {
+      const bucket = linksByCategory.get(link.categoryId) ?? [];
+      bucket.push(link);
+      linksByCategory.set(link.categoryId, bucket);
+    }
+
+    const simulations = [];
+    const omittedCategories: string[] = [];
+    const athleteCountByCategory = new Map<number, number>();
+
+    for (const category of categories) {
+      const typedLinks = linksByCategory.get(category.id) ?? [];
+      const scoped = selectAthletesByRegistrationScope(typedLinks, registrationScope);
+      athleteCountByCategory.set(category.id, scoped.athletes.length);
+    }
+
+    const historicalPreferences = await this.inferHistoricalGroupPreferences({
+      eventId,
+      categories,
+      athleteCountByCategory,
+    });
+
+    for (const category of categories) {
+      const typedLinks = linksByCategory.get(category.id) ?? [];
       const linkedAthleteIds = [...new Set(typedLinks.map((row) => row.athlete.id))];
       const breakdown: RegistrationBreakdown = computeRegistrationBreakdown(typedLinks);
       const scoped = selectAthletesByRegistrationScope(typedLinks, registrationScope);
@@ -614,12 +638,10 @@ export class UserService {
         continue;
       }
 
-      const historical = await this.inferHistoricalGroupPreference(
-        eventId,
-        category.id,
-        category.normalizedName,
-        athletes.length,
-      );
+      const historical = historicalPreferences.get(category.id) ?? {
+        preferredGroupCount: null,
+        sampleSize: 0,
+      };
       const simulation = simulateGroupsForCategory({
         seed: `event:${eventId}:category:${category.id}:scope:${registrationScope}`,
         athletes: athletes.map((athlete) => ({
@@ -1954,25 +1976,41 @@ export class UserService {
     return normalized;
   }
 
-  private async inferHistoricalGroupPreference(
-    eventId: number,
-    categoryId: number,
-    categoryNormalizedName: string,
-    athleteCount: number,
-  ): Promise<{ preferredGroupCount: number | null; sampleSize: number }> {
+  private async inferHistoricalGroupPreferences(input: {
+    eventId: number;
+    categories: Array<{ id: number; normalizedName: string }>;
+    athleteCountByCategory: Map<number, number>;
+  }): Promise<Map<number, { preferredGroupCount: number | null; sampleSize: number }>> {
+    const result = new Map<number, { preferredGroupCount: number | null; sampleSize: number }>();
+    if (input.categories.length === 0) {
+      return result;
+    }
+
+    const normalizedNames = [...new Set(input.categories.map((category) => category.normalizedName))];
+
     const historicalCategories = await this.prisma.category.findMany({
       where: {
-        eventId: { not: eventId },
-        id: { not: categoryId },
-        normalizedName: categoryNormalizedName,
+        eventId: { not: input.eventId },
+        normalizedName: { in: normalizedNames },
       },
-      select: { id: true },
-      take: 50,
+      select: {
+        id: true,
+        normalizedName: true,
+      },
+      take: 300,
     });
 
     const historicalCategoryIds = historicalCategories.map((item) => item.id);
     if (historicalCategoryIds.length === 0) {
-      return { preferredGroupCount: null, sampleSize: 0 };
+      for (const category of input.categories) {
+        result.set(category.id, { preferredGroupCount: null, sampleSize: 0 });
+      }
+      return result;
+    }
+
+    const historicalNameByCategoryId = new Map<number, string>();
+    for (const item of historicalCategories) {
+      historicalNameByCategoryId.set(item.id, item.normalizedName);
     }
 
     const [athleteCounts, groupMatches] = await Promise.all([
@@ -1993,9 +2031,9 @@ export class UserService {
       }),
     ]);
 
-    const athleteCountByCategory = new Map<number, number>();
+    const athleteCountByHistoricalCategory = new Map<number, number>();
     for (const row of athleteCounts) {
-      athleteCountByCategory.set(row.categoryId, row._count.athleteId);
+      athleteCountByHistoricalCategory.set(row.categoryId, row._count.athleteId);
     }
 
     const groupsByCategory = new Map<number, Set<string>>();
@@ -2009,36 +2047,52 @@ export class UserService {
       groupsByCategory.set(match.categoryId, bucket);
     }
 
-    const samples: Array<{ athleteCount: number; groupCount: number }> = [];
+    const samplesByNormalizedName = new Map<string, Array<{ athleteCount: number; groupCount: number }>>();
     for (const [historicalCategoryId, groups] of groupsByCategory.entries()) {
-      const count = athleteCountByCategory.get(historicalCategoryId) ?? 0;
-      const groupCount = groups.size;
-      if (count <= 0 || groupCount <= 0) {
+      const normalizedName = historicalNameByCategoryId.get(historicalCategoryId);
+      if (!normalizedName) {
         continue;
       }
-      samples.push({
-        athleteCount: count,
-        groupCount,
+      const athleteCount = athleteCountByHistoricalCategory.get(historicalCategoryId) ?? 0;
+      const groupCount = groups.size;
+      if (athleteCount <= 0 || groupCount <= 0) {
+        continue;
+      }
+      const samples = samplesByNormalizedName.get(normalizedName) ?? [];
+      samples.push({ athleteCount, groupCount });
+      samplesByNormalizedName.set(normalizedName, samples);
+    }
+
+    for (const category of input.categories) {
+      const targetAthleteCount = input.athleteCountByCategory.get(category.id) ?? 0;
+      const samples = samplesByNormalizedName.get(category.normalizedName) ?? [];
+      if (samples.length === 0 || targetAthleteCount <= 0) {
+        result.set(category.id, { preferredGroupCount: null, sampleSize: samples.length });
+        continue;
+      }
+
+      samples.sort((a, b) => {
+        const diffA = Math.abs(a.athleteCount - targetAthleteCount);
+        const diffB = Math.abs(b.athleteCount - targetAthleteCount);
+        if (diffA !== diffB) {
+          return diffA - diffB;
+        }
+        return Math.abs(a.groupCount - b.groupCount);
+      });
+
+      result.set(category.id, {
+        preferredGroupCount: samples[0].groupCount,
+        sampleSize: samples.length,
       });
     }
 
-    if (samples.length === 0) {
-      return { preferredGroupCount: null, sampleSize: 0 };
+    for (const category of input.categories) {
+      if (!result.has(category.id)) {
+        result.set(category.id, { preferredGroupCount: null, sampleSize: 0 });
+      }
     }
 
-    samples.sort((a, b) => {
-      const diffA = Math.abs(a.athleteCount - athleteCount);
-      const diffB = Math.abs(b.athleteCount - athleteCount);
-      if (diffA !== diffB) {
-        return diffA - diffB;
-      }
-      return Math.abs(a.groupCount - b.groupCount);
-    });
-
-    return {
-      preferredGroupCount: samples[0].groupCount,
-      sampleSize: samples.length,
-    };
+    return result;
   }
 
   private async eventHasOfficialGroups(eventId: number): Promise<boolean> {

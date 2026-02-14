@@ -16,6 +16,7 @@ import { Roles } from "../common/roles.decorator";
 import { CreateAdminEventDto } from "./dto/create-admin-event.dto";
 import { UpdateAdminEventDto } from "./dto/update-admin-event.dto";
 import { ResolveAthleteConflictDto } from "./dto/resolve-athlete-conflict.dto";
+import { RawCaptureCleanupDto } from "./dto/raw-capture-cleanup.dto";
 
 @Controller("admin/events")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -56,6 +57,25 @@ export class AdminEventsController {
   @Get(":id/scrape-runs")
   async listScrapeRuns(@Param("id", ParseIntPipe) id: number) {
     return this.service.listScrapeRuns(id);
+  }
+
+  @Post("raw-captures/cleanup")
+  async cleanupRawCapturesGlobal(@Body() body: RawCaptureCleanupDto) {
+    return this.service.cleanupRawCaptures({
+      eventId: body.eventId,
+      dryRun: body.dryRun ?? false,
+    });
+  }
+
+  @Post(":id/raw-captures/cleanup")
+  async cleanupRawCapturesByEvent(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() body: RawCaptureCleanupDto,
+  ) {
+    return this.service.cleanupRawCaptures({
+      eventId: id,
+      dryRun: body.dryRun ?? false,
+    });
   }
 
   @Get(":id/athlete-conflicts")

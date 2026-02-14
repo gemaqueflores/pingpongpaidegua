@@ -4,6 +4,7 @@ import { QueueService } from "../common/queue.service";
 import { computeEventSituation, getEventSituationTransition, normalizeText } from "@cbtm/shared";
 import { CreateAdminEventDto } from "./dto/create-admin-event.dto";
 import { UpdateAdminEventDto } from "./dto/update-admin-event.dto";
+import { RawCaptureRetentionService } from "./raw-capture-retention.service";
 
 type DateBoundary = "start" | "end";
 const EVENT_TZ_OFFSET_MINUTES = -3 * 60;
@@ -13,6 +14,7 @@ export class AdminEventsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queue: QueueService,
+    private readonly rawCaptureRetention: RawCaptureRetentionService,
   ) {}
 
   async listEvents() {
@@ -281,6 +283,13 @@ export class AdminEventsService {
       orderBy: [{ startedAt: "desc" }],
       take: 100,
     });
+  }
+
+  async cleanupRawCaptures(input: { eventId?: number; dryRun?: boolean }) {
+    if (input.eventId) {
+      await this.ensureEvent(input.eventId);
+    }
+    return this.rawCaptureRetention.cleanup(input);
   }
 
   async listAthleteConflicts(eventId: number) {

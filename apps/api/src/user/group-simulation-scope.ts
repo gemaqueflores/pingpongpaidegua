@@ -19,6 +19,7 @@ export type SimulationAthleteInfo = {
 };
 
 export type SimulationAthleteLink = {
+  categoryId: number;
   registrationStatus: RegistrationStatus | null;
   athlete: SimulationAthleteInfo;
 };
