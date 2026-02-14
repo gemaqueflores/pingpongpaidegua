@@ -1,0 +1,21 @@
+{
+  "name": "@cbtm/parser",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cbtm/shared": "1.0.0",
+    "cheerio": "^1.0.0",
+    "he": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/he": "^1.2.3",
+    "vitest": "^3.0.5"
+  }
+}
+

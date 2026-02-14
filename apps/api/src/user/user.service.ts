@@ -1,0 +1,2091 @@
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  EventSituation,
+  MatchPerformanceInput,
+  SummaryOrderBy,
+  calculateAthletePointPerformance,
+  computeEventSituation,
+  getAthleteMatchOutcome,
+  getMatchPhaseOrder,
+  getRoundSemanticOrder,
+  normalizeAthleteName,
+  normalizeRegistrationScope,
+  type RegistrationScope,
+} from "@cbtm/shared";
+import { Prisma } from "@prisma/client";
+import { PrismaService } from "../common/prisma.service";
+import {
+  computeCategoryClassificationSummaries,
+  computeCategoryPerformanceSummaries,
+  type CategoryAnalyticsMatch,
+} from "./athlete-analytics";
+import { buildCareerMedalTable } from "./career-medals";
+import {
+  canUseGroupSimulation,
+  hasGroupStructureFromMatch,
+  resolveUserEventStatus,
+} from "./event-group-eligibility";
+import { simulateGroupsForCategory } from "./group-simulator";
+import {
+  computeRegistrationBreakdown,
+  hasMinimumSimulationAthletes,
+  selectAthletesByRegistrationScope,
+  type RegistrationBreakdown,
+  type SimulationAthleteLink,
+} from "./group-simulation-scope";
+
+const IGNORED_CATEGORY_IDS = ["88888888", "99999999"];
+const SUPPORT_EMAIL = "gemaqueflores@gmail.com";
+
+type AthleteSummaryPlayer = {
+  id: number | null;
+  name: string;
+  club: { id: number; name: string } | null;
+};
+
+type AthleteSummaryMatch = {
+  id: number;
+  event: {
+    id: number;
+    cbtmEventId: number;
+    nome: string;
+    nivel: "ESTADUAL" | "COPA" | "NACIONAL" | null;
+    dataInicio: Date | null;
+    dataFim: Date | null;
+    concluido: boolean;
+  };
+  phase: string;
+  round: string | null;
+  tableNumber: string | null;
+  matchDatetime: Date | null;
+  scoreRaw: string;
+  scoreFinal: { setsA: number; setsB: number } | null;
+  scoreSets: Array<{ set: number; a: number; b: number }>;
+  sets: Array<{ p1: number; p2: number }>;
+  setsResult: { p1Sets: number; p2Sets: number } | null;
+  winnerIndex: 0 | 1 | null;
+  athleteIndex: 0 | 1 | null;
+  outcome: "W" | "L" | null;
+  sourceUrl: string | null;
+  players: [AthleteSummaryPlayer | null, AthleteSummaryPlayer | null];
+  category: {
+    id: number;
+    name: string;
+    cbtmCategoryId: string | null;
+  };
+  matchKey: string;
+  gameId: string | null;
+  athlete: {
+    id: number;
+    name: string;
+  } | null;
+  athleteKey: string | null;
+  opponent: {
+    id: number;
+    name: string;
+    club: { id: number; name: string } | null;
+  } | null;
+};
+
+type MatchWithRelations = Prisma.MatchGetPayload<{
+  include: {
+    event: true;
+    category: true;
+    participants: {
+      include: {
+        athlete: {
+          include: {
+            club: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+
+type MatchMinimalWithRelations = Prisma.MatchGetPayload<{
+  include: {
+    category: true;
+    participants: {
+      include: {
+        athlete: {
+          include: {
+            club: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+
+type AthleteDirectoryRow = {
+  athleteKey: string;
+  nameDisplay: string;
+  nameReduced: string;
+  firstLetter: string;
+  totalEvents: number;
+  totalAthleteRecords: number;
+};
+
+function toReducedName(name: string): string {
+  const tokens = name
+    .trim()
+    .split(/\s+/g)
+    .filter(Boolean);
+  if (tokens.length === 0) {
+    return "";
+  }
+  if (tokens.length === 1) {
+    return tokens[0];
+  }
+  return `${tokens[0]} ${tokens[tokens.length - 1]}`;
+}
+
+function toFirstLetter(name: string): string {
+  const normalized = normalizeAthleteName(name);
+  const first = normalized.charAt(0).toUpperCase();
+  if (!first) {
+    return "#";
+  }
+  return /^[A-Z]$/.test(first) ? first : "#";
+}
+
+function parseSetsResultFromScoreRaw(scoreRaw: string | null | undefined): { p1Sets: number; p2Sets: number } | null {
+  const normalized = String(scoreRaw ?? "").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const match = normalized.match(/^(\d+)\s*[-xX]\s*(\d+)$/);
+  if (!match) {
+    return null;
+  }
+
+  const p1Sets = Number(match[1]);
+  const p2Sets = Number(match[2]);
+  if (!Number.isFinite(p1Sets) || !Number.isFinite(p2Sets)) {
+    return null;
+  }
+
+  return {
+    p1Sets,
+    p2Sets,
+  };
+}
+
+function sanitizeUserWarnings(warnings: string[]): string[] {
+  const blockedPatterns = [
+    /inconsist/i,
+    /colis/i,
+    /conflit/i,
+    /duplicad/i,
+    /diagnost/i,
+    /normalizou/i,
+    /vinculo/i,
+    /omitid/i,
+    /permut/i,
+  ];
+
+  return warnings.filter((warning) => {
+    const text = String(warning ?? "").trim();
+    if (!text) {
+      return false;
+    }
+    return !blockedPatterns.some((pattern) => pattern.test(text));
+  });
+}
+
+@Injectable()
+export class UserService {
+  private readonly prisma: PrismaService;
+
+  constructor(@Inject(PrismaService) prisma: PrismaService) {
+    this.prisma = prisma;
+  }
+
+  async reportProblem(titleRaw: string, descriptionRaw: string): Promise<{ success: true }> {
+    const title = String(titleRaw ?? "").trim();
+    const description = String(descriptionRaw ?? "").trim();
+    if (!title || !description) {
+      throw new BadRequestException("Titulo e descricao sao obrigatorios.");
+    }
+
+    await this.sendSupportEmail(title, description);
+    return { success: true };
+  }
+
+  private async sendSupportEmail(title: string, description: string): Promise<void> {
+    const smtpHost = process.env.SMTP_HOST?.trim();
+    const smtpPort = Number(process.env.SMTP_PORT ?? "587");
+    const smtpUser = process.env.SMTP_USER?.trim();
+    const smtpPass = process.env.SMTP_PASS?.trim();
+    const smtpFrom = process.env.SMTP_FROM?.trim();
+
+    if (!smtpHost || !smtpUser || !smtpPass || !smtpFrom || !Number.isFinite(smtpPort)) {
+      throw new BadRequestException(
+        "SMTP nao configurado: defina SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS e SMTP_FROM.",
+      );
+    }
+
+    const moduleName = "nodemailer";
+    const nodemailerModule = (await import(moduleName as string)) as {
+      createTransport: (config: Record<string, unknown>) => {
+        sendMail: (mail: Record<string, unknown>) => Promise<unknown>;
+      };
+    };
+
+    const transporter = nodemailerModule.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    });
+
+    const safeTitle = title.replace(/\r?\n/g, " ").trim();
+    const safeDescription = description.replace(/\r\n/g, "\n");
+    await transporter.sendMail({
+      from: smtpFrom,
+      to: SUPPORT_EMAIL,
+      subject: `Bug Site: ${safeTitle}`,
+      text: safeDescription,
+      html: `<p>${safeDescription.replace(/\n/g, "<br/>")}</p>`,
+    });
+  }
+
+  async listEvents() {
+    const events = await this.prisma.event.findMany({
+      orderBy: [{ dataInicio: "desc" }, { nome: "asc" }],
+      select: {
+        id: true,
+        cbtmEventId: true,
+        nome: true,
+        inicioInscricoes: true,
+        fimInscricoes: true,
+        inicioRealizacao: true,
+        fimRealizacao: true,
+        dataInicio: true,
+        dataFim: true,
+        concluido: true,
+        lastScrapeAt: true,
+      },
+    });
+
+    if (events.length === 0) {
+      return [];
+    }
+
+    const eventIds = events.map((event) => event.id);
+
+    const [categoriesCountByEvent, inscritosCountByEvent, tecnicosByEvent, groupMatchesByEvent] = await Promise.all([
+      this.prisma.category.groupBy({
+        by: ["eventId"],
+        where: {
+          eventId: { in: eventIds },
+          OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
+        },
+        _count: {
+          _all: true,
+        },
+      }),
+      this.prisma.athlete.groupBy({
+        by: ["eventId"],
+        where: {
+          eventId: { in: eventIds },
+          createdFromWarning: false,
+        },
+        _count: {
+          _all: true,
+        },
+      }),
+      this.prisma.athlete.findMany({
+        where: {
+          eventId: { in: eventIds },
+          createdFromWarning: false,
+          categories: {
+            some: {
+              category: {
+                cbtmCategoryId: "99999999",
+              },
+            },
+          },
+        },
+        select: {
+          eventId: true,
+          id: true,
+        },
+      }),
+      this.prisma.match.groupBy({
+        by: ["eventId"],
+        where: {
+          eventId: { in: eventIds },
+          OR: [{ phase: "GRUPOS" }, { round: { contains: "grupo", mode: "insensitive" } }],
+        },
+        _count: {
+          _all: true,
+        },
+      }),
+    ]);
+
+    const categoriasMap = new Map<number, number>();
+    for (const row of categoriesCountByEvent) {
+      categoriasMap.set(row.eventId, row._count._all);
+    }
+
+    const inscritosMap = new Map<number, number>();
+    for (const row of inscritosCountByEvent) {
+      inscritosMap.set(row.eventId, row._count._all);
+    }
+
+    const tecnicosMap = new Map<number, number>();
+    for (const athlete of tecnicosByEvent) {
+      tecnicosMap.set(athlete.eventId, (tecnicosMap.get(athlete.eventId) ?? 0) + 1);
+    }
+
+    const groupsDefinedByEventMap = new Map<number, boolean>();
+    for (const row of groupMatchesByEvent) {
+      groupsDefinedByEventMap.set(row.eventId, row._count._all > 0);
+    }
+
+    return events.map((event) => ({
+      ...event,
+      situacaoComputada: computeEventSituation({
+        inicioInscricoes: event.inicioInscricoes,
+        fimInscricoes: event.fimInscricoes,
+        inicioRealizacao: event.inicioRealizacao,
+        fimRealizacao: event.fimRealizacao,
+        dataInicio: event.dataInicio,
+        dataFim: event.dataFim,
+      }),
+      totalCategorias: categoriasMap.get(event.id) ?? 0,
+      totalInscritos: inscritosMap.get(event.id) ?? 0,
+      totalTecnicos: tecnicosMap.get(event.id) ?? 0,
+      groupsDefined: groupsDefinedByEventMap.get(event.id) ?? false,
+    })).map((event) => {
+      const userStatus = resolveUserEventStatus({
+        concluido: event.concluido,
+        eventSituation: event.situacaoComputada,
+      });
+      const groupSimulationEligible = canUseGroupSimulation({
+        concluido: event.concluido,
+        groupsDefined: event.groupsDefined,
+        eventSituation: event.situacaoComputada,
+      });
+
+      return {
+        ...event,
+        userStatus,
+        groupSimulationEligible,
+      };
+    });
+  }
+
+  async listAthletes(eventId: number, search: string) {
+    await this.ensureEvent(eventId);
+
+    return this.prisma.athlete.findMany({
+      where: {
+        eventId,
+        createdFromWarning: false,
+        nameDisplay: {
+          contains: search || undefined,
+          mode: "insensitive",
+        },
+      },
+      include: {
+        club: true,
+      },
+      orderBy: [{ nameDisplay: "asc" }],
+    });
+  }
+
+  async listClubs(eventId: number, search: string, categoryId: number | null) {
+    await this.ensureEvent(eventId);
+    if (categoryId) {
+      await this.ensureCategoryOfEvent(eventId, categoryId);
+    }
+
+    return this.prisma.club.findMany({
+      where: {
+        name: {
+          contains: search || undefined,
+          mode: "insensitive",
+        },
+        athletes: {
+          some: {
+            eventId,
+            createdFromWarning: false,
+            categories: categoryId
+              ? {
+                  some: {
+                    categoryId,
+                  },
+                }
+              : undefined,
+          },
+        },
+      },
+      orderBy: [{ name: "asc" }],
+    });
+  }
+
+  async listCategories(eventId: number) {
+    await this.ensureEvent(eventId);
+
+    return this.prisma.category.findMany({
+      where: {
+        eventId,
+        OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        normalizedName: true,
+        cbtmCategoryId: true,
+      },
+    });
+  }
+
+  async simulateGroups(
+    eventId: number,
+    categoryId: number | null,
+    registrationScopeRaw?: string | null,
+    debugMode = false,
+  ) {
+    const event = await this.ensureEvent(eventId);
+    const registrationScope: RegistrationScope = normalizeRegistrationScope(registrationScopeRaw ?? undefined);
+    const eventSituation: EventSituation = computeEventSituation({
+      inicioInscricoes: event.inicioInscricoes,
+      fimInscricoes: event.fimInscricoes,
+      inicioRealizacao: event.inicioRealizacao,
+      fimRealizacao: event.fimRealizacao,
+      dataInicio: event.dataInicio,
+      dataFim: event.dataFim,
+    });
+    const groupsDefined = await this.eventHasOfficialGroups(eventId);
+    const simulationEligible = canUseGroupSimulation({
+      concluido: event.concluido,
+      groupsDefined,
+      eventSituation,
+    });
+    if (!simulationEligible) {
+      if (groupsDefined) {
+        throw new BadRequestException(
+          "Simulador indisponível: o evento já possui estrutura oficial de grupos.",
+        );
+      }
+      throw new BadRequestException(
+        `Simulador indisponível para situação '${eventSituation}'.`,
+      );
+    }
+
+    const categories = await this.prisma.category.findMany({
+      where: {
+        eventId,
+        id: categoryId ?? undefined,
+        OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
+        ...(categoryId === null
+          ? {
+              athletes: {
+                some: {
+                  athlete: {
+                    eventId,
+                    createdFromWarning: false,
+                  },
+                },
+              },
+            }
+          : {}),
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        normalizedName: true,
+      },
+    });
+
+    const simulations = [];
+    const omittedCategories: string[] = [];
+    for (const category of categories) {
+      const categoryLinks = await this.prisma.athleteCategory.findMany({
+        where: {
+          categoryId: category.id,
+          athlete: {
+            eventId,
+            createdFromWarning: false,
+          },
+        },
+        include: {
+          athlete: {
+            include: {
+              club: true,
+            },
+          },
+        },
+        orderBy: [{ athlete: { nameDisplay: "asc" } }],
+      });
+
+      const typedLinks = categoryLinks as SimulationAthleteLink[];
+      const linkedAthleteIds = [...new Set(typedLinks.map((row) => row.athlete.id))];
+      const breakdown: RegistrationBreakdown = computeRegistrationBreakdown(typedLinks);
+      const scoped = selectAthletesByRegistrationScope(typedLinks, registrationScope);
+      const scopedWarnings = [...scoped.warnings];
+      const scopedByAthlete = new Map<number, (typeof scoped.athletes)[number]>();
+      for (const athlete of scoped.athletes) {
+        if (!scopedByAthlete.has(athlete.id)) {
+          scopedByAthlete.set(athlete.id, athlete);
+        }
+      }
+      if (typedLinks.length !== linkedAthleteIds.length) {
+        scopedWarnings.push(
+          `Detectados ${typedLinks.length - linkedAthleteIds.length} vinculo(s) duplicado(s) na base da categoria; simulacao normalizou por athleteId.`,
+        );
+      }
+      if (scoped.athletes.length !== scopedByAthlete.size) {
+        scopedWarnings.push(
+          `Detectados ${scoped.athletes.length - scopedByAthlete.size} atleta(s) duplicado(s) no escopo; simulacao normalizou por athleteId.`,
+        );
+      }
+      const athletes = [...scopedByAthlete.values()];
+      const baseWarning =
+        breakdown.total === 0
+          ? "Categoria listada sem vinculos de atleta-categoria no banco."
+          : `Categoria sem atletas no escopo '${registrationScope}' (vinculos=${linkedAthleteIds.length}, considerados=${athletes.length}).`;
+
+      if (athletes.length === 0) {
+        const reason =
+          breakdown.total === 0
+            ? "categoria_sem_vinculo_athlete_category"
+            : registrationScope === "confirmed"
+            ? "categoria_sem_inscritos_confirmados"
+            : "categoria_sem_atletas_no_escopo";
+        if (categoryId !== null) {
+          simulations.push({
+            categoryId: category.id,
+            categoryName: category.name,
+            status: "skipped",
+            reason,
+            groups: [],
+            stats: null,
+            registration: {
+              scope: registrationScope,
+              ...breakdown,
+              linkedAthletesCount: linkedAthleteIds.length,
+              scopedAthletesCount: 0,
+              considered: 0,
+              consideredAthleteIds: debugMode ? [] : undefined,
+            },
+            warnings: sanitizeUserWarnings([baseWarning, ...scopedWarnings]),
+          });
+        } else {
+          omittedCategories.push(`${category.name} (${reason})`);
+        }
+        continue;
+      }
+
+      if (!hasMinimumSimulationAthletes(athletes.length)) {
+        const reason = "categoria_com_menos_de_tres_atletas";
+        const warning = `Categoria com ${athletes.length} atleta(s) no escopo. Mínimo para simulação: 3.`;
+        if (categoryId !== null) {
+          simulations.push({
+            categoryId: category.id,
+            categoryName: category.name,
+            status: "skipped",
+            reason,
+            groups: [],
+            stats: null,
+            registration: {
+              scope: registrationScope,
+              ...breakdown,
+              linkedAthletesCount: linkedAthleteIds.length,
+              scopedAthletesCount: athletes.length,
+              considered: athletes.length,
+              consideredAthleteIds: debugMode ? athletes.map((athlete) => athlete.id) : undefined,
+            },
+            warnings: sanitizeUserWarnings([warning, ...scopedWarnings]),
+          });
+        } else {
+          omittedCategories.push(`${category.name} (${reason})`);
+        }
+        continue;
+      }
+
+      const historical = await this.inferHistoricalGroupPreference(
+        eventId,
+        category.id,
+        category.normalizedName,
+        athletes.length,
+      );
+      const simulation = simulateGroupsForCategory({
+        seed: `event:${eventId}:category:${category.id}:scope:${registrationScope}`,
+        athletes: athletes.map((athlete) => ({
+          athleteId: athlete.id,
+          nameDisplay: athlete.nameDisplay,
+          clubId: athlete.clubId,
+          clubName: athlete.club?.name ?? null,
+          rankingPoints: athlete.rankingPoints,
+          ratingPoints: athlete.ratingPoints,
+        })),
+        preferredGroupCount: historical.preferredGroupCount,
+      });
+
+      simulations.push({
+        categoryId: category.id,
+        categoryName: category.name,
+        status: "simulated",
+        reason: null,
+        groups: simulation.groups.map((group) => ({
+          groupName: group.groupName,
+          athletes: group.athletes.map((athlete) => ({
+            athleteId: athlete.athleteId,
+            nameDisplay: athlete.nameDisplay,
+            nameReduced: toReducedName(athlete.nameDisplay),
+            clubName: athlete.clubName,
+            rankingPoints: athlete.rankingPoints,
+            ratingPoints: athlete.ratingPoints,
+          })),
+        })),
+        stats: {
+          ...simulation.stats,
+          historicalSampleSize: historical.sampleSize,
+        },
+        registration: {
+          scope: registrationScope,
+          ...breakdown,
+          linkedAthletesCount: linkedAthleteIds.length,
+          scopedAthletesCount: athletes.length,
+          considered: athletes.length,
+          consideredAthleteIds: debugMode ? athletes.map((athlete) => athlete.id) : undefined,
+        },
+        warnings: sanitizeUserWarnings([...simulation.warnings, ...scopedWarnings]),
+      });
+    }
+
+    const warnings = omittedCategories.length
+      ? [`Categorias omitidas por falta de atletas no escopo: ${omittedCategories.join(", ")}.`]
+      : [];
+
+    return {
+      eventId,
+      eventSituation,
+      groupsDefined,
+      registrationScope,
+      warnings: sanitizeUserWarnings(warnings),
+      categories: simulations,
+    };
+  }
+
+  async listClubAthletes(eventId: number, clubId: number, categoryId: number | null) {
+    await this.ensureEvent(eventId);
+    if (categoryId) {
+      await this.ensureCategoryOfEvent(eventId, categoryId);
+    }
+
+    const club = await this.prisma.club.findFirst({
+      where: {
+        id: clubId,
+        athletes: {
+          some: {
+            eventId,
+            categories: categoryId
+              ? {
+                  some: {
+                    categoryId,
+                  },
+                }
+              : undefined,
+          },
+        },
+      },
+    });
+
+    if (!club) {
+      throw new NotFoundException("Clube nao encontrado para o evento");
+    }
+
+    const athletes = await this.prisma.athlete.findMany({
+      where: {
+        eventId,
+        clubId,
+        createdFromWarning: false,
+        categories: categoryId
+          ? {
+              some: {
+                categoryId,
+              },
+            }
+          : undefined,
+      },
+      orderBy: [{ nameDisplay: "asc" }],
+    });
+
+    return {
+      club,
+      athletes,
+    };
+  }
+
+  async getAthleteSummary(eventId: number, athleteId: number, orderBy: SummaryOrderBy) {
+    await this.ensureEvent(eventId);
+
+    const athlete = await this.prisma.athlete.findFirst({
+      where: {
+        id: athleteId,
+        eventId,
+      },
+      include: {
+        club: true,
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+      },
+    });
+
+    if (!athlete) {
+      throw new NotFoundException("Atleta nao encontrado");
+    }
+
+    const matches = await this.prisma.match.findMany({
+      where: {
+        eventId,
+        participants: {
+          some: { athleteId },
+        },
+      },
+      include: {
+        event: true,
+        category: true,
+        participants: {
+          include: {
+            athlete: {
+              include: {
+                club: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const matchSummaries = matches
+      .map((match) => this.buildAthleteSummaryMatch(match, athleteId))
+      .filter((match): match is AthleteSummaryMatch => Boolean(match));
+
+    const normalizedOrderBy: SummaryOrderBy =
+      orderBy === "category_phase_datetime" ? "category_phase_datetime" : "phase_hierarchy_datetime";
+
+    const deduplicated = this.deduplicateMatches(matchSummaries);
+    this.sortMatches(deduplicated.matches, normalizedOrderBy);
+
+    const performance = calculateAthletePointPerformance(
+      deduplicated.matches.map((match) => this.toMatchPerformanceInput(match)),
+      {
+        athleteId,
+        athleteName: athlete.nameDisplay,
+        athleteNameNormalized: athlete.nameNormalized,
+      },
+    );
+    const categoryMatches = deduplicated.matches.map((match) => this.toCategoryAnalyticsMatch(match));
+    const performanceByCategoryRaw = computeCategoryPerformanceSummaries(categoryMatches, {
+      athleteId,
+      athleteName: athlete.nameDisplay,
+      athleteNameNormalized: athlete.nameNormalized,
+    });
+    const categoryIdsForClassification = [...new Set(performanceByCategoryRaw.map((item) => item.categoryId))];
+    const fullCategoryMatchesRaw =
+      categoryIdsForClassification.length > 0
+        ? await this.prisma.match.findMany({
+            where: {
+              eventId,
+              categoryId: {
+                in: categoryIdsForClassification,
+              },
+            },
+            include: {
+              category: true,
+              participants: {
+                include: {
+                  athlete: {
+                    include: {
+                      club: true,
+                    },
+                  },
+                },
+              },
+            },
+          })
+        : [];
+    const fullCategoryMatches = fullCategoryMatchesRaw
+      .map((match) => this.buildCategoryAnalyticsMatchFromRaw(match))
+      .filter((item): item is CategoryAnalyticsMatch => Boolean(item));
+
+    const classificationByCategory = computeCategoryClassificationSummaries(fullCategoryMatches, {
+      athleteId,
+      athleteName: athlete.nameDisplay,
+      athleteNameNormalized: athlete.nameNormalized,
+    });
+    const classificationMap = new Map<number, (typeof classificationByCategory)[number]>(
+      classificationByCategory.map((item) => [item.categoryId, item]),
+    );
+    const performanceByCategory = performanceByCategoryRaw.map((item) => ({
+      ...item,
+      classification: classificationMap.get(item.categoryId) ?? null,
+    }));
+
+    return {
+      athlete: {
+        id: athlete.id,
+        name: athlete.nameDisplay,
+        shortName: toReducedName(athlete.nameDisplay),
+        athleteKey: normalizeAthleteName(athlete.nameDisplay),
+        rankingPoints: athlete.rankingPoints,
+        ratingPoints: athlete.ratingPoints,
+        stateCode: athlete.stateCode,
+        stateName: athlete.stateName,
+        region: athlete.region,
+      },
+      club: {
+        id: athlete.club.id,
+        name: athlete.club.name,
+      },
+      categories: athlete.categories
+        .map((item) => item.category)
+        .filter((category) => !category.cbtmCategoryId || !IGNORED_CATEGORY_IDS.includes(category.cbtmCategoryId))
+        .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }))
+        .map((category) => ({
+          id: category.id,
+          name: category.name,
+          cbtmCategoryId: category.cbtmCategoryId,
+        })),
+      matches: deduplicated.matches,
+      performance,
+      performanceByCategory,
+      orderByApplied: normalizedOrderBy,
+      deduplicatedMatchesRemoved: deduplicated.removed,
+      noDatetimeFallback: "Jogos sem horario ficam no final da fase/rodada e sao desempatados por mesa e match_key.",
+    };
+  }
+
+  async listAthleteDirectory(search: string): Promise<AthleteDirectoryRow[]> {
+    const trimmedSearch = search.trim();
+    const normalizedSearch = normalizeAthleteName(trimmedSearch);
+
+    const athletes = await this.prisma.athlete.findMany({
+      where: {
+        createdFromWarning: false,
+        nameDisplay: {
+          contains: trimmedSearch || undefined,
+          mode: "insensitive",
+        },
+      },
+      select: {
+        id: true,
+        eventId: true,
+        nameDisplay: true,
+      },
+      orderBy: [{ nameDisplay: "asc" }],
+    });
+
+    const grouped = new Map<
+      string,
+      {
+        athleteKey: string;
+        nameDisplay: string;
+        eventIds: Set<number>;
+        totalAthleteRecords: number;
+      }
+    >();
+
+    for (const athlete of athletes) {
+      const athleteKey = normalizeAthleteName(athlete.nameDisplay);
+      if (!athleteKey) {
+        continue;
+      }
+      if (normalizedSearch && !athleteKey.includes(normalizedSearch)) {
+        continue;
+      }
+
+      const current = grouped.get(athleteKey);
+      if (!current) {
+        grouped.set(athleteKey, {
+          athleteKey,
+          nameDisplay: athlete.nameDisplay,
+          eventIds: new Set([athlete.eventId]),
+          totalAthleteRecords: 1,
+        });
+        continue;
+      }
+
+      current.totalAthleteRecords += 1;
+      current.eventIds.add(athlete.eventId);
+      if (athlete.nameDisplay.length > current.nameDisplay.length) {
+        current.nameDisplay = athlete.nameDisplay;
+      }
+    }
+
+    return [...grouped.values()]
+      .map((entry) => ({
+        athleteKey: entry.athleteKey,
+        nameDisplay: entry.nameDisplay,
+        nameReduced: toReducedName(entry.nameDisplay),
+        firstLetter: toFirstLetter(entry.nameDisplay),
+        totalEvents: entry.eventIds.size,
+        totalAthleteRecords: entry.totalAthleteRecords,
+      }))
+      .sort((a, b) => a.nameDisplay.localeCompare(b.nameDisplay, "pt-BR", { sensitivity: "base" }));
+  }
+
+  async getAthleteCareer(athleteKey: string) {
+    const normalizedKey = normalizeAthleteName(athleteKey);
+    if (!normalizedKey) {
+      throw new NotFoundException("Atleta nao encontrado");
+    }
+
+    const athletesByKey = await this.prisma.athlete.findMany({
+      where: {
+        createdFromWarning: false,
+        OR: [
+          { nameNormalized: normalizedKey },
+          {
+            aliases: {
+              some: {
+                aliasNormalized: normalizedKey,
+              },
+            },
+          },
+        ],
+      },
+      include: {
+        aliases: true,
+      },
+      orderBy: [{ nameDisplay: "asc" }],
+    });
+
+    const fallbackAthletes =
+      athletesByKey.length > 0
+        ? athletesByKey
+        : await this.prisma.athlete.findMany({
+            where: {
+              createdFromWarning: false,
+              nameDisplay: {
+                contains: normalizedKey.split(" ")[0] ?? normalizedKey,
+                mode: "insensitive",
+              },
+            },
+            include: {
+              aliases: true,
+            },
+            take: 300,
+          });
+
+    const athleteRecords = fallbackAthletes.filter((athlete) => {
+      const normalizedDisplay = normalizeAthleteName(athlete.nameDisplay);
+      if (normalizedDisplay === normalizedKey) {
+        return true;
+      }
+      return athlete.aliases.some((alias) => normalizeAthleteName(alias.aliasNormalized) === normalizedKey);
+    });
+
+    if (athleteRecords.length === 0) {
+      throw new NotFoundException("Atleta nao encontrado");
+    }
+
+    const canonicalName = athleteRecords.reduce((best, current) => {
+      if (current.nameDisplay.length > best.length) {
+        return current.nameDisplay;
+      }
+      return best;
+    }, athleteRecords[0].nameDisplay);
+    const federation = athleteRecords.find((item) => item.stateCode && item.region) ?? athleteRecords[0];
+
+    const athleteIds = athleteRecords.map((athlete) => athlete.id);
+    const matches = await this.prisma.match.findMany({
+      where: {
+        participants: {
+          some: {
+            athleteId: {
+              in: athleteIds,
+            },
+          },
+        },
+      },
+      include: {
+        event: true,
+        category: true,
+        participants: {
+          include: {
+            athlete: {
+              include: {
+                club: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const summaries: AthleteSummaryMatch[] = [];
+    for (const match of matches) {
+      const participantIds = match.participants.map((participant) => participant.athleteId);
+      const matchedAthleteIds = participantIds.filter((id) => athleteIds.includes(id));
+      if (matchedAthleteIds.length === 0) {
+        continue;
+      }
+
+      const primaryAthleteId = [...matchedAthleteIds].sort((a, b) => a - b)[0];
+      const summary = this.buildAthleteSummaryMatch(match, primaryAthleteId);
+      if (!summary) {
+        continue;
+      }
+      summaries.push(summary);
+    }
+
+    const deduplicated = this.deduplicateMatches(summaries);
+    this.sortMatches(deduplicated.matches, "phase_hierarchy_datetime");
+
+    const eventBuckets = new Map<
+      number,
+      {
+        event: AthleteSummaryMatch["event"];
+        categories: Map<number, { id: number; name: string }>;
+        matches: AthleteSummaryMatch[];
+      }
+    >();
+
+    for (const match of deduplicated.matches) {
+      const bucket = eventBuckets.get(match.event.id) ?? {
+        event: match.event,
+        categories: new Map<number, { id: number; name: string }>(),
+        matches: [],
+      };
+      bucket.matches.push(match);
+      bucket.categories.set(match.category.id, {
+        id: match.category.id,
+        name: match.category.name,
+      });
+      eventBuckets.set(match.event.id, bucket);
+    }
+
+    const events = (
+      await Promise.all(
+        [...eventBuckets.values()].map(async (bucket) => {
+          const categoryIdsForClassification = [...bucket.categories.keys()];
+          const fullCategoryMatchesRaw =
+            categoryIdsForClassification.length > 0
+              ? await this.prisma.match.findMany({
+                  where: {
+                    eventId: bucket.event.id,
+                    categoryId: {
+                      in: categoryIdsForClassification,
+                    },
+                  },
+                  include: {
+                    category: true,
+                    participants: {
+                      include: {
+                        athlete: {
+                          include: {
+                            club: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                })
+              : [];
+          const fullCategoryMatches = fullCategoryMatchesRaw
+            .map((match) => this.buildCategoryAnalyticsMatchFromRaw(match))
+            .filter((item): item is CategoryAnalyticsMatch => Boolean(item));
+
+          const categoryMatches = bucket.matches.map((match) => this.toCategoryAnalyticsMatch(match));
+          const perf = computeCategoryPerformanceSummaries(categoryMatches, {
+            athleteIds,
+            athleteName: canonicalName,
+            athleteNameNormalized: normalizedKey,
+          });
+          const classification = computeCategoryClassificationSummaries(fullCategoryMatches, {
+            athleteIds,
+            athleteName: canonicalName,
+            athleteNameNormalized: normalizedKey,
+          });
+          const classificationMap = new Map<number, (typeof classification)[number]>(
+            classification.map((item) => [item.categoryId, item]),
+          );
+
+          return {
+            ...bucket.event,
+            categories: [...bucket.categories.values()].sort((a, b) =>
+              a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
+            ),
+            matches: bucket.matches,
+            performance: calculateAthletePointPerformance(
+              bucket.matches.map((match) => this.toMatchPerformanceInput(match)),
+              {
+                athleteIds,
+                athleteName: canonicalName,
+                athleteNameNormalized: normalizedKey,
+              },
+            ),
+            performanceByCategory: perf.map((item) => ({
+              ...item,
+              classification: classificationMap.get(item.categoryId) ?? null,
+            })),
+          };
+        }),
+      )
+    ).sort((a, b) => {
+        const aTime = a.dataInicio ? new Date(a.dataInicio).getTime() : Number.MIN_SAFE_INTEGER;
+        const bTime = b.dataInicio ? new Date(b.dataInicio).getTime() : Number.MIN_SAFE_INTEGER;
+        if (aTime !== bTime) {
+          return bTime - aTime;
+        }
+        return a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" });
+      });
+
+    const totalPerformance = calculateAthletePointPerformance(
+      deduplicated.matches.map((match) => this.toMatchPerformanceInput(match)),
+      {
+        athleteIds,
+        athleteName: canonicalName,
+        athleteNameNormalized: normalizedKey,
+      },
+    );
+    const medalTable = buildCareerMedalTable(events);
+
+    return {
+      athlete: {
+        athleteKey: normalizedKey,
+        nameDisplay: canonicalName,
+        nameReduced: toReducedName(canonicalName),
+        stateCode: federation.stateCode,
+        stateName: federation.stateName,
+        region: federation.region,
+      },
+      totals: {
+        events: events.length,
+        matches: deduplicated.matches.length,
+        performance: totalPerformance,
+      },
+      medalTable,
+      events,
+      deduplicatedMatchesRemoved: deduplicated.removed,
+    };
+  }
+
+  private buildAthleteSummaryMatch(match: MatchWithRelations, athleteId: number): AthleteSummaryMatch | null {
+    const participants = match.participants.map((participant) => participant.athlete);
+    const ordered = this.resolveOrderedPlayers(match.scorePlayers, participants);
+
+    const athleteIndex =
+      ordered.players[0]?.id === athleteId ? 0 : ordered.players[1]?.id === athleteId ? 1 : null;
+
+    if (athleteIndex === null && !participants.some((participant) => participant.id === athleteId)) {
+      return null;
+    }
+
+    const athletePlayer = athleteIndex === 0 ? ordered.players[0] : athleteIndex === 1 ? ordered.players[1] : null;
+    const opponentPlayer = athleteIndex === 0 ? ordered.players[1] : athleteIndex === 1 ? ordered.players[0] : null;
+
+    const sets = this.parseSetsJson(match.setsJson);
+    const scoreSets = this.parseScoreSetsJson(match.scoreSets, sets, match.scoreRaw);
+    const effectiveSets = scoreSets.map((set) => ({
+      p1: set.a,
+      p2: set.b,
+    }));
+    const legacySetsResult = this.resolveSetsResult(match.p1Sets, match.p2Sets, match.scoreRaw, effectiveSets);
+    const scoreFinal = this.parseScoreFinalJson(match.scoreFinal, legacySetsResult);
+    const setsResult = scoreFinal
+      ? {
+          p1Sets: scoreFinal.setsA,
+          p2Sets: scoreFinal.setsB,
+        }
+      : legacySetsResult;
+    const winnerIndex = this.resolveWinnerIndexFromData({
+      storedWinnerIndex: match.winnerIndex,
+      setsResult,
+      sets: effectiveSets,
+      hasReliableOrder: ordered.hasReliableOrder,
+    });
+
+    return {
+      id: match.id,
+      event: {
+        id: match.event.id,
+        cbtmEventId: match.event.cbtmEventId,
+        nome: match.event.nome,
+        nivel: match.event.nivel,
+        dataInicio: match.event.dataInicio,
+        dataFim: match.event.dataFim,
+        concluido: match.event.concluido,
+      },
+      phase: match.phase,
+      round: match.round,
+      tableNumber: match.tableNumber,
+      matchDatetime: match.matchDatetime,
+      scoreRaw: match.scoreRaw,
+      scoreFinal,
+      scoreSets,
+      sets: effectiveSets,
+      setsResult,
+      winnerIndex,
+      athleteIndex,
+      outcome: getAthleteMatchOutcome({ winnerIndex, athleteIndex }),
+      sourceUrl: match.sourceUrl,
+      players: ordered.players,
+      category: {
+        id: match.category.id,
+        name: match.category.name,
+        cbtmCategoryId: match.category.cbtmCategoryId,
+      },
+      matchKey: match.matchKey,
+      gameId: this.extractGameIdFromRound(match.round),
+      athlete:
+        athletePlayer && athletePlayer.id
+          ? {
+              id: athletePlayer.id,
+              name: athletePlayer.name,
+            }
+          : null,
+      athleteKey: athletePlayer ? normalizeAthleteName(athletePlayer.name) : null,
+      opponent:
+        opponentPlayer && opponentPlayer.id
+          ? {
+              id: opponentPlayer.id,
+              name: opponentPlayer.name,
+              club: opponentPlayer.club,
+            }
+          : null,
+    };
+  }
+
+  private parseScorePlayers(raw: Prisma.JsonValue | null):
+    | [{ athleteId: number | null; name: string | null }, { athleteId: number | null; name: string | null }]
+    | null {
+    if (!Array.isArray(raw) || raw.length < 2) {
+      return null;
+    }
+
+    const hints = raw.slice(0, 2).map((item) => {
+      if (!item || typeof item !== "object") {
+        return { athleteId: null, name: null };
+      }
+
+      const value = item as { athleteId?: unknown; name?: unknown };
+      const athleteId = Number.isInteger(value.athleteId) ? Number(value.athleteId) : null;
+      const name = typeof value.name === "string" && value.name.trim() ? value.name.trim() : null;
+
+      return {
+        athleteId,
+        name,
+      };
+    });
+
+    return [hints[0], hints[1]];
+  }
+
+  private toSummaryPlayer(
+    athlete: MatchWithRelations["participants"][number]["athlete"] | null,
+    fallbackName?: string | null,
+  ): AthleteSummaryPlayer | null {
+    if (!athlete && !fallbackName) {
+      return null;
+    }
+
+    if (!athlete) {
+      return {
+        id: null,
+        name: fallbackName ?? "Sem atleta",
+        club: null,
+      };
+    }
+
+    return {
+      id: athlete.id,
+      name: athlete.nameDisplay,
+      club: athlete.club ? { id: athlete.club.id, name: athlete.club.name } : null,
+    };
+  }
+
+  private resolveOrderedPlayers(
+    scorePlayersRaw: Prisma.JsonValue | null,
+    participants: MatchWithRelations["participants"][number]["athlete"][],
+  ): {
+    players: [AthleteSummaryPlayer | null, AthleteSummaryPlayer | null];
+    hasReliableOrder: boolean;
+  } {
+    const sortedParticipants = [...participants].sort((a, b) => a.id - b.id);
+    const hints = this.parseScorePlayers(scorePlayersRaw);
+
+    if (!hints) {
+      return {
+        players: [this.toSummaryPlayer(sortedParticipants[0] ?? null), this.toSummaryPlayer(sortedParticipants[1] ?? null)],
+        hasReliableOrder: false,
+      };
+    }
+
+    const remaining = [...sortedParticipants];
+    const resolved: Array<MatchWithRelations["participants"][number]["athlete"] | null> = [null, null];
+    let resolvedFromHints = 0;
+
+    for (let index = 0; index < 2; index += 1) {
+      const hint = hints[index];
+      let foundIndex = -1;
+
+      if (typeof hint.athleteId === "number") {
+        foundIndex = remaining.findIndex((participant) => participant.id === hint.athleteId);
+      }
+
+      if (foundIndex === -1 && hint.name) {
+        const normalizedHint = normalizeAthleteName(hint.name);
+        foundIndex = remaining.findIndex(
+          (participant) => normalizeAthleteName(participant.nameDisplay) === normalizedHint,
+        );
+      }
+
+      if (foundIndex >= 0) {
+        resolved[index] = remaining[foundIndex];
+        remaining.splice(foundIndex, 1);
+        resolvedFromHints += 1;
+      }
+    }
+
+    for (let index = 0; index < 2; index += 1) {
+      if (!resolved[index] && remaining.length > 0) {
+        resolved[index] = remaining.shift() ?? null;
+      }
+    }
+
+    return {
+      players: [this.toSummaryPlayer(resolved[0], hints[0].name), this.toSummaryPlayer(resolved[1], hints[1].name)],
+      hasReliableOrder: resolvedFromHints > 0,
+    };
+  }
+
+  private parseSetsJson(raw: Prisma.JsonValue | null): Array<{ p1: number; p2: number }> {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+
+    const sets: Array<{ p1: number; p2: number }> = [];
+    for (const item of raw) {
+      if (!item || typeof item !== "object") {
+        continue;
+      }
+
+      const row = item as { p1?: unknown; p2?: unknown };
+      const p1 = Number(row.p1);
+      const p2 = Number(row.p2);
+      if (!Number.isFinite(p1) || !Number.isFinite(p2)) {
+        continue;
+      }
+      if (p1 < 0 || p2 < 0) {
+        continue;
+      }
+
+      sets.push({
+        p1,
+        p2,
+      });
+    }
+
+    return sets;
+  }
+
+  private parseScoreSetsJson(
+    raw: Prisma.JsonValue | null,
+    fallbackSets: Array<{ p1: number; p2: number }>,
+    scoreRaw: string,
+  ): Array<{ set: number; a: number; b: number }> {
+    if (Array.isArray(raw)) {
+      const parsed: Array<{ set: number; a: number; b: number }> = [];
+      for (const item of raw) {
+        if (!item || typeof item !== "object") {
+          continue;
+        }
+
+        const row = item as { set?: unknown; a?: unknown; b?: unknown };
+        const set = Number(row.set);
+        const a = Number(row.a);
+        const b = Number(row.b);
+        if (!Number.isFinite(a) || !Number.isFinite(b)) {
+          continue;
+        }
+        if (a < 0 || b < 0) {
+          continue;
+        }
+
+        parsed.push({
+          set: Number.isFinite(set) && set > 0 ? Number(set) : parsed.length + 1,
+          a,
+          b,
+        });
+      }
+
+      if (parsed.length > 0) {
+        return parsed;
+      }
+    }
+
+    if (fallbackSets.length > 0) {
+      return fallbackSets.map((set, index) => ({
+        set: index + 1,
+        a: set.p1,
+        b: set.p2,
+      }));
+    }
+
+    return this.parseScoreSetsFromScoreRaw(scoreRaw);
+  }
+
+  private parseScoreSetsFromScoreRaw(scoreRaw: string | null | undefined): Array<{ set: number; a: number; b: number }> {
+    const normalized = String(scoreRaw ?? "")
+      .replace(/[\u2013\u2014\u2212]/g, "-")
+      .replace(/\u00D7/g, "x");
+
+    const parsePairs = (value: string): Array<{ a: number; b: number }> => {
+      const pairs: Array<{ a: number; b: number }> = [];
+      for (const match of value.matchAll(/(\d{1,2})\s*(?:-|\/|x|X)\s*(\d{1,2})/g)) {
+        const a = Number(match[1]);
+        const b = Number(match[2]);
+        if (!Number.isFinite(a) || !Number.isFinite(b)) {
+          continue;
+        }
+        pairs.push({ a, b });
+      }
+      return pairs;
+    };
+
+    const insideParentheses = [...normalized.matchAll(/\(([^)]*)\)/g)].map((match) => String(match[1] ?? ""));
+    let pairs: Array<{ a: number; b: number }> = [];
+    for (const chunk of insideParentheses) {
+      pairs.push(...parsePairs(chunk));
+    }
+    if (pairs.length === 0) {
+      pairs = parsePairs(normalized);
+    }
+
+    return pairs
+      .filter((pair) => Math.max(pair.a, pair.b) >= 8 || (pair.a === 0 && pair.b === 0))
+      .map((pair, index) => ({
+        set: index + 1,
+        a: pair.a,
+        b: pair.b,
+      }));
+  }
+
+  private parseScoreFinalJson(
+    raw: Prisma.JsonValue | null,
+    fallback: { p1Sets: number; p2Sets: number } | null,
+  ): { setsA: number; setsB: number } | null {
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const value = raw as { setsA?: unknown; setsB?: unknown };
+      const setsA = Number(value.setsA);
+      const setsB = Number(value.setsB);
+
+      if (Number.isFinite(setsA) && Number.isFinite(setsB)) {
+        return {
+          setsA,
+          setsB,
+        };
+      }
+    }
+
+    if (!fallback) {
+      return null;
+    }
+
+    return {
+      setsA: fallback.p1Sets,
+      setsB: fallback.p2Sets,
+    };
+  }
+
+  private resolveSetsResult(
+    p1Sets: number | null,
+    p2Sets: number | null,
+    scoreRaw: string,
+    sets: Array<{ p1: number; p2: number }>,
+  ): { p1Sets: number; p2Sets: number } | null {
+    if (Number.isInteger(p1Sets) && Number.isInteger(p2Sets)) {
+      return {
+        p1Sets: Number(p1Sets),
+        p2Sets: Number(p2Sets),
+      };
+    }
+
+    const parsedFromRaw = parseSetsResultFromScoreRaw(scoreRaw);
+    if (parsedFromRaw) {
+      return parsedFromRaw;
+    }
+
+    if (sets.length > 0) {
+      let p1Wins = 0;
+      let p2Wins = 0;
+      for (const set of sets) {
+        if (set.p1 > set.p2) {
+          p1Wins += 1;
+        } else if (set.p2 > set.p1) {
+          p2Wins += 1;
+        }
+      }
+      if (p1Wins > 0 || p2Wins > 0) {
+        return {
+          p1Sets: p1Wins,
+          p2Sets: p2Wins,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  private resolveWinnerIndexFromData(input: {
+    storedWinnerIndex: number | null;
+    setsResult: { p1Sets: number; p2Sets: number } | null;
+    sets: Array<{ p1: number; p2: number }>;
+    hasReliableOrder: boolean;
+  }): 0 | 1 | null {
+    if (input.storedWinnerIndex === 0 || input.storedWinnerIndex === 1) {
+      return input.storedWinnerIndex;
+    }
+
+    if (!input.hasReliableOrder) {
+      return null;
+    }
+
+    if (input.setsResult) {
+      if (input.setsResult.p1Sets > input.setsResult.p2Sets) {
+        return 0;
+      }
+      if (input.setsResult.p2Sets > input.setsResult.p1Sets) {
+        return 1;
+      }
+    }
+
+    if (input.sets.length > 0) {
+      let p1Wins = 0;
+      let p2Wins = 0;
+      for (const set of input.sets) {
+        if (set.p1 > set.p2) {
+          p1Wins += 1;
+        } else if (set.p2 > set.p1) {
+          p2Wins += 1;
+        }
+      }
+      if (p1Wins > p2Wins) {
+        return 0;
+      }
+      if (p2Wins > p1Wins) {
+        return 1;
+      }
+    }
+
+    return null;
+  }
+
+  private toMatchPerformanceInput(match: AthleteSummaryMatch): MatchPerformanceInput {
+    return {
+      players: [
+        {
+          athleteId: match.players[0]?.id ?? null,
+          name: match.players[0]?.name ?? null,
+        },
+        {
+          athleteId: match.players[1]?.id ?? null,
+          name: match.players[1]?.name ?? null,
+        },
+      ],
+      sets: match.sets,
+      winnerIndex: match.winnerIndex,
+    };
+  }
+
+  private toCategoryAnalyticsMatch(match: AthleteSummaryMatch): CategoryAnalyticsMatch {
+    return {
+      categoryId: match.category.id,
+      categoryName: match.category.name,
+      phase: match.phase,
+      round: match.round,
+      players: [
+        {
+          athleteId: match.players[0]?.id ?? null,
+          name: match.players[0]?.name ?? null,
+        },
+        {
+          athleteId: match.players[1]?.id ?? null,
+          name: match.players[1]?.name ?? null,
+        },
+      ],
+      sets: match.sets,
+      setsResult: match.setsResult,
+      winnerIndex: match.winnerIndex,
+    };
+  }
+
+  private buildCategoryAnalyticsMatchFromRaw(match: MatchMinimalWithRelations): CategoryAnalyticsMatch | null {
+    const participants = match.participants.map((participant) => participant.athlete);
+    const ordered = this.resolveOrderedPlayers(match.scorePlayers, participants);
+    if (!ordered.players[0] || !ordered.players[1]) {
+      return null;
+    }
+
+    const sets = this.parseSetsJson(match.setsJson);
+    const scoreSets = this.parseScoreSetsJson(match.scoreSets, sets, match.scoreRaw);
+    const effectiveSets = scoreSets.map((set) => ({
+      p1: set.a,
+      p2: set.b,
+    }));
+    const legacySetsResult = this.resolveSetsResult(match.p1Sets, match.p2Sets, match.scoreRaw, effectiveSets);
+    const scoreFinal = this.parseScoreFinalJson(match.scoreFinal, legacySetsResult);
+    const setsResult = scoreFinal
+      ? {
+          p1Sets: scoreFinal.setsA,
+          p2Sets: scoreFinal.setsB,
+        }
+      : legacySetsResult;
+    const winnerIndex = this.resolveWinnerIndexFromData({
+      storedWinnerIndex: match.winnerIndex,
+      setsResult,
+      sets: effectiveSets,
+      hasReliableOrder: ordered.hasReliableOrder,
+    });
+
+    return {
+      categoryId: match.category.id,
+      categoryName: match.category.name,
+      phase: match.phase,
+      round: match.round,
+      players: [
+        {
+          athleteId: ordered.players[0].id ?? null,
+          name: ordered.players[0].name,
+        },
+        {
+          athleteId: ordered.players[1].id ?? null,
+          name: ordered.players[1].name,
+        },
+      ],
+      sets: effectiveSets,
+      setsResult,
+      winnerIndex,
+    };
+  }
+
+  private sortMatches(matches: AthleteSummaryMatch[], orderBy: SummaryOrderBy): void {
+    matches.sort((a, b) => {
+      if (orderBy === "category_phase_datetime") {
+        const byCategory = a.category.name.localeCompare(b.category.name, "pt-BR", { sensitivity: "base" });
+        if (byCategory !== 0) {
+          return byCategory;
+        }
+      }
+
+      const byHierarchy = this.getRoundHierarchyOrder(a.round, a.phase) - this.getRoundHierarchyOrder(b.round, b.phase);
+      if (byHierarchy !== 0) {
+        return byHierarchy;
+      }
+
+      const byRound = getRoundSemanticOrder(a.round ?? null) - getRoundSemanticOrder(b.round ?? null);
+      if (byRound !== 0) {
+        return byRound;
+      }
+
+      const byPhase = getMatchPhaseOrder(a.phase) - getMatchPhaseOrder(b.phase);
+      if (byPhase !== 0) {
+        return byPhase;
+      }
+
+      const timestampA = a.matchDatetime ? new Date(a.matchDatetime).getTime() : Number.MAX_SAFE_INTEGER;
+      const timestampB = b.matchDatetime ? new Date(b.matchDatetime).getTime() : Number.MAX_SAFE_INTEGER;
+      if (timestampA !== timestampB) {
+        return timestampA - timestampB;
+      }
+
+      const tableA = Number.isFinite(Number(a.tableNumber)) ? Number(a.tableNumber) : Number.MAX_SAFE_INTEGER;
+      const tableB = Number.isFinite(Number(b.tableNumber)) ? Number(b.tableNumber) : Number.MAX_SAFE_INTEGER;
+      if (tableA !== tableB) {
+        return tableA - tableB;
+      }
+
+      return a.matchKey.localeCompare(b.matchKey);
+    });
+  }
+
+  private deduplicateMatches(matches: AthleteSummaryMatch[]): { matches: AthleteSummaryMatch[]; removed: number } {
+    const firstPass = this.deduplicateByKey(matches, (match) => {
+      const day = this.getMatchDay(match.matchDatetime);
+      if (!day || !match.gameId) {
+        return null;
+      }
+
+      return [match.category.id, this.getParticipantKey(match), day, `game:${match.gameId}`].join("|");
+    });
+
+    const secondPass = this.deduplicateByKey(firstPass.matches, (match) => {
+      const timestamp = this.getMatchTimestamp(match.matchDatetime);
+      if (!timestamp) {
+        return null;
+      }
+
+      return [
+        match.category.id,
+        this.getParticipantKey(match),
+        timestamp,
+        match.tableNumber ?? "sem-mesa",
+        match.scoreRaw,
+      ].join("|");
+    });
+
+    return {
+      matches: secondPass.matches,
+      removed: firstPass.removed + secondPass.removed,
+    };
+  }
+
+  private deduplicateByKey(
+    matches: AthleteSummaryMatch[],
+    buildKey: (match: AthleteSummaryMatch) => string | null,
+  ): { matches: AthleteSummaryMatch[]; removed: number } {
+    const map = new Map<string, AthleteSummaryMatch>();
+
+    for (const match of matches) {
+      const key = buildKey(match) ?? `match:${match.id}`;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, match);
+        continue;
+      }
+
+      map.set(key, this.selectPreferredMatch(existing, match));
+    }
+
+    return {
+      matches: [...map.values()],
+      removed: matches.length - map.size,
+    };
+  }
+
+  private selectPreferredMatch(a: AthleteSummaryMatch, b: AthleteSummaryMatch): AthleteSummaryMatch {
+    if (a.sets.length !== b.sets.length) {
+      return a.sets.length > b.sets.length ? a : b;
+    }
+
+    const specificityA = this.getRoundSpecificity(a.round);
+    const specificityB = this.getRoundSpecificity(b.round);
+    if (specificityA !== specificityB) {
+      return specificityA > specificityB ? a : b;
+    }
+
+    const hierarchyA = this.getRoundHierarchyOrder(a.round, a.phase);
+    const hierarchyB = this.getRoundHierarchyOrder(b.round, b.phase);
+    if (hierarchyA !== hierarchyB) {
+      return hierarchyA < hierarchyB ? a : b;
+    }
+
+    const hasDatetimeA = Boolean(a.matchDatetime);
+    const hasDatetimeB = Boolean(b.matchDatetime);
+    if (hasDatetimeA !== hasDatetimeB) {
+      return hasDatetimeA ? a : b;
+    }
+
+    const roundOrderA = getRoundSemanticOrder(a.round ?? null);
+    const roundOrderB = getRoundSemanticOrder(b.round ?? null);
+    if (roundOrderA !== roundOrderB) {
+      return roundOrderA < roundOrderB ? a : b;
+    }
+
+    return a.id <= b.id ? a : b;
+  }
+
+  private getParticipantKey(match: AthleteSummaryMatch): string {
+    const playerTokens = match.players
+      .map((player, index) => {
+        if (player?.id) {
+          return `id:${player.id}`;
+        }
+        return `nm:${normalizeAthleteName(player?.name ?? `p${index + 1}`)}`;
+      })
+      .sort();
+
+    return playerTokens.join("|");
+  }
+
+  private getRoundSpecificity(round: string | null | undefined): number {
+    const normalized = (round ?? "").toString().toLowerCase();
+    if (!normalized) {
+      return 0;
+    }
+
+    if (
+      normalized.includes("fase") ||
+      normalized.includes("grupo") ||
+      normalized.includes("oitavas") ||
+      normalized.includes("quartas") ||
+      normalized.includes("semi") ||
+      normalized.includes("final") ||
+      /\b1\/\d+\b/.test(normalized)
+    ) {
+      return 3;
+    }
+
+    if (normalized.includes("jogo")) {
+      return 2;
+    }
+
+    if (normalized.includes("rodada")) {
+      return 1;
+    }
+
+    return 0;
+  }
+
+  private getRoundHierarchyOrder(round: string | null | undefined, phase: string | null | undefined): number {
+    const normalized = (round ?? "").toString().toLowerCase();
+
+    if (normalized.includes("grupo")) {
+      return 10;
+    }
+    if (/\b32\b/.test(normalized) || normalized.includes("1/32")) {
+      return 20;
+    }
+    if (/\b16\b/.test(normalized) || normalized.includes("1/16")) {
+      return 30;
+    }
+    if (normalized.includes("oitavas")) {
+      return 40;
+    }
+    if (normalized.includes("quartas")) {
+      return 50;
+    }
+    if (normalized.includes("semi")) {
+      return 60;
+    }
+    if (normalized.includes("final")) {
+      return 70;
+    }
+
+    const phaseOrder = getMatchPhaseOrder(phase ?? null);
+    if (phaseOrder === 1) {
+      return 10;
+    }
+    if (phaseOrder === 2) {
+      return 80;
+    }
+    if (phaseOrder === 3) {
+      return 90;
+    }
+    if (phaseOrder === 4) {
+      return 100;
+    }
+
+    return 999;
+  }
+
+  private extractGameIdFromRound(round: string | null | undefined): string | null {
+    const normalized = (round ?? "").toString().toLowerCase();
+    if (!normalized) {
+      return null;
+    }
+
+    const explicit = normalized.match(/\b(?:jogo|fase|rodada)\s*0*(\d+)\b/);
+    if (explicit?.[1]) {
+      return String(Number(explicit[1]));
+    }
+
+    const slash = normalized.match(/\b1\/(\d+)\b/);
+    if (slash?.[1]) {
+      return String(Number(slash[1]));
+    }
+
+    const group = normalized.match(/\bgrupo\s*0*(\d+)\b/);
+    if (group?.[1]) {
+      return `g${Number(group[1])}`;
+    }
+
+    if (normalized.includes("oitavas")) {
+      return "8";
+    }
+    if (normalized.includes("quartas")) {
+      return "4";
+    }
+    if (normalized.includes("semi")) {
+      return "2";
+    }
+    if (normalized.includes("final")) {
+      return "1";
+    }
+    if (normalized.includes("grupo")) {
+      return "grupo";
+    }
+
+    return null;
+  }
+
+  private getMatchDay(matchDatetime: Date | null): string | null {
+    if (!matchDatetime) {
+      return null;
+    }
+    return matchDatetime.toISOString().slice(0, 10);
+  }
+
+  private getMatchTimestamp(matchDatetime: Date | null): string | null {
+    if (!matchDatetime) {
+      return null;
+    }
+    return matchDatetime.toISOString();
+  }
+
+  private normalizeGroupRoundKey(round: string | null | undefined): string | null {
+    const normalized = normalizeAthleteName(round ?? "");
+    if (!normalized || !normalized.includes("grupo")) {
+      return null;
+    }
+
+    const number = normalized.match(/grupo\s*(\d+)/)?.[1] ?? null;
+    if (number) {
+      return `grupo-${Number(number)}`;
+    }
+    return normalized;
+  }
+
+  private async inferHistoricalGroupPreference(
+    eventId: number,
+    categoryId: number,
+    categoryNormalizedName: string,
+    athleteCount: number,
+  ): Promise<{ preferredGroupCount: number | null; sampleSize: number }> {
+    const historicalCategories = await this.prisma.category.findMany({
+      where: {
+        eventId: { not: eventId },
+        id: { not: categoryId },
+        normalizedName: categoryNormalizedName,
+      },
+      select: { id: true },
+      take: 50,
+    });
+
+    const historicalCategoryIds = historicalCategories.map((item) => item.id);
+    if (historicalCategoryIds.length === 0) {
+      return { preferredGroupCount: null, sampleSize: 0 };
+    }
+
+    const [athleteCounts, groupMatches] = await Promise.all([
+      this.prisma.athleteCategory.groupBy({
+        by: ["categoryId"],
+        where: { categoryId: { in: historicalCategoryIds } },
+        _count: { athleteId: true },
+      }),
+      this.prisma.match.findMany({
+        where: {
+          categoryId: { in: historicalCategoryIds },
+          phase: "GRUPOS",
+        },
+        select: {
+          categoryId: true,
+          round: true,
+        },
+      }),
+    ]);
+
+    const athleteCountByCategory = new Map<number, number>();
+    for (const row of athleteCounts) {
+      athleteCountByCategory.set(row.categoryId, row._count.athleteId);
+    }
+
+    const groupsByCategory = new Map<number, Set<string>>();
+    for (const match of groupMatches) {
+      const roundKey = this.normalizeGroupRoundKey(match.round);
+      if (!roundKey) {
+        continue;
+      }
+      const bucket = groupsByCategory.get(match.categoryId) ?? new Set<string>();
+      bucket.add(roundKey);
+      groupsByCategory.set(match.categoryId, bucket);
+    }
+
+    const samples: Array<{ athleteCount: number; groupCount: number }> = [];
+    for (const [historicalCategoryId, groups] of groupsByCategory.entries()) {
+      const count = athleteCountByCategory.get(historicalCategoryId) ?? 0;
+      const groupCount = groups.size;
+      if (count <= 0 || groupCount <= 0) {
+        continue;
+      }
+      samples.push({
+        athleteCount: count,
+        groupCount,
+      });
+    }
+
+    if (samples.length === 0) {
+      return { preferredGroupCount: null, sampleSize: 0 };
+    }
+
+    samples.sort((a, b) => {
+      const diffA = Math.abs(a.athleteCount - athleteCount);
+      const diffB = Math.abs(b.athleteCount - athleteCount);
+      if (diffA !== diffB) {
+        return diffA - diffB;
+      }
+      return Math.abs(a.groupCount - b.groupCount);
+    });
+
+    return {
+      preferredGroupCount: samples[0].groupCount,
+      sampleSize: samples.length,
+    };
+  }
+
+  private async eventHasOfficialGroups(eventId: number): Promise<boolean> {
+    const groupMatch = await this.prisma.match.findFirst({
+      where: {
+        eventId,
+        OR: [{ phase: "GRUPOS" }, { round: { contains: "grupo", mode: "insensitive" } }],
+      },
+      select: {
+        id: true,
+        phase: true,
+        round: true,
+      },
+    });
+
+    if (!groupMatch) {
+      return false;
+    }
+
+    return hasGroupStructureFromMatch({
+      phase: groupMatch.phase,
+      round: groupMatch.round,
+    });
+  }
+
+  private async ensureEvent(eventId: number) {
+    const event = await this.prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) {
+      throw new NotFoundException("Evento nao encontrado");
+    }
+    return event;
+  }
+
+  private async ensureCategoryOfEvent(eventId: number, categoryId: number) {
+    const category = await this.prisma.category.findFirst({
+      where: {
+        id: categoryId,
+        eventId,
+        OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
+      },
+      select: { id: true },
+    });
+
+    if (!category) {
+      throw new NotFoundException("Categoria nao encontrada para o evento");
+    }
+
+    return category;
+  }
+}

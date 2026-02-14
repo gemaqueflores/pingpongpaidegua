@@ -1,0 +1,81 @@
+import { buildEventScrapePolicy } from "@cbtm/shared";
+import { config } from "./config";
+import { log } from "./logger";
+import { ScrapeProcessor } from "./pipeline/scrape.processor";
+import { prisma } from "./prisma";
+
+function parseEventIds(raw: string | undefined): number[] {
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(/[;,]/g)
+    .map((value) => Number(value.trim()))
+    .filter((value) => Number.isFinite(value) && value > 0);
+}
+
+async function run(): Promise<void> {
+  await prisma.$connect();
+  const processor = new ScrapeProcessor();
+
+  const forcedEventIds = parseEventIds(process.env.SCRAPE_EVENT_IDS);
+  const where =
+    forcedEventIds.length > 0
+      ? { id: { in: forcedEventIds } }
+      : { concluido: false };
+
+  const events = await prisma.event.findMany({
+    where,
+    select: {
+      id: true,
+      concluido: true,
+      inicioInscricoes: true,
+      fimInscricoes: true,
+      inicioRealizacao: true,
+      fimRealizacao: true,
+      dataInicio: true,
+      dataFim: true,
+    },
+    orderBy: [{ id: "asc" }],
+  });
+
+  let eligible = 0;
+  let processed = 0;
+  let failed = 0;
+
+  for (const event of events) {
+    const policy = buildEventScrapePolicy(event, {
+      postEventGraceHours: config.postEventGraceHours,
+    });
+    if (!policy.autoSchedule) {
+      continue;
+    }
+    eligible += 1;
+    try {
+      await processor.processEventJob(event.id, "scheduled-2h");
+      processed += 1;
+    } catch (error) {
+      failed += 1;
+      log("error", "Falha no run-once para evento", {
+        eventId: event.id,
+        error: String(error),
+      });
+    }
+  }
+
+  log("info", "Run-once concluido", {
+    totalEvents: events.length,
+    eligibleEvents: eligible,
+    processed,
+    failed,
+  });
+
+  await prisma.$disconnect();
+}
+
+run().catch(async (error) => {
+  log("error", "Falha no run-once", { error: String(error) });
+  await prisma.$disconnect();
+  process.exit(1);
+});
+

@@ -1,0 +1,485 @@
+Request URL
+https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5246
+Request Method
+POST
+Status Code
+200 OK
+Remote Address
+191.235.228.36:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-origin
+*
+access-control-expose-headers
+Request-Context
+cache-control
+no-cache, no-store
+content-encoding
+gzip
+content-length
+79
+content-type
+text/plain; charset=utf-8
+date
+Mon, 09 Feb 2026 18:20:05 GMT
+expires
+-1
+pragma
+no-cache
+request-context
+appId=cid-v1:5bf8ac72-4556-43ef-9400-df111525fafa
+server
+Microsoft-IIS/10.0
+x-aspnet-version
+4.0.30319
+x-ms-middleware-request-id
+00000000-0000-0000-0000-000000000000
+x-powered-by
+ASP.NET
+:authority
+app.cbtm.org.br
+:method
+POST
+:path
+/IUI/App/Evento?EVE_Evento_ID=5246
+:scheme
+https
+accept
+*/*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+pt-PT,pt;q=0.9,en-US;q=0.8,en;q=0.7
+content-length
+7385
+content-type
+application/x-www-form-urlencoded; charset=UTF-8
+cookie
+_ga=GA1.1.218802298.1770053496; __AntiXsrfToken=30efafdbcbc44f99a1823297377e8347; ARRAffinity=a6d5d784ba3c94883199c1e190035dad1710800bb20642c5c5cbdf4a2bd3b1dc; ARRAffinitySameSite=a6d5d784ba3c94883199c1e190035dad1710800bb20642c5c5cbdf4a2bd3b1dc; ASP.NET_SessionId=mrzmsurdefn22buqbfufa4ic; _ga_3PW6D5SGGB=GS2.1.s1770661098$o22$g1$t1770661192$j48$l0$h0
+origin
+https://app.cbtm.org.br
+priority
+u=1, i
+referer
+https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5246
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+0|/*DX*/({'id':0,'result':{'data':null,'parameter':'246'}})
+
+Request URL
+https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5246
+Request Method
+POST
+Status Code
+200 OK
+Remote Address
+191.235.228.36:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-origin
+*
+access-control-expose-headers
+Request-Context
+cache-control
+no-cache, no-store
+content-encoding
+gzip
+content-length
+2576
+content-type
+text/plain; charset=utf-8
+date
+Mon, 09 Feb 2026 18:20:05 GMT
+expires
+-1
+pragma
+no-cache
+request-context
+appId=cid-v1:5bf8ac72-4556-43ef-9400-df111525fafa
+server
+Microsoft-IIS/10.0
+x-aspnet-version
+4.0.30319
+x-ms-middleware-request-id
+00000000-0000-0000-0000-000000000000
+x-powered-by
+ASP.NET
+:authority
+app.cbtm.org.br
+:method
+POST
+:path
+/IUI/App/Evento?EVE_Evento_ID=5246
+:scheme
+https
+accept
+*/*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+pt-PT,pt;q=0.9,en-US;q=0.8,en;q=0.7
+content-length
+7477
+content-type
+application/x-www-form-urlencoded; charset=UTF-8
+cookie
+_ga=GA1.1.218802298.1770053496; __AntiXsrfToken=30efafdbcbc44f99a1823297377e8347; ARRAffinity=a6d5d784ba3c94883199c1e190035dad1710800bb20642c5c5cbdf4a2bd3b1dc; ARRAffinitySameSite=a6d5d784ba3c94883199c1e190035dad1710800bb20642c5c5cbdf4a2bd3b1dc; ASP.NET_SessionId=mrzmsurdefn22buqbfufa4ic; _ga_3PW6D5SGGB=GS2.1.s1770661098$o22$g1$t1770661192$j48$l0$h0
+origin
+https://app.cbtm.org.br
+priority
+u=1, i
+referer
+https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5246
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+0|/*DX*/({'result':{'stateObject':{'keys':['341804','341631','335443'],'callbackState':'Q+yJ5LOqDNCk6aduw2sO2TXiSYvaE20tnNL6aK0/QvrPIrOTBfVM+0C2zZ+qnHDRf29mG7x8nJPiHj3a4c+qWCK1z5lM1nRzcdJXmetowcqC7pin932QWKF9g0J/6thYHw8S72eyM4aHrfs3JzpCmkuzx0QOql/zXa2dYpylcZ1f+a0Wz2jzrZJpVntZZFNu9x+qltm5M62I4Ft2gjaVQKjbdfhDv2jTtP/ViIMKR8EZxCa08tUGfdY5nbGl1W1dMq0kGF3cP15Kx9TlmV95L3Vzjpu5iVGQRknUGC+yInMYHoRlcvEvswS8fJs9MbmqhsTDxw1qyezP6OFTLsM54LmLmiPUgCDLPcMcT2SmHvcwnVQ6Mqiy/5awrBZmG84EOJn56F2dO2GVqLSqY7uGAZxhRwmE1NyG0+b7MayKRtyJ333SQlST6e5lnvpPQFtT8HXNlA==','selection':''},'html':'<table id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXMainTable" class="dxcvTable_MaterialCompact dxcvBPT" cellspacing="0" cellpadding="0" style="background-color:#F6F4F4;border-style:None;width:100%;border-collapse:collapse;empty-cells:show;">\r\n\t<tr>\r\n\t\t<td><div class="dxbplc">\r\n\t\t\t<div id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXDataCard0" class="dxcvBreakpointsCard_MaterialCompact" style="height:100%;">\r\n\t\t\t\t<script id="dxis_266891036" src="/DXR.axd?r=1_60-NzADr" type="text/javascript"><\/script><div class="dxflFormLayout_MaterialCompact dxflViewFormLayoutSys" id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout0" style="width:100%;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;">\r\n\t\t\t\t\t<table class="dxflGroup_MaterialCompact dxflGroupSys dxflAGSys" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border-collapse:separate;">\r\n\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout0_0" class="dxflVATSys dxflGroupCell_MaterialCompact" colspan="12" style="border-style:None;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflGroupBox_MaterialCompact dxflGroupBoxSys" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t<table class="dxflGroup_MaterialCompact dxflGroupSys dxflAGSys" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border-collapse:separate;">\r\n\t\t\t\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout0_0_0" class="dxflGroupCell_MaterialCompact" colspan="12" style="font-weight:bold;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><table class="dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" cellspacing="0" cellpadding="0" style="border-style:None;border-collapse:collapse;table-layout:fixed;">\r\n\t\t\t\t\t\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t\t\t\t\t\t<td class="dxflNestedControlCell_MaterialCompact dx-ellipsis">FRANCIS LAYLA DOS SANTOS PAMPLONA</td>\r\n\t\t\t\t\t\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t\t\t\t\t\t</table></td>\r\n\t\t\t\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout0_0_1" class="dxflGroupCell_MaterialCompact" colspan="12" style="font-size:X-Small;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\tPAR&#193; CLUBE - PA\r\n\t\t\t\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout0_0_2" class="dxflGroupCell_MaterialCompact" colspan="6" style="font-size:Small;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\tMASTER 30FEM\r\n\t\t\t\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout0_0_3" class="dxflGroupCell_MaterialCompact" colspan="6" style="font-size:Small;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\tInscrito\r\n\t\t\t\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout0_0_4" class="dxflGroupCell_MaterialCompact" colspan="6" style="color:#0081D8;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\t2595 pts.  Ranking \r\n\t\t\t\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout0_0_5" class="dxflGroupCell_MaterialCompact" colspan="6" style="color:#0081D8;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\t2116 pts. Rating\r\n\t\t\t\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t\t\t\t</table>\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t</table>\r\n\t\t\t\t</div><script id="dxss_346889393" type="text/javascript">\n<!-\-\nASPx.createControl(ASPxClientFormLayout,\'MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout0\',\'\',{\'uniqueID\':\'ctl00$ctl00$MainContent$MainContent$EventoTabPage$Inscricoes$CardViewInscricoes$DXCardLayout0\'});\n\n//-\->\n<\/script>\r\n\t\t\t</div>\r\n\t\t</div><div class="dxbplc">\r\n\t\t\t<div id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXDataCard1" class="dxcvBreakpointsCard_MaterialCompact" style="height:100%;">\r\n\t\t\t\t<div class="dxflFormLayout_MaterialCompact dxflViewFormLayoutSys" id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout1" style="width:100%;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;">\r\n\t\t\t\t\t<table class="dxflGroup_MaterialCompact dxflGroupSys dxflAGSys" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border-collapse:separate;">\r\n\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout1_0" class="dxflVATSys dxflGroupCell_MaterialCompact" colspan="12" style="border-style:None;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflGroupBox_MaterialCompact dxflGroupBoxSys" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t<table class="dxflGroup_MaterialCompact dxflGroupSys dxflAGSys" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border-collapse:separate;">\r\n\t\t\t\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout1_0_0" class="dxflGroupCell_MaterialCompact" colspan="12" style="font-weight:bold;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><table class="dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" cellspacing="0" cellpadding="0" style="border-style:None;border-collapse:collapse;table-layout:fixed;">\r\n\t\t\t\t\t\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t\t\t\t\t\t<td class="dxflNestedControlCell_MaterialCompact dx-ellipsis">LUCIANA NUNES FERREIRA </td>\r\n\t\t\t\t\t\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t\t\t\t\t\t</table></td>\r\n\t\t\t\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout1_0_1" class="dxflGroupCell_MaterialCompact" colspan="12" style="font-size:X-Small;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\tGR&#202;MIO LITER&#193;RIO E RECREATIVO PORTUGU&#202;S - PA \r\n\t\t\t\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout1_0_2" class="dxflGroupCell_MaterialCompact" colspan="6" style="font-size:Small;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\tMASTER 30FEM\r\n\t\t\t\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout1_0_3" class="dxflGroupCell_MaterialCompact" colspan="6" style="font-size:Small;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\tInscrito\r\n\t\t\t\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout1_0_4" class="dxflGroupCell_MaterialCompact" colspan="6" style="color:#0081D8;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\t160 pts.  Ranking \r\n\t\t\t\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout1_0_5" class="dxflGroupCell_MaterialCompact" colspan="6" style="color:#0081D8;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\t496 pts. Rating\r\n\t\t\t\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t\t\t\t</table>\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t</table>\r\n\t\t\t\t</div><script id="dxss_1516952755" type="text/javascript">\n<!-\-\nASPx.createControl(ASPxClientFormLayout,\'MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout1\',\'\',{\'uniqueID\':\'ctl00$ctl00$MainContent$MainContent$EventoTabPage$Inscricoes$CardViewInscricoes$DXCardLayout1\'});\n\n//-\->\n<\/script>\r\n\t\t\t</div>\r\n\t\t</div><div class="dxbplc">\r\n\t\t\t<div id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXDataCard2" class="dxcvBreakpointsCard_MaterialCompact" style="height:100%;">\r\n\t\t\t\t<div class="dxflFormLayout_MaterialCompact dxflViewFormLayoutSys" id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout2" style="width:100%;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;">\r\n\t\t\t\t\t<table class="dxflGroup_MaterialCompact dxflGroupSys dxflAGSys" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border-collapse:separate;">\r\n\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout2_0" class="dxflVATSys dxflGroupCell_MaterialCompact" colspan="12" style="border-style:None;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflGroupBox_MaterialCompact dxflGroupBoxSys" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t<table class="dxflGroup_MaterialCompact dxflGroupSys dxflAGSys" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border-collapse:separate;">\r\n\t\t\t\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout2_0_0" class="dxflGroupCell_MaterialCompact" colspan="12" style="font-weight:bold;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><table class="dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" cellspacing="0" cellpadding="0" style="border-style:None;border-collapse:collapse;table-layout:fixed;">\r\n\t\t\t\t\t\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t\t\t\t\t\t<td class="dxflNestedControlCell_MaterialCompact dx-ellipsis">YANARA ARAUJO RODRIGUES</td>\r\n\t\t\t\t\t\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t\t\t\t\t\t</table></td>\r\n\t\t\t\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout2_0_1" class="dxflGroupCell_MaterialCompact" colspan="12" style="font-size:X-Small;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\tASSEMBL&#201;IA PARAENSE - PA\r\n\t\t\t\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout2_0_2" class="dxflGroupCell_MaterialCompact" colspan="6" style="font-size:Small;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\tMASTER 30FEM\r\n\t\t\t\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout2_0_3" class="dxflGroupCell_MaterialCompact" colspan="6" style="font-size:Small;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\tInscrito\r\n\t\t\t\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout2_0_4" class="dxflGroupCell_MaterialCompact" colspan="6" style="color:#0081D8;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\t1190 pts.  Ranking \r\n\t\t\t\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout2_0_5" class="dxflGroupCell_MaterialCompact" colspan="6" style="color:#0081D8;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="border-style:None;">\r\n\t\t\t\t\t\t\t\t\t\t\t1024 pts. Rating\r\n\t\t\t\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t\t\t\t</table>\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t</table>\r\n\t\t\t\t</div><script id="dxss_107668989" type="text/javascript">\n<!-\-\nASPx.createControl(ASPxClientFormLayout,\'MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_DXCardLayout2\',\'\',{\'uniqueID\':\'ctl00$ctl00$MainContent$MainContent$EventoTabPage$Inscricoes$CardViewInscricoes$DXCardLayout2\'});\n\n//-\->\n<\/script>\r\n\t\t\t</div>\r\n\t\t</div></td>\r\n\t</tr>\r\n</table><table id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_LP" class="dxcvLoadingPanel_MaterialCompact" cellspacing="0" cellpadding="0" style="border-collapse:collapse;left:0px;top:0px;z-index:30000;display:none;">\r\n\t<tr>\r\n\t\t<td class="dx" style="padding-right:0px;"><img class="dxlp-loadingImage dxlp-imgPosLeft" src="/DXR.axd?r=1_89-NzADr" alt="" align="middle" /></td><td class="dx" style="padding-left:0px;"><span id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_TL">Loading&hellip;</span></td>\r\n\t</tr>\r\n</table><div id="MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes_LD" class="dxcvLoadingDiv_MaterialCompact" style="display:none;z-index:29999;position:absolute;">\r\n\r\n</div><script id="dxss_339541417" type="text/javascript">\n<!-\-\nvar dxo = ASPx.GetControlCollection().Get(\'MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes\');\r\ndxo.SetProperties({\'callBacksEnabled\':true,\'pageRowCount\':3,\'pageRowSize\':12,\'pageIndex\':-1,\'pageCount\':1,\'selectedWithoutPageRowCount\':0,\'visibleStartIndex\':0,\'focusedRowIndex\':-1,\'allowFocusedRow\':false,\'allowSelectByItemClick\':false,\'allowSelectSingleRowOnly\':false,\'callbackOnFocusedRowChanged\':false,\'callbackOnSelectionChanged\':false,\'editState\':0,\'editItemVisibleIndex\':-1,\'searchPanelFilter\':\'\',\'allowDelete\':true,\'allowEdit\':true,\'allowInsert\':true,\'columnProp\':[[0,,\'Nome\',\'ASS_Associado_Nome\',,,,,,0],[1,,,\'EVE_EventoInscricaoAtleta_PontosRanking\',,,,,,0],[2,,,\'Clube\'],[3,,,\'EVE_EventoInscricaoAtleta_PontosRating\',,,,,,0],[4,,\'Status\',\'Status_Inscricao\'],[5,,,\'Categoria_Nome\'],[6,,,\'img\',0,,,,,0]],\'shouldScrollToNewRow\':false,\'layoutMode\':2,\'breakpointsCardsPerRow\':5,\'breakpointsInfo\':[[1600,4],[1199,3],[991,2],[767,1],[450,1]]});\n\n//-\->\n<\/script><script id="dxss_1455741227" type="text/javascript">\n<!-\-\nASPxClientGridBase.PostponeInitialize(\'MainContent_MainContent_EventoTabPage_Inscricoes_CardViewInscricoes\',({\'commandButtonIDs\':[],\'styleInfo\':{\'ei\':\'<div id="DXEditingErrorItem" class="dxcvCardError_MaterialCompact">\\r\\n\\t\\r\\n</div>\',\'fc\':{\'className\':\'dxcvFocusedCell_MaterialCompact\'},\'bec\':{\'className\':\'dxcvBatchEditCell_MaterialCompact dxcv\'},\'bemc\':{\'className\':\'dxcvBatchEditModifiedCell_MaterialCompact dxcv\'},\'bemergmc\':{\'className\':\'dxcvBatchEditModifiedCell_MaterialCompact dxcvBatchEditCell_MaterialCompact dxcv\'},\'bedi\':{\'className\':\'dxcvBatchEditDeletedItem_MaterialCompact dxcv\'},\'sel\':{\'className\':\'dxcvSelectedCard_MaterialCompact\'},\'fi\':{\'className\':\'dxcvFocusedCard_MaterialCompact\'}}}));\n\n//-\->\n<\/script>'},'id':0,'cp':{'cpCategoriaId':'246'}})
+
+Request URL
+https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5246
+Request Method
+POST
+Status Code
+200 OK
+Remote Address
+191.235.228.36:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-origin
+*
+access-control-expose-headers
+Request-Context
+cache-control
+no-cache, no-store
+content-encoding
+gzip
+content-length
+2827
+content-type
+text/plain; charset=utf-8
+date
+Mon, 09 Feb 2026 18:22:40 GMT
+expires
+-1
+pragma
+no-cache
+request-context
+appId=cid-v1:5bf8ac72-4556-43ef-9400-df111525fafa
+server
+Microsoft-IIS/10.0
+x-aspnet-version
+4.0.30319
+x-ms-middleware-request-id
+00000000-0000-0000-0000-000000000000
+x-powered-by
+ASP.NET
+:authority
+app.cbtm.org.br
+:method
+POST
+:path
+/IUI/App/Evento?EVE_Evento_ID=5246
+:scheme
+https
+accept
+*/*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+pt-PT,pt;q=0.9,en-US;q=0.8,en;q=0.7
+content-length
+7607
+content-type
+application/x-www-form-urlencoded; charset=UTF-8
+cookie
+_ga=GA1.1.218802298.1770053496; __AntiXsrfToken=30efafdbcbc44f99a1823297377e8347; ARRAffinity=a6d5d784ba3c94883199c1e190035dad1710800bb20642c5c5cbdf4a2bd3b1dc; ARRAffinitySameSite=a6d5d784ba3c94883199c1e190035dad1710800bb20642c5c5cbdf4a2bd3b1dc; ASP.NET_SessionId=mrzmsurdefn22buqbfufa4ic; _ga_3PW6D5SGGB=GS2.1.s1770661098$o22$g1$t1770661192$j48$l0$h0
+origin
+https://app.cbtm.org.br
+priority
+u=1, i
+referer
+https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5246
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+0|/*DX*/({'result':{'stateObject':{'keys':['246|01  '],'callbackState':'FwYVL9ewq3GCMCmHGfSovl+l2dDlMcFQc+0OWoA/Jdnv+/REyrIhZOiRH44FvvcMUlCuOujlEOKcdi5iGMWudEo0lbKrSKBrEwKXNzA9a8KNue41IEey9uQp+L6MzDO2+F2uTdxtttiHHNhCeQ6yDUBZqxJEtJY2WTZZ2y3wRhveMVe+3gKn5WTHb5S2JVax6zSObHNxpbXpEm9rzSmJM6KFzWBelmTPNuZYxObQCqjGu/m5Zo2Dj8ZksvEGBWbqKJ4AD7PMan6QmLWcvZjTtIubpyywAhKIL642o3QmqTSWkRDw0AW7DUWrBChGWVG59kx4ofs4P/JpyccWw83DI4bPYYT7Him8ofUxPJQpIYR1s0LMf+gv3We8RO5SUj11yMgkba6dCJ1xdbhuKHpPzrBge3iALez27CUwFZchKYWk/TW3UHILlKBYcGKoVSvTNV/97I2rLtjV++fkbpcjbqF2h2zHVkhnC6PlQn84O3OdkgJ/IrulPF2uL3au+pAHxLszhcZetwbBgyftRc5l7hAKe8xpma5qTRQGRUhTSONxDPl5ksi+7viPnoKoJrCtyt5UjYYYFJS612nM2p+ONll5Isg=','selection':''},'html':'<table id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXMainTable" class="dxcvTable_MaterialCompact dxcvBPT" cellspacing="0" cellpadding="0" style="background-color:#F6F4F4;border-style:None;width:100%;border-collapse:collapse;empty-cells:show;">\r\n\t<tr>\r\n\t\t<td><div class="dxbplc">\r\n\t\t\t<div id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXDataCard0" class="dxcvBreakpointsCard_MaterialCompact" style="height:100%;">\r\n\t\t\t\t<div class="dxflFormLayout_MaterialCompact dxflViewFormLayoutSys" id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0" style="width:100%;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;">\r\n\t\t\t\t\t<table class="dxflGroup_MaterialCompact dxflGroupSys dxflAGSys" cellspacing="0" cellpadding="0" style="background-color:White;border-collapse:collapse;border-collapse:separate;">\r\n\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_0" class="dxflHACSys dxflGroupCell_MaterialCompact" colspan="12" style="font-size:Larger;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="height:25px;">\r\n\t\t\t\t\t\t\t\tMASTER 30FEM - Grupo 01  \r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_1" class="dxflHACSys dxflGroupCell_MaterialCompact" style="color:White;background-color:#018777;font-size:Small;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="height:30px;padding-top:5px;">\r\n\t\t\t\t\t\t\t\t#\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_2" class="dxflHALSys dxflGroupCell_MaterialCompact" colspan="6" style="color:White;background-color:#018777;font-size:Small;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="height:30px;padding-top:5px;">\r\n\t\t\t\t\t\t\t\tJOGADORES\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_3" class="dxflHALSys dxflGroupCell_MaterialCompact" style="color:White;background-color:#018777;font-size:Small;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="height:30px;padding-top:5px;">\r\n\t\t\t\t\t\t\t\tPT. RAK\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_4" class="dxflHALSys dxflGroupCell_MaterialCompact" style="color:White;background-color:#018777;font-size:Small;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="height:30px;padding-top:5px;">\r\n\t\t\t\t\t\t\t\tPT. RAT\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_5" class="dxflHACSys dxflGroupCell_MaterialCompact" colspan="3" style="color:White;background-color:#018777;font-size:Small;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="height:30px;padding-top:5px;">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_6" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t1\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_7" class="dxflHALSys dxflGroupCell_MaterialCompact" colspan="6" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tFrancis PAMPLONA\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_8" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t2595\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_9" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t2116\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_10" class="dxflHACSys dxflGroupCell_MaterialCompact" colspan="3" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tClassificado\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_11" class="dxflGroupCell_MaterialCompact" colspan="12" style="padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflEmptyItem_MaterialCompact" style="height:1px;border-bottom-color:LightGrey;border-bottom-style:Solid;border-bottom-width:1px;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_12" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t2\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_13" class="dxflHALSys dxflGroupCell_MaterialCompact" colspan="6" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tYanara RODRIGUES\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_14" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t1190\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_15" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t1024\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_16" class="dxflHACSys dxflGroupCell_MaterialCompact" colspan="3" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tClassificado\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_17" class="dxflGroupCell_MaterialCompact" colspan="12" style="padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflEmptyItem_MaterialCompact" style="height:1px;border-bottom-color:LightGrey;border-bottom-style:Solid;border-bottom-width:1px;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_18" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t3\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_19" class="dxflHALSys dxflGroupCell_MaterialCompact" colspan="6" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tLuciana \r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_20" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t160\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_21" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t496\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_22" class="dxflHACSys dxflGroupCell_MaterialCompact" colspan="3" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_23" class="dxflGroupCell_MaterialCompact" colspan="12" style="padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflEmptyItem_MaterialCompact" style="height:1px;border-bottom-color:LightGrey;border-bottom-style:Solid;border-bottom-width:1px;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_24" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_25" class="dxflHALSys dxflGroupCell_MaterialCompact" colspan="6" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_26" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_27" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_28" class="dxflHACSys dxflGroupCell_MaterialCompact" colspan="3" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_29" class="dxflGroupCell_MaterialCompact" colspan="12" style="padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflEmptyItem_MaterialCompact" style="height:1px;border-bottom-color:LightGrey;border-bottom-style:Solid;border-bottom-width:1px;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_30" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_31" class="dxflHALSys dxflGroupCell_MaterialCompact" colspan="6" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_32" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_33" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0_34" class="dxflHACSys dxflGroupCell_MaterialCompact" colspan="3" style="font-size:Small;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t</table>\r\n\t\t\t\t</div><script id="dxss_2070205441" type="text/javascript">\n<!-\-\nASPx.createControl(ASPxClientFormLayout,\'MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_DXCardLayout0\',\'\',{\'uniqueID\':\'ctl00$ctl00$MainContent$MainContent$EventoTabPage$Grupos$CardViewGrupo$DXCardLayout0\'});\n\n//-\->\n<\/script>\r\n\t\t\t</div>\r\n\t\t</div></td>\r\n\t</tr>\r\n</table><table id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_LP" class="dxcvLoadingPanel_MaterialCompact" cellspacing="0" cellpadding="0" style="border-collapse:collapse;left:0px;top:0px;z-index:30000;display:none;">\r\n\t<tr>\r\n\t\t<td class="dx" style="padding-right:0px;"><img class="dxlp-loadingImage dxlp-imgPosLeft" src="/DXR.axd?r=1_89-NzADr" alt="" align="middle" /></td><td class="dx" style="padding-left:0px;"><span id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_TL">Loading&hellip;</span></td>\r\n\t</tr>\r\n</table><div id="MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo_LD" class="dxcvLoadingDiv_MaterialCompact" style="display:none;z-index:29999;position:absolute;">\r\n\r\n</div><script id="dxss_1187881424" type="text/javascript">\n<!-\-\nvar dxo = ASPx.GetControlCollection().Get(\'MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo\');\r\ndxo.SetProperties({\'callBacksEnabled\':true,\'pageRowCount\':1,\'pageRowSize\':12,\'pageIndex\':-1,\'pageCount\':1,\'selectedWithoutPageRowCount\':0,\'visibleStartIndex\':0,\'focusedRowIndex\':-1,\'allowFocusedRow\':false,\'allowSelectByItemClick\':false,\'allowSelectSingleRowOnly\':false,\'callbackOnFocusedRowChanged\':false,\'callbackOnSelectionChanged\':false,\'editState\':0,\'editItemVisibleIndex\':-1,\'searchPanelFilter\':\'\',\'allowDelete\':true,\'allowEdit\':true,\'allowInsert\':true,\'columnProp\':[[0,,\'Titulo\',\'Titulo_1\'],[1,,,\'Titulo\'],[2,,,\'Categoria\'],[3,,,\'Grupo\'],[4,,,\'COLOCACAO\'],[5,,,\'JOGADORES\'],[6,,,\'PtRak\'],[7,,,\'PtRaT\'],[8,,,\'RESULTADOS\'],[9,,,\'EVE_EventoInscricaoAtleta_PontosRanking\'],[10,,,\'EVE_EventoInscricaoAtleta_PontosRating\'],[11,,,\'Classificacao_1\'],[12,,,\'Classificacao_2\'],[13,,,\'Classificacao_3\'],[14,,,\'Classificacao_4\'],[15,,,\'Classificacao_5\'],[16,,,\'PontosRanking_1\'],[17,,,\'PontosRanking_2\'],[18,,,\'PontosRanking_3\'],[19,,,\'PontosRanking_4\'],[20,,,\'PontosRanking_5\'],[21,,,\'PontosRating_1\'],[22,,,\'PontosRating_2\'],[23,,,\'PontosRating_3\'],[24,,,\'PontosRating_4\'],[25,,,\'PontosRating_5\'],[26,,,\'Nome_1\'],[27,,,\'Nome_2\'],[28,,,\'Nome_3\'],[29,,,\'Nome_4\'],[30,,,\'Nome_5\'],[31,,,\'Partidas_Pro_1\'],[32,,,\'Partidas_Pro_2\'],[33,,,\'Partidas_Pro_3\'],[34,,,\'Partidas_Pro_4\'],[35,,,\'Partidas_Pro_5\'],[36,,,\'PartidasContra_1\'],[37,,,\'PartidasContra_2\'],[38,,,\'PartidasContra_3\'],[39,,,\'PartidasContra_4\'],[40,,,\'PartidasContra_5\'],[41,,,\'Resultados_1\'],[42,,,\'Resultados_2\'],[43,,,\'Resultados_3\'],[44,,,\'Resultados_4\'],[45,,,\'Resultados_5\']],\'shouldScrollToNewRow\':false,\'layoutMode\':2,\'breakpointsCardsPerRow\':6,\'breakpointsInfo\':[[1600,3],[1199,3],[991,3],[767,2],[450,1]]});\n\n//-\->\n<\/script><script id="dxss_809910012" type="text/javascript">\n<!-\-\nASPxClientGridBase.PostponeInitialize(\'MainContent_MainContent_EventoTabPage_Grupos_CardViewGrupo\',({\'commandButtonIDs\':[],\'styleInfo\':{\'ei\':\'<div id="DXEditingErrorItem" class="dxcvCardError_MaterialCompact">\\r\\n\\t\\r\\n</div>\',\'fc\':{\'className\':\'dxcvFocusedCell_MaterialCompact\'},\'bec\':{\'className\':\'dxcvBatchEditCell_MaterialCompact dxcv\'},\'bemc\':{\'className\':\'dxcvBatchEditModifiedCell_MaterialCompact dxcv\'},\'bemergmc\':{\'className\':\'dxcvBatchEditModifiedCell_MaterialCompact dxcvBatchEditCell_MaterialCompact dxcv\'},\'bedi\':{\'className\':\'dxcvBatchEditDeletedItem_MaterialCompact dxcv\'},\'sel\':{\'className\':\'dxcvSelectedCard_MaterialCompact\'},\'fi\':{\'className\':\'dxcvFocusedCard_MaterialCompact\'}}}));\n\n//-\->\n<\/script>'},'id':0,'cp':{'cpCategoriaId':'246'}})
+
+Request URL
+https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5246
+Request Method
+POST
+Status Code
+200 OK
+Remote Address
+191.235.228.36:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-origin
+*
+access-control-expose-headers
+Request-Context
+cache-control
+no-cache, no-store
+content-encoding
+gzip
+content-length
+83
+content-type
+text/plain; charset=utf-8
+date
+Mon, 09 Feb 2026 18:23:03 GMT
+expires
+-1
+pragma
+no-cache
+request-context
+appId=cid-v1:5bf8ac72-4556-43ef-9400-df111525fafa
+server
+Microsoft-IIS/10.0
+x-aspnet-version
+4.0.30319
+x-ms-middleware-request-id
+00000000-0000-0000-0000-000000000000
+x-powered-by
+ASP.NET
+:authority
+app.cbtm.org.br
+:method
+POST
+:path
+/IUI/App/Evento?EVE_Evento_ID=5246
+:scheme
+https
+accept
+*/*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+pt-PT,pt;q=0.9,en-US;q=0.8,en;q=0.7
+content-length
+7643
+content-type
+application/x-www-form-urlencoded; charset=UTF-8
+cookie
+_ga=GA1.1.218802298.1770053496; __AntiXsrfToken=30efafdbcbc44f99a1823297377e8347; ARRAffinity=a6d5d784ba3c94883199c1e190035dad1710800bb20642c5c5cbdf4a2bd3b1dc; ARRAffinitySameSite=a6d5d784ba3c94883199c1e190035dad1710800bb20642c5c5cbdf4a2bd3b1dc; ASP.NET_SessionId=mrzmsurdefn22buqbfufa4ic; _ga_3PW6D5SGGB=GS2.1.s1770661098$o22$g1$t1770661192$j48$l0$h0
+origin
+https://app.cbtm.org.br
+priority
+u=1, i
+referer
+https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5246
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+0|/*DX*/({'id':0,'result':{'i':[{'value':'U','text':'Única'}]}})
+
+Request URL
+https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5246
+Request Method
+POST
+Status Code
+200 OK
+Remote Address
+191.235.228.36:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-origin
+*
+access-control-expose-headers
+Request-Context
+cache-control
+no-cache, no-store
+content-encoding
+gzip
+content-length
+168
+content-type
+text/plain; charset=utf-8
+date
+Mon, 09 Feb 2026 18:23:03 GMT
+expires
+-1
+pragma
+no-cache
+request-context
+appId=cid-v1:5bf8ac72-4556-43ef-9400-df111525fafa
+server
+Microsoft-IIS/10.0
+x-aspnet-version
+4.0.30319
+x-ms-middleware-request-id
+00000000-0000-0000-0000-000000000000
+x-powered-by
+ASP.NET
+:authority
+app.cbtm.org.br
+:method
+POST
+:path
+/IUI/App/Evento?EVE_Evento_ID=5246
+:scheme
+https
+accept
+*/*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+pt-PT,pt;q=0.9,en-US;q=0.8,en;q=0.7
+content-length
+7666
+content-type
+application/x-www-form-urlencoded; charset=UTF-8
+cookie
+_ga=GA1.1.218802298.1770053496; __AntiXsrfToken=30efafdbcbc44f99a1823297377e8347; ARRAffinity=a6d5d784ba3c94883199c1e190035dad1710800bb20642c5c5cbdf4a2bd3b1dc; ARRAffinitySameSite=a6d5d784ba3c94883199c1e190035dad1710800bb20642c5c5cbdf4a2bd3b1dc; ASP.NET_SessionId=mrzmsurdefn22buqbfufa4ic; _ga_3PW6D5SGGB=GS2.1.s1770661098$o22$g1$t1770661192$j48$l0$h0
+origin
+https://app.cbtm.org.br
+priority
+u=1, i
+referer
+https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5246
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+0|/*DX*/({'id':0,'result':{'i':[{'value':'855','text':'FRANCIS LAYLA DOS SANTOS PAMPLONA'},{'value':'82782','text':'LUCIANA NUNES FERREIRA '},{'value':'55730','text':'YANARA ARAUJO RODRIGUES'}]}})
+
+Request URL
+https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5246
+Request Method
+POST
+Status Code
+200 OK
+Remote Address
+191.235.228.36:443
+Referrer Policy
+strict-origin-when-cross-origin
+access-control-allow-origin
+*
+access-control-expose-headers
+Request-Context
+cache-control
+no-cache, no-store
+content-encoding
+gzip
+content-length
+2910
+content-type
+text/plain; charset=utf-8
+date
+Mon, 09 Feb 2026 18:23:03 GMT
+expires
+-1
+pragma
+no-cache
+request-context
+appId=cid-v1:5bf8ac72-4556-43ef-9400-df111525fafa
+server
+Microsoft-IIS/10.0
+x-aspnet-version
+4.0.30319
+x-ms-middleware-request-id
+00000000-0000-0000-0000-000000000000
+x-powered-by
+ASP.NET
+:authority
+app.cbtm.org.br
+:method
+POST
+:path
+/IUI/App/Evento?EVE_Evento_ID=5246
+:scheme
+https
+accept
+*/*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+pt-PT,pt;q=0.9,en-US;q=0.8,en;q=0.7
+content-length
+7687
+content-type
+application/x-www-form-urlencoded; charset=UTF-8
+cookie
+_ga=GA1.1.218802298.1770053496; __AntiXsrfToken=30efafdbcbc44f99a1823297377e8347; ARRAffinity=a6d5d784ba3c94883199c1e190035dad1710800bb20642c5c5cbdf4a2bd3b1dc; ARRAffinitySameSite=a6d5d784ba3c94883199c1e190035dad1710800bb20642c5c5cbdf4a2bd3b1dc; ASP.NET_SessionId=mrzmsurdefn22buqbfufa4ic; _ga_3PW6D5SGGB=GS2.1.s1770661098$o22$g1$t1770661192$j48$l0$h0
+origin
+https://app.cbtm.org.br
+priority
+u=1, i
+referer
+https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5246
+sec-ch-ua
+"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+
+0|/*DX*/({'result':{'stateObject':{'keys':['1973101','1973102','1973103'],'callbackState':'CKaHiFCrUUu5o1/jaFgCHQIKXybi1xBrvKU9CaUbySsfdXX4Ji1P/zAARUjqdg74XW9LKw1HV3XMHLjOEoHESTOz9rZrb7gCq46YQfyg5p+4lPe9L2zUHKHi7e1+e7jrXM2fmdWcYTGlrwFpGBJ627Swvc48T1Q70Nhmbt/DWMw/K7kc0dk2CVBjhLaP3X3U781SVlNwS9iAv3eWnhgbfYM3iM97sus2kXDrIT+mst7E5PnFfRo+GiXgYxXtXBsHbfiHN1/DOUtp3fqzw7EYGR5nQPFJiIp1+8nqS6XUd2GlZ9gXNWp1Whp+z5TjjHl3CAmt+6aHo9pjagfkNAUZxMWctJIGqEiwwrEItjAXa8w+P0XA+6Tu/ff004dgBi5Xz2ApaxBGlv6Wnre7r/eOKbYeB1Z/zTYSIqS2CYK1Tm9oP1qrpwwjyDVfqPTmZRSYJ5hCoEfWUUNdzPYycRf4X6pyU5MMxYFrxRsfGg2KuZtv5iE7','selection':''},'html':'<table id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXMainTable" class="dxcvTable_MaterialCompact dxcvBPT" cellspacing="0" cellpadding="0" style="background-color:#F6F4F4;border-style:None;width:100%;border-collapse:collapse;empty-cells:show;">\r\n\t<tr>\r\n\t\t<td><div class="dxbplc">\r\n\t\t\t<div id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXDataCard0" class="dxcvBreakpointsCard_MaterialCompact" style="height:100%;">\r\n\t\t\t\t<div class="dxflFormLayout_MaterialCompact dxflViewFormLayoutSys" id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0" style="width:100%;">\r\n\t\t\t\t\t<table class="dxflGroup_MaterialCompact dxflGroupSys dxflAGSys" cellspacing="0" cellpadding="0" style="background-color:White;border-collapse:collapse;border-collapse:separate;">\r\n\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_0" class="dxflGroupCell_MaterialCompact" colspan="9" style="font-size:Larger;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;">\r\n\t\t\t\t\t\t\t\tMASTER 30FEM - &#218;nica 01        \r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_1" class="dxflHARSys dxflGroupCell_MaterialCompact" colspan="3" style="color:#018777;font-size:X-Large;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t3-0\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_2" class="dxflGroupCell_MaterialCompact" colspan="9" style="color:graytext;font-size:Small;font-weight:normal;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tJogo 001 - Mesa 16 - 10:30\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_3" class="dxflHARSys dxflGroupCell_MaterialCompact" colspan="3" style="color:graytext;font-size:Small;font-weight:normal;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t29/11/2025\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_4" class="dxflGroupCell_MaterialCompact" colspan="12" style="padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflEmptyItem_MaterialCompact" style="height:5px;border-bottom-color:#018777;border-bottom-style:Solid;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_5" class="dxflGroupCell_MaterialCompact" colspan="12"><div class="dxflEmptyItem_MaterialCompact" style="height:10px;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_6" class="dxflGroupCell_MaterialCompact" colspan="6" style="color:#018777;font-size:Small;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tFRANCIS  PAMPLONA\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_7" class="dxflHACSys dxflGroupCell_MaterialCompact" style="color:#018777;font-size:Large;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t3\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_8" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;font-weight:bold;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t11\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_9" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;font-weight:bold;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t11\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_10" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;font-weight:bold;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t11\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_11" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_12" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_13" class="dxflGroupCell_MaterialCompact" colspan="12"><div class="dxflEmptyItem_MaterialCompact" style="height:2px;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_14" class="dxflGroupCell_MaterialCompact" colspan="6" style="color:#777777;font-size:Small;font-weight:normal;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tLUCIANA  FERREIRA\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_15" class="dxflHACSys dxflGroupCell_MaterialCompact" style="color:#777777;font-size:Large;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t0\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_16" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t3\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_17" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t6\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_18" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t6\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_19" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0_20" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t</table>\r\n\t\t\t\t</div><script id="dxss_1339875585" type="text/javascript">\n<!-\-\nASPx.createControl(ASPxClientFormLayout,\'MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout0\',\'\',{\'uniqueID\':\'ctl00$ctl00$MainContent$MainContent$EventoTabPage$Resultados$CardViewResultado$DXCardLayout0\'});\n\n//-\->\n<\/script>\r\n\t\t\t</div>\r\n\t\t</div><div class="dxbplc">\r\n\t\t\t<div id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXDataCard1" class="dxcvBreakpointsCard_MaterialCompact" style="height:100%;">\r\n\t\t\t\t<div class="dxflFormLayout_MaterialCompact dxflViewFormLayoutSys" id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1" style="width:100%;">\r\n\t\t\t\t\t<table class="dxflGroup_MaterialCompact dxflGroupSys dxflAGSys" cellspacing="0" cellpadding="0" style="background-color:White;border-collapse:collapse;border-collapse:separate;">\r\n\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_0" class="dxflGroupCell_MaterialCompact" colspan="9" style="font-size:Larger;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;">\r\n\t\t\t\t\t\t\t\tMASTER 30FEM - &#218;nica 01        \r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_1" class="dxflHARSys dxflGroupCell_MaterialCompact" colspan="3" style="color:#018777;font-size:X-Large;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t3-0\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_2" class="dxflGroupCell_MaterialCompact" colspan="9" style="color:graytext;font-size:Small;font-weight:normal;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tJogo 002 - Mesa 16 - 10:55\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_3" class="dxflHARSys dxflGroupCell_MaterialCompact" colspan="3" style="color:graytext;font-size:Small;font-weight:normal;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t29/11/2025\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_4" class="dxflGroupCell_MaterialCompact" colspan="12" style="padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflEmptyItem_MaterialCompact" style="height:5px;border-bottom-color:#018777;border-bottom-style:Solid;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_5" class="dxflGroupCell_MaterialCompact" colspan="12"><div class="dxflEmptyItem_MaterialCompact" style="height:10px;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_6" class="dxflGroupCell_MaterialCompact" colspan="6" style="color:#018777;font-size:Small;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tYANARA  RODRIGUES\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_7" class="dxflHACSys dxflGroupCell_MaterialCompact" style="color:#018777;font-size:Large;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t3\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_8" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;font-weight:bold;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t11\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_9" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;font-weight:bold;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t11\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_10" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;font-weight:bold;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t11\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_11" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_12" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_13" class="dxflGroupCell_MaterialCompact" colspan="12"><div class="dxflEmptyItem_MaterialCompact" style="height:2px;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_14" class="dxflGroupCell_MaterialCompact" colspan="6" style="color:#777777;font-size:Small;font-weight:normal;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tLUCIANA  FERREIRA\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_15" class="dxflHACSys dxflGroupCell_MaterialCompact" style="color:#777777;font-size:Large;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t0\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_16" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t2\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_17" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t3\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_18" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t2\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_19" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1_20" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t</table>\r\n\t\t\t\t</div><script id="dxss_2103453153" type="text/javascript">\n<!-\-\nASPx.createControl(ASPxClientFormLayout,\'MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout1\',\'\',{\'uniqueID\':\'ctl00$ctl00$MainContent$MainContent$EventoTabPage$Resultados$CardViewResultado$DXCardLayout1\'});\n\n//-\->\n<\/script>\r\n\t\t\t</div>\r\n\t\t</div><div class="dxbplc">\r\n\t\t\t<div id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXDataCard2" class="dxcvBreakpointsCard_MaterialCompact" style="height:100%;">\r\n\t\t\t\t<div class="dxflFormLayout_MaterialCompact dxflViewFormLayoutSys" id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2" style="width:100%;">\r\n\t\t\t\t\t<table class="dxflGroup_MaterialCompact dxflGroupSys dxflAGSys" cellspacing="0" cellpadding="0" style="background-color:White;border-collapse:collapse;border-collapse:separate;">\r\n\t\t\t\t\t\t<tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_0" class="dxflGroupCell_MaterialCompact" colspan="9" style="font-size:Larger;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact" style="padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;">\r\n\t\t\t\t\t\t\t\tMASTER 30FEM - &#218;nica 01        \r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_1" class="dxflHARSys dxflGroupCell_MaterialCompact" colspan="3" style="color:#018777;font-size:X-Large;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t3-0\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_2" class="dxflGroupCell_MaterialCompact" colspan="9" style="color:graytext;font-size:Small;font-weight:normal;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tJogo 003 - Mesa 16 - 11:20\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_3" class="dxflHARSys dxflGroupCell_MaterialCompact" colspan="3" style="color:graytext;font-size:Small;font-weight:normal;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t29/11/2025\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_4" class="dxflGroupCell_MaterialCompact" colspan="12" style="padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px;"><div class="dxflEmptyItem_MaterialCompact" style="height:5px;border-bottom-color:#018777;border-bottom-style:Solid;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_5" class="dxflGroupCell_MaterialCompact" colspan="12"><div class="dxflEmptyItem_MaterialCompact" style="height:10px;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_6" class="dxflGroupCell_MaterialCompact" colspan="6" style="color:#018777;font-size:Small;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tFRANCIS  PAMPLONA\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_7" class="dxflHACSys dxflGroupCell_MaterialCompact" style="color:#018777;font-size:Large;font-weight:bold;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t3\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_8" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;font-weight:bold;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t11\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_9" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;font-weight:bold;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t11\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_10" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;font-weight:bold;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t11\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_11" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_12" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_13" class="dxflGroupCell_MaterialCompact" colspan="12"><div class="dxflEmptyItem_MaterialCompact" style="height:2px;">\r\n\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr><tr>\r\n\t\t\t\t\t\t\t<td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_14" class="dxflGroupCell_MaterialCompact" colspan="6" style="color:#777777;font-size:Small;font-weight:normal;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\tYANARA  RODRIGUES\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_15" class="dxflHACSys dxflGroupCell_MaterialCompact" style="color:#777777;font-size:Large;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t0\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_16" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t7\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_17" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t7\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_18" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;border-right-color:LightGrey;border-right-style:Solid;border-right-width:1px;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t3\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_19" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td><td id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2_20" class="dxflHACSys dxflGroupCell_MaterialCompact" style="font-size:Medium;"><div class="dxflNestedControlCell_MaterialCompact dxflCLLSys dxflItemSys dxflTextItemSys dxflItem_MaterialCompact">\r\n\t\t\t\t\t\t\t\t&nbsp;\r\n\t\t\t\t\t\t\t</div></td>\r\n\t\t\t\t\t\t</tr>\r\n\t\t\t\t\t</table>\r\n\t\t\t\t</div><script id="dxss_15202625" type="text/javascript">\n<!-\-\nASPx.createControl(ASPxClientFormLayout,\'MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_DXCardLayout2\',\'\',{\'uniqueID\':\'ctl00$ctl00$MainContent$MainContent$EventoTabPage$Resultados$CardViewResultado$DXCardLayout2\'});\n\n//-\->\n<\/script>\r\n\t\t\t</div>\r\n\t\t</div></td>\r\n\t</tr>\r\n</table><table id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_LP" class="dxcvLoadingPanel_MaterialCompact" cellspacing="0" cellpadding="0" style="border-collapse:collapse;left:0px;top:0px;z-index:30000;display:none;">\r\n\t<tr>\r\n\t\t<td class="dx" style="padding-right:0px;"><img class="dxlp-loadingImage dxlp-imgPosLeft" src="/DXR.axd?r=1_89-NzADr" alt="" align="middle" /></td><td class="dx" style="padding-left:0px;"><span id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_TL">Loading&hellip;</span></td>\r\n\t</tr>\r\n</table><div id="MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado_LD" class="dxcvLoadingDiv_MaterialCompact" style="display:none;z-index:29999;position:absolute;">\r\n\r\n</div><script id="dxss_1930548565" type="text/javascript">\n<!-\-\nvar dxo = ASPx.GetControlCollection().Get(\'MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado\');\r\ndxo.SetProperties({\'callBacksEnabled\':true,\'pageRowCount\':3,\'pageRowSize\':12,\'pageIndex\':-1,\'pageCount\':1,\'selectedWithoutPageRowCount\':0,\'visibleStartIndex\':0,\'focusedRowIndex\':-1,\'allowFocusedRow\':false,\'allowSelectByItemClick\':false,\'allowSelectSingleRowOnly\':false,\'callbackOnFocusedRowChanged\':false,\'callbackOnSelectionChanged\':false,\'editState\':0,\'editItemVisibleIndex\':-1,\'searchPanelFilter\':\'\',\'allowDelete\':true,\'allowEdit\':true,\'allowInsert\':true,\'columnProp\':[[0,,,\'Titulo\'],[1,,,\'Resultado\'],[2,,,\'Mesa_Horario\'],[3,,,\'Data\'],[4,,,\'Atleta_Um_Nome\'],[5,,,\'Atleta_Dois_Nome\'],[6,,,\'EVE_Jogo_TotalSets_1\'],[7,,,\'EVE_Jogo_TotalSets_2\'],[8,,,\'EVE_Jogo_Set_1_1\'],[9,,,\'EVE_Jogo_Set_1_2\'],[10,,,\'EVE_Jogo_Set_1_3\'],[11,,,\'EVE_Jogo_Set_1_4\'],[12,,,\'EVE_Jogo_Set_1_5\'],[13,,,\'EVE_Jogo_Set_1_6\'],[14,,,\'EVE_Jogo_Set_1_7\'],[15,,,\'EVE_Jogo_Set_2_1\'],[16,,,\'EVE_Jogo_Set_2_2\'],[17,,,\'EVE_Jogo_Set_2_3\'],[18,,,\'EVE_Jogo_Set_2_4\'],[19,,,\'EVE_Jogo_Set_2_5\'],[20,,,\'EVE_Jogo_Set_2_6\'],[21,,,\'EVE_Jogo_Set_2_7\']],\'shouldScrollToNewRow\':false,\'layoutMode\':2,\'breakpointsCardsPerRow\':6,\'breakpointsInfo\':[[1600,3],[1199,3],[991,3],[767,2],[450,1]]});\n\n//-\->\n<\/script><script id="dxss_2016177156" type="text/javascript">\n<!-\-\nASPxClientGridBase.PostponeInitialize(\'MainContent_MainContent_EventoTabPage_Resultados_CardViewResultado\',({\'commandButtonIDs\':[],\'styleInfo\':{\'ei\':\'<div id="DXEditingErrorItem" class="dxcvCardError_MaterialCompact">\\r\\n\\t\\r\\n</div>\',\'fc\':{\'className\':\'dxcvFocusedCell_MaterialCompact\'},\'bec\':{\'className\':\'dxcvBatchEditCell_MaterialCompact dxcv\'},\'bemc\':{\'className\':\'dxcvBatchEditModifiedCell_MaterialCompact dxcv\'},\'bemergmc\':{\'className\':\'dxcvBatchEditModifiedCell_MaterialCompact dxcvBatchEditCell_MaterialCompact dxcv\'},\'bedi\':{\'className\':\'dxcvBatchEditDeletedItem_MaterialCompact dxcv\'},\'sel\':{\'className\':\'dxcvSelectedCard_MaterialCompact\'},\'fi\':{\'className\':\'dxcvFocusedCard_MaterialCompact\'}}}));\n\n//-\->\n<\/script>'},'id':0,'cp':{'cpCategoriaId':'246'}})

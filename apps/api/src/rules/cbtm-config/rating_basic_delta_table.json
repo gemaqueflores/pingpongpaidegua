@@ -1,0 +1,26 @@
+﻿[
+  {
+    "delta_min": 0,
+    "delta_max": 49,
+    "expected_win": 6,
+    "expected_loss": -6,
+    "unexpected_win": 10,
+    "unexpected_loss": -10
+  },
+  {
+    "delta_min": 50,
+    "delta_max": 99,
+    "expected_win": 5,
+    "expected_loss": -5,
+    "unexpected_win": 12,
+    "unexpected_loss": -12
+  },
+  {
+    "delta_min": 100,
+    "delta_max": 9999,
+    "expected_win": 4,
+    "expected_loss": -4,
+    "unexpected_win": 14,
+    "unexpected_loss": -14
+  }
+]

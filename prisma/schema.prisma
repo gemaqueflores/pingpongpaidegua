@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MatchPhase {
+  INSCRICOES
+  GRUPOS
+  RESULTADOS
+  ELIMINATORIA
+}
+
+enum ScrapeStatus {
+  SUCCESS
+  ERROR
+  PARTIAL
+}
+
+enum AliasSource {
+  INSCRICOES
+  JOGOS
+}
+
+enum EventLevel {
+  ESTADUAL
+  COPA
+  NACIONAL
+}
+
+enum RegistrationStatus {
+  INSCRITO
+  PRE_INSCRITO
+  OUTRO
+}
+
+model Event {
+  id           Int         @id @default(autoincrement())
+  cbtmEventId  Int         @unique @map("cbtm_event_id")
+  nome         String
+  nivel        EventLevel?
+  dataInicio   DateTime?   @map("data_inicio")
+  dataFim      DateTime?   @map("data_fim")
+  inicioInscricoes DateTime? @map("inicio_inscricoes")
+  fimInscricoes DateTime? @map("fim_inscricoes")
+  inicioRealizacao DateTime? @map("inicio_realizacao")
+  fimRealizacao DateTime? @map("fim_realizacao")
+  concluido    Boolean     @default(false)
+  lastScrapeAt DateTime?   @map("last_scrape_at")
+  scrapeLockedAt DateTime? @map("scrape_locked_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  athletes      Athlete[]
+  categories    Category[]
+  matches       Match[]
+  scrapeRuns    ScrapeRun[]
+  rawCaptures   RawCapture[]
+  athleteMatchConflicts AthleteMatchConflict[]
+
+  @@map("events")
+}
+
+model Club {
+  id             Int       @id @default(autoincrement())
+  name           String
+  normalizedName String    @unique @map("normalized_name")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  athletes Athlete[]
+
+  @@map("clubs")
+}
+
+model Athlete {
+  id                 Int      @id @default(autoincrement())
+  nameDisplay        String   @map("name_display")
+  nameNormalized     String   @map("name_normalized")
+  rankingPoints      Int?     @map("ranking_points")
+  ratingPoints       Int?     @map("rating_points")
+  stateCode          String?  @map("state_code")
+  stateName          String?  @map("state_name")
+  region             String?  @map("region")
+  createdFromWarning Boolean  @default(false) @map("created_from_warning")
+  clubId             Int      @map("club_id")
+  eventId            Int      @map("event_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  club        Club               @relation(fields: [clubId], references: [id])
+  event       Event              @relation(fields: [eventId], references: [id])
+  categories  AthleteCategory[]
+  matches     MatchParticipant[]
+  aliases     AthleteAlias[]
+  resolvedConflicts AthleteMatchConflict[] @relation("ResolvedConflictAthlete")
+
+  @@unique([eventId, nameNormalized, clubId])
+  @@index([eventId])
+  @@index([clubId])
+  @@map("athletes")
+}
+
+model Category {
+  id             Int      @id @default(autoincrement())
+  name           String
+  normalizedName String   @map("normalized_name")
+  cbtmCategoryId String?  @map("cbtm_category_id")
+  eventId        Int      @map("event_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  event      Event              @relation(fields: [eventId], references: [id])
+  athletes   AthleteCategory[]
+  matches    Match[]
+
+  @@unique([eventId, normalizedName])
+  @@unique([eventId, cbtmCategoryId])
+  @@index([eventId])
+  @@map("categories")
+}
+
+model AthleteCategory {
+  athleteId          Int                @map("athlete_id")
+  categoryId         Int                @map("category_id")
+  registrationStatus RegistrationStatus? @map("registration_status")
+  createdAt          DateTime           @default(now()) @map("created_at")
+
+  athlete  Athlete  @relation(fields: [athleteId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@id([athleteId, categoryId])
+  @@map("athlete_categories")
+}
+
+model Match {
+  id            Int        @id @default(autoincrement())
+  eventId       Int        @map("event_id")
+  categoryId    Int        @map("category_id")
+  cbtmMatchId   String?    @map("cbtm_match_id")
+  phase         MatchPhase
+  round         String?
+  tableNumber   String?    @map("table_number")
+  matchDatetime DateTime?  @map("match_datetime")
+  scoreRaw      String     @map("score_raw")
+  setsJson      Json?      @map("sets_json")
+  scoreFinal    Json?      @map("score_final")
+  scoreSets     Json?      @map("score_sets")
+  sourceFlags   Json?      @map("source_flags")
+  p1Sets        Int?       @map("p1_sets")
+  p2Sets        Int?       @map("p2_sets")
+  winnerIndex   Int?       @map("winner_index")
+  scorePlayers  Json?      @map("score_players")
+  sourceUrl     String?    @map("source_url")
+  fetchedAt     DateTime?  @map("fetched_at")
+  matchKey      String     @unique @map("match_key")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  event        Event               @relation(fields: [eventId], references: [id])
+  category     Category            @relation(fields: [categoryId], references: [id])
+  participants MatchParticipant[]
+
+  @@index([eventId])
+  @@index([categoryId])
+  @@index([cbtmMatchId])
+  @@index([matchDatetime])
+  @@map("matches")
+}
+
+model MatchParticipant {
+  matchId   Int      @map("match_id")
+  athleteId Int      @map("athlete_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  match   Match   @relation(fields: [matchId], references: [id])
+  athlete Athlete @relation(fields: [athleteId], references: [id])
+
+  @@id([matchId, athleteId])
+  @@map("match_participants")
+}
+
+model ScrapeRun {
+  id            Int         @id @default(autoincrement())
+  eventId       Int         @map("event_id")
+  startedAt     DateTime    @default(now()) @map("started_at")
+  finishedAt    DateTime?   @map("finished_at")
+  status        ScrapeStatus
+  insertedCounts Json       @default("{}") @map("inserted_counts")
+  updatedCounts Json        @default("{}") @map("updated_counts")
+  extractionStats Json      @default("{}") @map("extraction_stats")
+  warnings      Json        @default("[]")
+  errorMessage  String?     @map("error_message")
+
+  event       Event       @relation(fields: [eventId], references: [id])
+  rawCaptures RawCapture[]
+
+  @@index([eventId])
+  @@map("scrape_runs")
+}
+
+model AthleteAlias {
+  id              Int         @id @default(autoincrement())
+  athleteId       Int         @map("athlete_id")
+  aliasDisplay    String      @map("alias_display")
+  aliasNormalized String      @map("alias_normalized")
+  source          AliasSource
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  athlete Athlete @relation(fields: [athleteId], references: [id])
+
+  @@unique([athleteId, aliasNormalized])
+  @@index([aliasNormalized])
+  @@map("athlete_aliases")
+}
+
+model AthleteMatchConflict {
+  id                  Int       @id @default(autoincrement())
+  eventId             Int       @map("event_id")
+  context             String
+  shortName           String    @map("short_name")
+  shortNameNormalized String    @map("short_name_normalized")
+  candidateAthletes   Json      @map("candidate_athletes")
+  resolvedAthleteId   Int?      @map("resolved_athlete_id")
+  resolvedAt          DateTime? @map("resolved_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id])
+  resolvedAthlete Athlete? @relation("ResolvedConflictAthlete", fields: [resolvedAthleteId], references: [id])
+
+  @@unique([eventId, context, shortNameNormalized])
+  @@index([eventId, resolvedAthleteId])
+  @@map("athlete_match_conflicts")
+}
+
+model RawCapture {
+  id         Int      @id @default(autoincrement())
+  eventId    Int      @map("event_id")
+  scrapeRunId Int?    @map("scrape_run_id")
+  tab        String
+  categoryId String?  @map("category_id")
+  rawBody    String   @map("raw_body")
+  htmlBody   String   @map("html_body")
+  capturedAt DateTime @default(now()) @map("captured_at")
+
+  event     Event      @relation(fields: [eventId], references: [id])
+  scrapeRun ScrapeRun? @relation(fields: [scrapeRunId], references: [id])
+
+  @@index([eventId])
+  @@map("raw_captures")
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  email     String
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email, createdAt])
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
+}
+
+model AdminCredential {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("admin_credentials")
+}
+

@@ -1,0 +1,20 @@
+{
+  "name": "apps-worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "scrape:once": "tsx src/run-once.ts",
+    "test": "tsx --test test/**/*.test.ts"
+  },
+  "dependencies": {
+    "@cbtm/parser": "1.0.0",
+    "@cbtm/shared": "1.0.0",
+    "@prisma/client": "^6.3.1",
+    "bullmq": "^5.40.2",
+    "dotenv": "^16.4.7",
+    "playwright": "^1.50.1"
+  }
+}
