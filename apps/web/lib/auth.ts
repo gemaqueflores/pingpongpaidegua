@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_BASE_PUBLIC = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_BASE_INTERNAL =
+  process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const ADMIN_TOKEN_KEY = "cbtm_admin_token";
 const ADMIN_ROLE_KEY = "cbtm_admin_role";
 const LEGACY_TOKEN_KEY = "cbtm_token";
@@ -15,7 +17,10 @@ function legacyStorage(): Storage {
 }
 
 export function getApiBase(): string {
-  return API_BASE;
+  if (typeof window === "undefined") {
+    return API_BASE_INTERNAL;
+  }
+  return API_BASE_PUBLIC;
 }
 
 export function getAuthToken(): string | null {

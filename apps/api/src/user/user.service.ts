@@ -13,7 +13,7 @@ import {
   type RegistrationScope,
 } from "@cbtm/shared";
 import { Prisma } from "@prisma/client";
-import { PrismaService } from "../common/prisma.service";
+import { PrismaReadService } from "../common/prisma.service";
 import {
   computeCategoryClassificationSummaries,
   computeCategoryPerformanceSummaries,
@@ -197,9 +197,9 @@ function sanitizeUserWarnings(warnings: string[]): string[] {
 
 @Injectable()
 export class UserService {
-  private readonly prisma: PrismaService;
+  private readonly prisma: PrismaReadService;
 
-  constructor(@Inject(PrismaService) prisma: PrismaService) {
+  constructor(@Inject(PrismaReadService) prisma: PrismaReadService) {
     this.prisma = prisma;
   }
 
