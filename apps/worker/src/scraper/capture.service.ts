@@ -92,6 +92,19 @@ function hasMatchGameId(match: {
   return false;
 }
 
+function hasDxServerError(rawLiteral: string): boolean {
+  const normalized = compactWhitespace(rawLiteral).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    normalized.includes("'error':{'message':") ||
+    normalized.includes('"error":{"message":') ||
+    normalized.includes("object reference not set to an instance of an object")
+  );
+}
+
 export class CaptureService {
   private readonly dxRequestBuilder = new DXRequestBuilder();
   private readonly liveHttpCaptureService = new LiveHttpCaptureService();
@@ -195,6 +208,8 @@ export class CaptureService {
       });
       const resultadosCount = previewDataset.matches.filter((match) => match.phase === "RESULTADOS").length;
       const matchesWithSets = previewDataset.matches.filter((match) => (match.sets?.length ?? 0) > 0).length;
+      const resultadosPayloads = httpCapture.payloads.filter((payload) => payload.tab === "RESULTADOS");
+      const resultadosWithServerError = resultadosPayloads.filter((payload) => hasDxServerError(payload.rawLiteral));
       const requiresResultValidation = options.captureResultados;
       const diagnosticWarnings: string[] = [];
 
@@ -254,6 +269,18 @@ export class CaptureService {
       if (requiresResultValidation && (resultadosCount === 0 || matchesWithSets === 0)) {
         diagnosticWarnings.push(
           `Captura HTTP com resultados incompletos (resultadosCount=${resultadosCount}, matchesWithSets=${matchesWithSets}); mantendo payload HTTP para evitar scrape vazio.`,
+        );
+      }
+
+      if (requiresResultValidation && resultadosWithServerError.length > 0) {
+        diagnosticWarnings.push(
+          `Detectado erro de callback DX em RESULTADOS (${resultadosWithServerError.length}/${resultadosPayloads.length} payloads); fallback para browser sera acionado se nao houver jogos de resultados validos.`,
+        );
+      }
+
+      if (requiresResultValidation && resultadosCount === 0 && resultadosWithServerError.length > 0) {
+        throw new Error(
+          `Captura HTTP de RESULTADOS com erro DX (${resultadosWithServerError.length} payloads com erro e resultadosCount=${resultadosCount}).`,
         );
       }
 

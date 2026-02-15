@@ -400,3 +400,46 @@ test("ordenacao aplica fallback para campo alternativo quando principal ausente"
   assert.equal(result.stats.fallbackUsedCount, 2);
   assert.deepEqual(result.stats.initialDistribution[0].athleteIds, [2, 1, 3]);
 });
+
+test("atletas dentro do grupo ficam ordenados por pontos de forma decrescente", () => {
+  const result = simulateGroupsForCategory({
+    seed: "sort:inside-group",
+    categoryName: "SUB-13 FEM",
+    athletes: [
+      athleteWithPoints({ id: 1, club: "A", rankingPoints: 1760, ratingPoints: 1000 }),
+      athleteWithPoints({ id: 2, club: "B", rankingPoints: 300, ratingPoints: 2000 }),
+      athleteWithPoints({ id: 3, club: "C", rankingPoints: 1520, ratingPoints: 1100 }),
+      athleteWithPoints({ id: 4, club: "D", rankingPoints: 700, ratingPoints: 900 }),
+    ],
+    preferredGroupCount: 1,
+  });
+
+  const points = result.groups[0].athletes.map((athleteItem) => athleteItem.rankingPoints ?? 0);
+  const sorted = [...points].sort((a, b) => b - a);
+  assert.deepEqual(points, sorted);
+});
+
+test("quando colisao e inevitavel, mantem distribuicao cobra da categoria", () => {
+  const result = simulateGroupsForCategory({
+    seed: "sub13fem:inevitavel",
+    categoryName: "SUB-13 FEM",
+    athletes: [
+      athleteWithPoints({ id: 1, name: "YUKARI SATO", club: "BEL", rankingPoints: 1360, ratingPoints: 662 }),
+      athleteWithPoints({ id: 2, name: "KAYLANNE DEUS", club: "PARA", rankingPoints: 1250, ratingPoints: 350 }),
+      athleteWithPoints({ id: 3, name: "ISABELA OLIVEIRA", club: "APTM", rankingPoints: 1240, ratingPoints: 398 }),
+      athleteWithPoints({ id: 4, name: "MARIANNY MORAES", club: "PARA", rankingPoints: 990, ratingPoints: 611 }),
+      athleteWithPoints({ id: 5, name: "ESTER MORAES", club: "YOSHIDA", rankingPoints: 300, ratingPoints: 439 }),
+      athleteWithPoints({ id: 6, name: "ANA SOUZA", club: "PARA", rankingPoints: 100, ratingPoints: 27 }),
+      athleteWithPoints({ id: 7, name: "ANNA RODRIGUES", club: "BEL", rankingPoints: 0, ratingPoints: 573 }),
+    ],
+  });
+
+  // Snake A-B-B-A-A-B-B sobre ranking decrescente para 7 atletas (4x3).
+  assert.deepEqual(result.stats.initialDistribution.map((group) => group.athleteIds), [
+    [1, 4, 5],
+    [2, 3, 6, 7],
+  ]);
+
+  assert.equal(result.stats.collisionsBefore, result.stats.collisionsAfter);
+  assert.equal(result.stats.swapsApplied, 0);
+});

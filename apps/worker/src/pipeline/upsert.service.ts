@@ -833,9 +833,13 @@ export class UpsertService {
           athleteId: athlete.id,
           categoryId: category.id,
           registrationStatus,
+          rankingPoints: registration.rankingPoints,
+          ratingPoints: registration.ratingPoints,
         },
         update: {
           registrationStatus,
+          rankingPoints: registration.rankingPoints,
+          ratingPoints: registration.ratingPoints,
         },
       });
 

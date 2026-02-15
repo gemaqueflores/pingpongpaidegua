@@ -29,6 +29,7 @@ enum EventLevel {
   ESTADUAL
   COPA
   NACIONAL
+  OPEN
 }
 
 enum RegistrationStatus {
@@ -141,6 +142,8 @@ model AthleteCategory {
   athleteId          Int                @map("athlete_id")
   categoryId         Int                @map("category_id")
   registrationStatus RegistrationStatus? @map("registration_status")
+  rankingPoints      Int?               @map("ranking_points")
+  ratingPoints       Int?               @map("rating_points")
   createdAt          DateTime           @default(now()) @map("created_at")
 
   athlete  Athlete  @relation(fields: [athleteId], references: [id])

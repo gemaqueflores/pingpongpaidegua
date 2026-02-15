@@ -21,6 +21,8 @@ export type SimulationAthleteInfo = {
 export type SimulationAthleteLink = {
   categoryId: number;
   registrationStatus: RegistrationStatus | null;
+  rankingPoints: number | null;
+  ratingPoints: number | null;
   athlete: SimulationAthleteInfo;
 };
 
@@ -69,7 +71,12 @@ export function selectAthletesByRegistrationScope(
   const selected = rows.filter((row) => includeStatus(row.registrationStatus));
   if (selected.length > 0) {
     return {
-      athletes: selected.map((row) => row.athlete),
+      athletes: selected.map((row) => ({
+        ...row.athlete,
+        // Prioriza snapshot de pontos da inscricao na categoria; fallback para pontos globais do atleta.
+        rankingPoints: row.rankingPoints ?? row.athlete.rankingPoints,
+        ratingPoints: row.ratingPoints ?? row.athlete.ratingPoints,
+      })),
       warnings,
     };
   }
@@ -81,7 +88,11 @@ export function selectAthletesByRegistrationScope(
         `Nenhum inscrito confirmado encontrado; usando ${unknown.length} atleta(s) com status desconhecido (legado).`,
       );
       return {
-        athletes: unknown.map((row) => row.athlete),
+        athletes: unknown.map((row) => ({
+          ...row.athlete,
+          rankingPoints: row.rankingPoints ?? row.athlete.rankingPoints,
+          ratingPoints: row.ratingPoints ?? row.athlete.ratingPoints,
+        })),
         warnings,
       };
     }

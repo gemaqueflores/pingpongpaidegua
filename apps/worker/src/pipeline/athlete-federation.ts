@@ -1,6 +1,6 @@
 import { BRAZIL_STATES_BY_CODE, inferBrazilStateFromClubNameDetailed } from "@cbtm/shared";
 
-export type EventLevelLike = "ESTADUAL" | "COPA" | "NACIONAL" | null | undefined;
+export type EventLevelLike = "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN" | null | undefined;
 
 export interface AthleteFederation {
   stateCode: string | null;

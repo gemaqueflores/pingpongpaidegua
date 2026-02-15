@@ -7,6 +7,7 @@ test("quadro de medalhas inicia com zeros", () => {
     ESTADUAL: { bronze: 0, prata: 0, ouro: 0 },
     COPA: { bronze: 0, prata: 0, ouro: 0 },
     NACIONAL: { bronze: 0, prata: 0, ouro: 0 },
+    OPEN: { bronze: 0, prata: 0, ouro: 0 },
   });
 });
 
@@ -30,6 +31,7 @@ test("quadro de medalhas agrega ouro/prata/bronze por nivel", () => {
     ESTADUAL: { bronze: 1, prata: 0, ouro: 1 },
     COPA: { bronze: 0, prata: 2, ouro: 0 },
     NACIONAL: { bronze: 0, prata: 0, ouro: 2 },
+    OPEN: { bronze: 0, prata: 0, ouro: 0 },
   });
 });
 
@@ -54,5 +56,6 @@ test("quadro de medalhas ignora classificacao ausente e nivel nulo", () => {
     ESTADUAL: { bronze: 0, prata: 0, ouro: 0 },
     COPA: { bronze: 0, prata: 0, ouro: 0 },
     NACIONAL: { bronze: 0, prata: 0, ouro: 0 },
+    OPEN: { bronze: 0, prata: 0, ouro: 0 },
   });
 });

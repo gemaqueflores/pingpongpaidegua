@@ -9,7 +9,10 @@ import {
 
 function row(id: number, status: "INSCRITO" | "PRE_INSCRITO" | "OUTRO" | null): SimulationAthleteLink {
   return {
+    categoryId: 1,
     registrationStatus: status,
+    rankingPoints: null,
+    ratingPoints: null,
     athlete: {
       id,
       nameDisplay: `ATLETA ${id}`,

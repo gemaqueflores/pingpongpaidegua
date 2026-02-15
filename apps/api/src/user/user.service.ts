@@ -49,7 +49,7 @@ type AthleteSummaryMatch = {
     id: number;
     cbtmEventId: number;
     nome: string;
-    nivel: "ESTADUAL" | "COPA" | "NACIONAL" | null;
+    nivel: "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN" | null;
     dataInicio: Date | null;
     dataFim: Date | null;
     concluido: boolean;
@@ -262,6 +262,7 @@ export class UserService {
         id: true,
         cbtmEventId: true,
         nome: true,
+        nivel: true,
         inicioInscricoes: true,
         fimInscricoes: true,
         inicioRealizacao: true,
@@ -655,6 +656,7 @@ export class UserService {
         })),
         preferredGroupCount: historical.preferredGroupCount,
       });
+      const useRatingPoints = simulation.stats.sortBasis === "rating";
 
       simulations.push({
         categoryId: category.id,
@@ -663,7 +665,28 @@ export class UserService {
         reason: null,
         groups: simulation.groups.map((group) => ({
           groupName: group.groupName,
-          athletes: group.athletes.map((athlete) => ({
+          athletes: [...group.athletes]
+            .sort((left, right) => {
+              const leftPrimary = useRatingPoints
+                ? (left.ratingPoints ?? left.rankingPoints ?? Number.MIN_SAFE_INTEGER)
+                : (left.rankingPoints ?? left.ratingPoints ?? Number.MIN_SAFE_INTEGER);
+              const rightPrimary = useRatingPoints
+                ? (right.ratingPoints ?? right.rankingPoints ?? Number.MIN_SAFE_INTEGER)
+                : (right.rankingPoints ?? right.ratingPoints ?? Number.MIN_SAFE_INTEGER);
+              if (leftPrimary !== rightPrimary) {
+                return rightPrimary - leftPrimary;
+              }
+
+              const byName = left.nameDisplay.localeCompare(right.nameDisplay, "pt-BR", {
+                sensitivity: "base",
+              });
+              if (byName !== 0) {
+                return byName;
+              }
+
+              return left.athleteId - right.athleteId;
+            })
+            .map((athlete) => ({
             athleteId: athlete.athleteId,
             nameDisplay: athlete.nameDisplay,
             nameReduced: toReducedName(athlete.nameDisplay),

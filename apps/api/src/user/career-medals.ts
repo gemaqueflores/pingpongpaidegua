@@ -1,4 +1,4 @@
-type EventLevel = "ESTADUAL" | "COPA" | "NACIONAL";
+type EventLevel = "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN";
 
 type ClassificationEntry = {
   position: number | null;
@@ -34,6 +34,7 @@ export function createEmptyMedalTable(): CareerMedalTable {
     ESTADUAL: createEmptyMedalRow(),
     COPA: createEmptyMedalRow(),
     NACIONAL: createEmptyMedalRow(),
+    OPEN: createEmptyMedalRow(),
   };
 }
 

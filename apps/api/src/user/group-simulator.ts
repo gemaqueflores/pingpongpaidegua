@@ -73,7 +73,7 @@ function buildFallbackGroupSizes(athleteCount: number): number[] {
       return [3, 3];
     }
     if (athleteCount === 7) {
-      return [4, 3];
+      return [3, 4];
     }
     return [4, 4];
   }
@@ -262,6 +262,49 @@ function athleteStrength(athlete: GroupSimulationAthleteInput): number {
   return athlete.ratingPoints ?? athlete.rankingPoints ?? 0;
 }
 
+function athleteSortScore(
+  athlete: GroupSimulationAthleteInput,
+  sortBasis: SortBasis,
+): { primary: number; secondary: number; normalizedName: string } {
+  const primary = sortBasis === "rating" ? athlete.ratingPoints : athlete.rankingPoints;
+  const secondary = sortBasis === "rating" ? athlete.rankingPoints : athlete.ratingPoints;
+  return {
+    primary: primary ?? Number.MIN_SAFE_INTEGER,
+    secondary: secondary ?? Number.MIN_SAFE_INTEGER,
+    normalizedName: normalizedNameForSort(athlete.nameDisplay),
+  };
+}
+
+function sortGroupAthletesByScore(
+  groups: GroupSimulationGroup[],
+  sortBasis: SortBasis,
+): GroupSimulationGroup[] {
+  return groups.map((group) => ({
+    ...group,
+    athletes: [...group.athletes].sort((left, right) => {
+      const scoreLeft = athleteSortScore(left, sortBasis);
+      const scoreRight = athleteSortScore(right, sortBasis);
+
+      if (scoreLeft.primary !== scoreRight.primary) {
+        return scoreRight.primary - scoreLeft.primary;
+      }
+
+      if (scoreLeft.secondary !== scoreRight.secondary) {
+        return scoreRight.secondary - scoreLeft.secondary;
+      }
+
+      const byName = scoreLeft.normalizedName.localeCompare(scoreRight.normalizedName, "pt-BR", {
+        sensitivity: "base",
+      });
+      if (byName !== 0) {
+        return byName;
+      }
+
+      return left.athleteId - right.athleteId;
+    }),
+  }));
+}
+
 function computeStrengthPenalty(groups: GroupSimulationGroup[]): number {
   if (groups.length === 0) {
     return 0;
@@ -387,10 +430,7 @@ export function optimizeByClubSwap(input: {
               continue;
             }
 
-            const improvesObjective =
-              evaluated.nextCollisions < currentCollisions ||
-              (evaluated.nextCollisions === currentCollisions &&
-                evaluated.nextStrengthPenalty < currentStrengthPenalty);
+            const improvesObjective = evaluated.nextCollisions < currentCollisions;
             if (!improvesObjective) {
               continue;
             }
@@ -529,7 +569,8 @@ export function simulateGroupsForCategory(input: {
   const initialAthleteIds = collectAthleteIds(initialGroups);
   const optimizedAthleteIds = collectAthleteIds(optimized.groups);
   const keepsCategoryAthletes = hasSameAthleteSet(initialAthleteIds, optimizedAthleteIds);
-  const finalGroups = keepsCategoryAthletes ? optimized.groups : initialGroups;
+  const unsortedFinalGroups = keepsCategoryAthletes ? optimized.groups : initialGroups;
+  const finalGroups = sortGroupAthletesByScore(unsortedFinalGroups, sortedResult.sortBasis);
   const finalCollisions = keepsCategoryAthletes ? optimized.collisionsAfter : optimized.collisionsBefore;
   const finalSwaps = keepsCategoryAthletes ? optimized.swapsApplied : 0;
   const finalIterations = keepsCategoryAthletes ? optimized.iterations : 0;
