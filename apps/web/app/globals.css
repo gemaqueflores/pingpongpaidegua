@@ -32,6 +32,7 @@ body {
   background: radial-gradient(circle at top right, #fdf5d8 0%, var(--bg) 40%, #e7f1ec 100%);
   color: var(--fg);
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 a {
@@ -430,6 +431,14 @@ h3 {
 
 .user-theme .container {
   position: relative;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.user-theme .grid,
+.user-theme .card,
+.user-theme .row {
+  min-width: 0;
 }
 
 .user-theme .user-page {
