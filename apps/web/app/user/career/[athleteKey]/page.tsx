@@ -90,6 +90,7 @@ type CareerResponse = {
     ESTADUAL: { bronze: number; prata: number; ouro: number };
     COPA: { bronze: number; prata: number; ouro: number };
     NACIONAL: { bronze: number; prata: number; ouro: number };
+    OPEN: { bronze: number; prata: number; ouro: number };
   };
   events: CareerEvent[];
 };
@@ -215,25 +216,26 @@ function getClassificationRowClass(position: number | null | undefined): string 
   return "classification-row-default";
 }
 
-function normalizeCompetitionKey(level: CareerEvent["nivel"]): "estadual" | "copa" | "brasileirao" {
+function normalizeCompetitionKey(level: CareerEvent["nivel"]): "estadual" | "copa" | "brasileirao" | "open" {
   if (level === "ESTADUAL") return "estadual";
   if (level === "COPA") return "copa";
+  if (level === "OPEN") return "open";
   return "brasileirao";
 }
 
 function emptyMatrix(): MedalMatrix {
   return {
-    ouro: { estadual: 0, copa: 0, brasileirao: 0, total: 0 },
-    prata: { estadual: 0, copa: 0, brasileirao: 0, total: 0 },
-    bronze: { estadual: 0, copa: 0, brasileirao: 0, total: 0 },
+    ouro: { estadual: 0, copa: 0, brasileirao: 0, open: 0, total: 0 },
+    prata: { estadual: 0, copa: 0, brasileirao: 0, open: 0, total: 0 },
+    bronze: { estadual: 0, copa: 0, brasileirao: 0, open: 0, total: 0 },
   };
 }
 
 function applyMatrixTotals(matrix: MedalMatrix): MedalMatrix {
   return {
-    ouro: { ...matrix.ouro, total: matrix.ouro.estadual + matrix.ouro.copa + matrix.ouro.brasileirao },
-    prata: { ...matrix.prata, total: matrix.prata.estadual + matrix.prata.copa + matrix.prata.brasileirao },
-    bronze: { ...matrix.bronze, total: matrix.bronze.estadual + matrix.bronze.copa + matrix.bronze.brasileirao },
+    ouro: { ...matrix.ouro, total: matrix.ouro.estadual + matrix.ouro.copa + matrix.ouro.brasileirao + matrix.ouro.open },
+    prata: { ...matrix.prata, total: matrix.prata.estadual + matrix.prata.copa + matrix.prata.brasileirao + matrix.prata.open },
+    bronze: { ...matrix.bronze, total: matrix.bronze.estadual + matrix.bronze.copa + matrix.bronze.brasileirao + matrix.bronze.open },
   };
 }
 
@@ -258,14 +260,17 @@ function computeMedalsByCompetition(events: CareerEvent[], fallback?: CareerResp
     matrix.ouro.estadual = fallback.ESTADUAL?.ouro ?? 0;
     matrix.ouro.copa = fallback.COPA?.ouro ?? 0;
     matrix.ouro.brasileirao = fallback.NACIONAL?.ouro ?? 0;
+    matrix.ouro.open = fallback.OPEN?.ouro ?? 0;
 
     matrix.prata.estadual = fallback.ESTADUAL?.prata ?? 0;
     matrix.prata.copa = fallback.COPA?.prata ?? 0;
     matrix.prata.brasileirao = fallback.NACIONAL?.prata ?? 0;
+    matrix.prata.open = fallback.OPEN?.prata ?? 0;
 
     matrix.bronze.estadual = fallback.ESTADUAL?.bronze ?? 0;
     matrix.bronze.copa = fallback.COPA?.bronze ?? 0;
     matrix.bronze.brasileirao = fallback.NACIONAL?.bronze ?? 0;
+    matrix.bronze.open = fallback.OPEN?.bronze ?? 0;
   }
 
   return applyMatrixTotals(matrix);
@@ -314,10 +319,11 @@ export default function AthleteCareerPage() {
 
   const federationText = payload ? formatAthleteFederation(payload.athlete) : null;
 
-  const shareColumns: Array<{ key: "estadual" | "copa" | "brasileirao" | "total"; label: string }> = [
+  const shareColumns: Array<{ key: "estadual" | "copa" | "brasileirao" | "open" | "total"; label: string }> = [
     { key: "estadual", label: "Estadual" },
     { key: "copa", label: "Copa" },
     { key: "brasileirao", label: "Brasileirão" },
+    { key: "open", label: "Open" },
     { key: "total", label: "Total" },
   ];
 

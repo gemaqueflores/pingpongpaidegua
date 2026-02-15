@@ -69,6 +69,7 @@ function inferEventType(event: EventRow): Exclude<EventTypeFilter, "ALL"> {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase();
+  if (normalized.includes("OPEN")) return "OPEN";
   if (normalized.includes("COPA")) return "COPA";
   if (normalized.includes("BRASILEIR") || normalized.includes("NACIONAL")) return "BRASILEIRAO";
   return "ESTADUAL";

@@ -73,14 +73,15 @@ test("MedalMatrixTable snapshot", () => {
   const html = renderToStaticMarkup(
     <MedalMatrixTable
       matrix={{
-        ouro: { estadual: 2, copa: 1, brasileirao: 0, total: 3 },
-        prata: { estadual: 1, copa: 0, brasileirao: 1, total: 2 },
-        bronze: { estadual: 4, copa: 2, brasileirao: 1, total: 7 },
+        ouro: { estadual: 2, copa: 1, brasileirao: 0, open: 1, total: 4 },
+        prata: { estadual: 1, copa: 0, brasileirao: 1, open: 0, total: 2 },
+        bronze: { estadual: 4, copa: 2, brasileirao: 1, open: 2, total: 9 },
       }}
     />,
   );
   assert.match(html, /career-medal-table/);
   assert.match(html, /Brasileirão/);
+  assert.match(html, /Open/);
   assert.match(html, /🥇/);
 });
 
@@ -100,9 +101,9 @@ test("AthleteSummaryCard snapshot", () => {
         totalMatches: 20,
       }}
       medalMatrix={{
-        ouro: { estadual: 2, copa: 0, brasileirao: 1, total: 3 },
-        prata: { estadual: 1, copa: 1, brasileirao: 0, total: 2 },
-        bronze: { estadual: 3, copa: 1, brasileirao: 1, total: 5 },
+        ouro: { estadual: 2, copa: 0, brasileirao: 1, open: 1, total: 4 },
+        prata: { estadual: 1, copa: 1, brasileirao: 0, open: 0, total: 2 },
+        bronze: { estadual: 3, copa: 1, brasileirao: 1, open: 2, total: 7 },
       }}
       share={{
         athleteKey: "ATLETA-EXEMPLO",
@@ -111,6 +112,7 @@ test("AthleteSummaryCard snapshot", () => {
           { key: "estadual", label: "Estadual" },
           { key: "copa", label: "Copa" },
           { key: "brasileirao", label: "Brasileirão" },
+          { key: "open", label: "Open" },
           { key: "total", label: "Total" },
         ],
       }}

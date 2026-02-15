@@ -49,11 +49,12 @@ function formatDate(value: string | null): string {
   return new Date(value).toLocaleDateString("pt-BR");
 }
 
-function inferEventType(name: string): "ESTADUAL" | "COPA" | "BRASILEIRAO" {
+function inferEventType(name: string): "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN" {
   const normalized = name
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase();
+  if (normalized.includes("OPEN")) return "OPEN";
   if (normalized.includes("COPA")) return "COPA";
   if (normalized.includes("BRASILEIR") || normalized.includes("NACIONAL")) return "BRASILEIRAO";
   return "ESTADUAL";

@@ -23,7 +23,7 @@ type AthleteSummaryCardProps = {
   share: {
     athleteKey: string;
     stateCode?: string | null;
-    visibleColumns: Array<{ key: "estadual" | "copa" | "brasileirao" | "total"; label: string }>;
+    visibleColumns: Array<{ key: "estadual" | "copa" | "brasileirao" | "open" | "total"; label: string }>;
   };
 };
 

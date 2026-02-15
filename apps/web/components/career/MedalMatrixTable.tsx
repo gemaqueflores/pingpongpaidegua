@@ -4,6 +4,7 @@ type MedalRow = {
   estadual: number;
   copa: number;
   brasileirao: number;
+  open: number;
   total: number;
 };
 
@@ -39,6 +40,7 @@ export function MedalMatrixTable({ matrix }: MedalMatrixTableProps) {
               <th>Estadual</th>
               <th>Copa</th>
               <th>Brasileirão</th>
+              <th>Open</th>
               <th>Total</th>
             </tr>
           </thead>
@@ -51,6 +53,7 @@ export function MedalMatrixTable({ matrix }: MedalMatrixTableProps) {
                 <td>{formatCount(row.values.estadual)}</td>
                 <td>{formatCount(row.values.copa)}</td>
                 <td>{formatCount(row.values.brasileirao)}</td>
+                <td>{formatCount(row.values.open)}</td>
                 <td><strong>{formatCount(row.values.total)}</strong></td>
               </tr>
             ))}
