@@ -1,5 +1,7 @@
-import { EventLevel } from "@prisma/client";
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Min } from "class-validator";
+
+const EVENT_LEVEL_VALUES = ["ESTADUAL", "COPA", "NACIONAL", "OPEN"] as const;
+type EventLevelInput = (typeof EVENT_LEVEL_VALUES)[number];
 
 export class CreateAdminEventDto {
   @IsInt()
@@ -10,8 +12,8 @@ export class CreateAdminEventDto {
   nome!: string;
 
   @IsOptional()
-  @IsEnum(EventLevel)
-  nivel?: EventLevel;
+  @IsIn(EVENT_LEVEL_VALUES)
+  nivel?: EventLevelInput;
 
   @IsOptional()
   @IsString()
