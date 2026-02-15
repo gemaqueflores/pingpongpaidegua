@@ -245,9 +245,15 @@ export class CaptureService {
         }
       }
 
-      if (categorizedPayloads === 0 || (requiresResultValidation && (resultadosCount === 0 || matchesWithSets === 0))) {
+      if (categorizedPayloads === 0) {
         throw new Error(
           `Captura HTTP inconsistente (categorizedPayloads=${categorizedPayloads}, resultadosCount=${resultadosCount}, matchesWithSets=${matchesWithSets})`,
+        );
+      }
+
+      if (requiresResultValidation && (resultadosCount === 0 || matchesWithSets === 0)) {
+        diagnosticWarnings.push(
+          `Captura HTTP com resultados incompletos (resultadosCount=${resultadosCount}, matchesWithSets=${matchesWithSets}); mantendo payload HTTP para evitar scrape vazio.`,
         );
       }
 
