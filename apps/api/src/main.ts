@@ -22,7 +22,33 @@ async function bootstrap(): Promise<void> {
     .filter(Boolean);
 
   const defaultLocalOrigins = ["http://localhost:3000", "http://127.0.0.1:3000"];
-  const allowedOrigins = [...new Set([...configuredOrigins, ...defaultLocalOrigins])];
+  const configuredOriginSet = new Set([...configuredOrigins, ...defaultLocalOrigins]);
+  const allowVercelPreviews = process.env.FRONTEND_ALLOW_VERCEL_PREVIEWS !== "false";
+
+  const wildcardMatchers = [...configuredOriginSet]
+    .filter((origin) => origin.includes("*"))
+    .map((pattern) => {
+      const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+      return new RegExp(`^${escaped}$`, "i");
+    });
+
+  const exactOriginSet = new Set([...configuredOriginSet].filter((origin) => !origin.includes("*")));
+
+  const isOriginAllowed = (origin: string): boolean => {
+    if (exactOriginSet.has(origin)) {
+      return true;
+    }
+
+    if (wildcardMatchers.some((matcher) => matcher.test(origin))) {
+      return true;
+    }
+
+    if (allowVercelPreviews && /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) {
+      return true;
+    }
+
+    return false;
+  };
 
   const originDelegate = (
     origin: string | undefined,
@@ -34,7 +60,7 @@ async function bootstrap(): Promise<void> {
       return;
     }
 
-    if (allowedOrigins.includes(requestOrigin)) {
+    if (isOriginAllowed(requestOrigin)) {
       callback(null, true);
       return;
     }
