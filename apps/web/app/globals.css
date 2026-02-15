@@ -585,17 +585,23 @@ h3 {
   background: rgba(20, 54, 116, 0.95);
 }
 
-.user-theme .match-row-win td {
+.user-theme .data-table tbody tr.match-row-win td,
+.user-theme .data-table tbody tr.match-row-win:nth-child(even) td,
+.user-theme .data-table tbody tr.match-row-win:hover td {
   background: rgba(70, 180, 109, 0.28);
   color: #f1fff6;
 }
 
-.user-theme .match-row-lose td {
+.user-theme .data-table tbody tr.match-row-lose td,
+.user-theme .data-table tbody tr.match-row-lose:nth-child(even) td,
+.user-theme .data-table tbody tr.match-row-lose:hover td {
   background: rgba(224, 95, 95, 0.28);
   color: #fff5f5;
 }
 
-.user-theme .match-row-neutral td {
+.user-theme .data-table tbody tr.match-row-neutral td,
+.user-theme .data-table tbody tr.match-row-neutral:nth-child(even) td,
+.user-theme .data-table tbody tr.match-row-neutral:hover td {
   background: rgba(9, 34, 80, 0.92);
   color: #eef5ff;
 }
@@ -798,6 +804,21 @@ h3 {
 }
 
 @media (max-width: 960px) {
+  .user-theme .product-header.user .container.row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .user-theme .product-header.user nav.row {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+  }
+
   .user-theme .medal-lane {
     grid-template-columns: 1fr;
   }
@@ -842,5 +863,64 @@ h3 {
   .career-athlete-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .user-theme .hero-subtitle {
+    line-height: 1.25;
+  }
+
+  .user-theme .row {
+    gap: 8px;
+  }
+
+  .user-theme button,
+  .user-theme .balloon-button {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .user-theme .data-table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .user-theme .data-table thead,
+  .user-theme .data-table tbody {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 390px) {
+  .container {
+    padding: 12px;
+  }
+
+  .user-theme .hero-header {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .user-theme .hero-title {
+    font-size: clamp(1.5rem, 8vw, 2rem);
+  }
+
+  .user-theme .hero-subtitle {
+    font-size: 0.95rem;
+  }
+
+  .user-theme .arena-card {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .sim-category-tabs {
+    gap: 6px;
+  }
+
+  .sim-category-tab {
+    padding: 6px 10px;
   }
 }
