@@ -11,6 +11,10 @@ import {
 } from "../../../../../lib/user-api";
 import { ShareActions } from "../../../../../components/share/ShareActions";
 import { createGroupSimulationShareImageBlob } from "../../../../../lib/share-image";
+import { HeroTitle } from "../../../../../components/ui/HeroTitle";
+import { Card } from "../../../../../components/ui/Card";
+import { Skeleton } from "../../../../../components/ui/Skeleton";
+import { Badge } from "../../../../../components/ui/Badge";
 
 type EventRow = UserEventRow;
 
@@ -53,7 +57,9 @@ export default function GroupSimulatorPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<GroupSimulationResponse | null>(null);
-  const [categorySlideIndex, setCategorySlideIndex] = useState(0);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [categorySearch, setCategorySearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(true);
 
   useEffect(() => {
     void apiGetEvents().then((events) => {
@@ -97,34 +103,53 @@ export default function GroupSimulatorPage() {
   }, [response]);
 
   useEffect(() => {
-    setCategorySlideIndex(0);
-  }, [scope, response]);
-
-  useEffect(() => {
     if (sortedCategories.length === 0) {
+      setSelectedCategoryId(null);
       return;
     }
-    if (categorySlideIndex >= sortedCategories.length) {
-      setCategorySlideIndex(sortedCategories.length - 1);
+
+    const exists = selectedCategoryId !== null && sortedCategories.some((category) => category.categoryId === selectedCategoryId);
+    if (!exists) {
+      setSelectedCategoryId(sortedCategories[0].categoryId);
     }
-  }, [categorySlideIndex, sortedCategories.length]);
+  }, [selectedCategoryId, sortedCategories]);
 
   const hasCategories = sortedCategories.length > 0;
+  const searchedCategories = useMemo(() => {
+    const query = categorySearch.trim().toUpperCase();
+    if (!query) {
+      return sortedCategories;
+    }
+    return sortedCategories.filter((category) => category.categoryName.toUpperCase().includes(query));
+  }, [categorySearch, sortedCategories]);
+
+  const visibleCategories = useMemo(() => {
+    if (selectedCategoryId === null) {
+      return searchedCategories.slice(0, 1);
+    }
+    const selected = searchedCategories.find((category) => category.categoryId === selectedCategoryId);
+    if (selected) {
+      return [selected];
+    }
+    return searchedCategories.slice(0, 1);
+  }, [searchedCategories, selectedCategoryId]);
 
   return (
     <main className="container grid user-page">
-      <section className="hero-header">
-        <h1 className="hero-title">Simulador de Grupos</h1>
-        <p className="hero-subtitle">Arena de projeção de grupos</p>
-        <div className="row">
-          <button onClick={() => (window.location.href = `/user/events/${eventId}`)}>Voltar ao evento</button>
-          <button className="secondary" onClick={() => (window.location.href = "/")}>
-            Home
-          </button>
-        </div>
-      </section>
+      <HeroTitle
+        title="Simulador de Grupos"
+        subtitle="Arena de projeção de grupos"
+        actions={
+          <>
+            <button onClick={() => (window.location.href = `/user/events/${eventId}`)}>Voltar ao evento</button>
+            <button className="secondary" onClick={() => (window.location.href = "/")}>
+              Home
+            </button>
+          </>
+        }
+      />
 
-      <section className="card arena-card grid">
+      <Card className="grid">
         <h2>{event?.nome ?? `Evento ${eventId}`}</h2>
         <div className="balloon-group" role="group" aria-label="Escopo de inscritos">
           <button
@@ -142,7 +167,13 @@ export default function GroupSimulatorPage() {
             Incluir pré-inscritos
           </button>
         </div>
-        {loading ? <p>Carregando simulação...</p> : null}
+        {loading ? (
+          <div className="grid">
+            <Skeleton height="24px" />
+            <Skeleton height="24px" />
+            <Skeleton height="120px" />
+          </div>
+        ) : null}
         {error ? <p className="warn">{error}</p> : null}
         {!loading && !error && response ? (
           <>
@@ -151,32 +182,57 @@ export default function GroupSimulatorPage() {
             {hasCategories ? (
               <div className="sim-category-carousel">
                 <div className="sim-category-carousel-header">
-                  <div className="sim-category-tabs" role="tablist" aria-label="Categorias do simulador">
-                    {sortedCategories.map((category, index) => (
-                      <button
-                        key={`tab-${category.categoryId}`}
-                        type="button"
-                        role="tab"
-                        aria-selected={categorySlideIndex === index}
-                        className={`sim-category-tab ${categorySlideIndex === index ? "active" : ""}`}
-                        onClick={() => setCategorySlideIndex(index)}
-                      >
-                        {category.categoryName}
-                      </button>
-                    ))}
+                  <div className="row" style={{ justifyContent: "space-between" }}>
+                    <h3 style={{ margin: 0 }}>Filtro de categoria</h3>
+                    <span className="arena-muted" title="Atleta: nome reduzido ou completo; Clube: agremiação; Pontos: ranking ou rating conforme categoria.">
+                      Legenda das colunas
+                    </span>
                   </div>
-                  <p className="sim-category-carousel-counter">
-                    Categoria {categorySlideIndex + 1} de {sortedCategories.length}
-                  </p>
+                  <label className="arena-muted" htmlFor="group-sim-category-search">Buscar categoria</label>
+                  <div className="row" style={{ justifyContent: "space-between" }}>
+                    <p className="sim-category-carousel-counter">
+                      {visibleCategories.length > 0 ? "Categoria selecionada para simulação" : "Nenhuma categoria encontrada"}
+                    </p>
+                    <button type="button" className="secondary" onClick={() => setFilterOpen((current) => !current)}>
+                      {filterOpen ? "Recolher filtros" : "Expandir filtros"}
+                    </button>
+                  </div>
+                  {filterOpen ? (
+                    <>
+                      <input
+                        id="group-sim-category-search"
+                        value={categorySearch}
+                        onChange={(event) => setCategorySearch(event.target.value)}
+                        placeholder="Digite para filtrar categorias"
+                      />
+                      <select
+                        value={selectedCategoryId ?? ""}
+                        onChange={(event) => setSelectedCategoryId(Number(event.target.value))}
+                        aria-label="Selecionar categoria"
+                        disabled={searchedCategories.length === 0}
+                      >
+                        {searchedCategories.length === 0 ? <option value="">Nenhuma categoria</option> : null}
+                        {searchedCategories.map((category) => (
+                          <option key={category.categoryId} value={category.categoryId}>
+                            {category.categoryName}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  ) : null}
+                  {visibleCategories.length > 0 ? (
+                    <div className="row">
+                      <span className="ui-badge ui-badge-open">Categoria: {visibleCategories[0].categoryName}</span>
+                      <button type="button" className="secondary" onClick={() => setCategorySearch("")}>
+                        Limpar busca
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
 
-                <div className="sim-category-carousel-viewport">
-                  <div
-                    className="sim-category-carousel-track"
-                    style={{ transform: `translateX(-${categorySlideIndex * 100}%)` }}
-                  >
-                    {sortedCategories.map((category) => (
-                      <article key={category.categoryId} className="sim-category-card sim-category-slide">
+                <div className="sim-category-grid">
+                    {visibleCategories.map((category) => (
+                      <article key={category.categoryId} className="sim-category-card">
                         {(() => {
                           const useRatingPoints = isRatingCategory(
                             category.categoryName,
@@ -189,7 +245,6 @@ export default function GroupSimulatorPage() {
                           <h3>{category.categoryName}</h3>
                           <ShareActions
                             inline
-                            iconOnly
                             shareText={`Simulação de grupos da categoria ${category.categoryName}`}
                             fileName={`simulador-${eventId}-${category.categoryId}.png`}
                             buildImage={() =>
@@ -211,33 +266,43 @@ export default function GroupSimulatorPage() {
                         <p>
                           Atletas Simulados: <strong>{category.registration.considered}</strong> | Inscritos: <strong>{category.registration.confirmed}</strong> | Pré-inscritos: <strong>{category.registration.preInscrito}</strong>
                         </p>
+                        <div className="row">
+                          <Badge tone="default">
+                            Base de seed: {category.stats?.sortBasis === "rating" ? "Rating" : "Ranking"}
+                          </Badge>
+                          <Badge tone="default">Fallback aplicado: {String(category.stats?.fallbackUsedCount ?? 0)}</Badge>
+                          <Badge tone="open">Líder de grupo destacado</Badge>
+                        </div>
 
                         <div className="sim-group-grid">
                           {category.groups.map((group) => (
                             <section key={`${category.categoryId}-${group.groupName}`} className="sim-group-card">
                               <h4>{group.groupName}</h4>
-                              <table className="data-table">
-                                <thead>
-                                  <tr>
-                                    <th>Atleta</th>
-                                    <th>Clube</th>
-                                    <th>{pointsLabel}</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {group.athletes.map((athlete) => (
-                                    <tr key={`${group.groupName}-${athlete.athleteId}`}>
-                                      <td>{athlete.nameReduced || athlete.nameDisplay}</td>
-                                      <td>{athlete.clubName ?? "-"}</td>
-                                      <td>
-                                        {useRatingPoints
-                                          ? (athlete.ratingPoints ?? "-")
-                                          : (athlete.rankingPoints ?? "-")}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                              <div className="group-athlete-list">
+                                <div className="group-athlete-row group-athlete-head">
+                                  <span>Atleta</span>
+                                  <span>{pointsLabel}</span>
+                                </div>
+                                {group.athletes.map((athlete, athleteIndex) => (
+                                  <div
+                                    key={`${group.groupName}-${athlete.athleteId}`}
+                                    className={`group-athlete-row ${athleteIndex === 0 ? "group-athlete-seed" : ""}`}
+                                  >
+                                    <div className="group-athlete-main">
+                                      <span className="group-athlete-name">
+                                        {athleteIndex === 0 ? "★ " : ""}
+                                        {athlete.nameReduced || athlete.nameDisplay}
+                                      </span>
+                                      <span className="group-athlete-club">{athlete.clubName ?? "-"}</span>
+                                    </div>
+                                    <span className="group-athlete-points">
+                                      {useRatingPoints
+                                        ? (athlete.ratingPoints ?? "-")
+                                        : (athlete.rankingPoints ?? "-")}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
                             </section>
                           ))}
                         </div>
@@ -246,13 +311,12 @@ export default function GroupSimulatorPage() {
                         })()}
                       </article>
                     ))}
-                  </div>
                 </div>
               </div>
             ) : null}
           </>
         ) : null}
-      </section>
+      </Card>
     </main>
   );
 }

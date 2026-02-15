@@ -177,6 +177,70 @@ Credenciais padrão:
   - Telegram
   - Instagram (feed/story/reels via download da arte gerada)
 
+## Design system web
+- Tokens centralizados: `apps/web/lib/designTokens.ts`
+- Cores principais:
+  - `primaryBg: #0A1233`
+  - `cardBg: #121E52`
+  - `accent: #FFC300`
+  - `textPrimary: #FFFFFF`
+  - `textSecondary: #9FB0FF`
+  - `win: #2ECC71`
+  - `loss: #E74C3C`
+- Espaçamento:
+  - `xs=8px`, `sm=16px`, `md=24px`, `lg=32px`, `xl=48px`
+- Tipografia:
+  - Títulos: Montserrat (bold)
+  - Corpo: Inter (regular)
+- Raios:
+  - `card=20px`, `component=12px`
+
+## Componentes reutilizáveis
+- Base UI em `apps/web/components/ui`:
+  - `Card` (com variantes: `event`, `athlete`, `group`, `match`, `stat`)
+  - `Hero` / `HeroTitle`
+  - `Badge`
+  - `Skeleton`
+  - `StatBlock`
+  - `EventCard`
+  - `MatchCard`
+- Compartilhamento em `apps/web/components/share/ShareActions.tsx`:
+  - Botões para WhatsApp, Instagram, Telegram e exportação PNG.
+
+## Templates sociais e exportação
+- Geração de imagem em `apps/web/lib/share-image.ts`.
+- Templates ativos:
+  - Card de carreira de atleta.
+  - Card de simulador de grupos.
+- Formatos suportados:
+  - `portrait` (1080x1350, 4:5)
+  - `square` (1080x1080, 1:1)
+  - `landscape` (1920x1080)
+- Fluxo:
+  1. UI monta payload (título, métricas, grupos etc.).
+  2. `createShareImageBlob` / `createGroupSimulationShareImageBlob` gera PNG.
+  3. `downloadBlob` exporta arquivo.
+
+## Estratégia de performance UI
+- Home:
+  - eventos em grid de cards ordenados por situação/data.
+  - lista de atletas com paginação incremental (`Carregar mais`).
+- Carregamento:
+  - skeleton loaders nos blocos críticos.
+- Responsividade:
+  - grid adaptativo para cards e faixas horizontais com `overflow-x` controlado.
+
+## Testes visuais (snapshot de componentes)
+- Testes em `apps/web/tests/ui-snapshots.test.tsx`.
+- Cobertura atual:
+  - `Hero`
+  - `EventCard`
+  - `StatBlock`
+  - `MatchCard`
+  - contrato de exportação de templates em `share-image`.
+- Comando:
+  - `npm run test --workspace apps/web`
+
 ## Perfil de baixo custo (scrape a cada 2 horas)
 - `SCRAPER_REFRESH_CRON_MS` padrao no worker: `7200000` (2 horas).
 - Para rodar scrape sem worker 24/7, use:
@@ -185,6 +249,14 @@ Credenciais padrão:
   - `.github/workflows/scrape-every-2h.yml`
   - Agenda automatica: a cada 2 horas (`0 */2 * * *`).
   - Execucao manual: `workflow_dispatch` com `event_ids` opcional.
+  - Execucao do scrape via SSH na VM Oracle (sem expor Postgres na internet).
+  - Secrets obrigatorios:
+    - `ORACLE_SSH_HOST`
+    - `ORACLE_SSH_USER`
+    - `ORACLE_SSH_PRIVATE_KEY`
+  - Secrets opcionais:
+    - `ORACLE_SSH_PORT` (default `22`)
+    - `ORACLE_APP_DIR` (default `~/pingpongpaidegua`)
 
 ## Publicacao online (producao)
 1. Configure DNS do dominio para o servidor.
@@ -213,6 +285,8 @@ Credenciais padrão:
 7. Para atualizar sem downtime longo:
    - `docker compose pull`
    - `docker compose up -d --build`
+8. Para Oracle + Vercel com DuckDNS e HTTPS sem Cloudflare:
+   - `docs/runbook-producao-oracle-vercel.md`
 
 ## Execução local sem Docker
 

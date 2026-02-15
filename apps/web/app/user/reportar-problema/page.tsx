@@ -2,6 +2,8 @@
 
 import { FormEvent, useState } from "react";
 import { apiReportProblem } from "../../../lib/user-api";
+import { Hero } from "../../../components/ui/Hero";
+import { Card } from "../../../components/ui/Card";
 
 export default function ReportarProblemaPage() {
   const [title, setTitle] = useState("");
@@ -17,6 +19,12 @@ export default function ReportarProblemaPage() {
     setError(null);
 
     try {
+      if (title.trim().length < 6) {
+        throw new Error("Informe um título com pelo menos 6 caracteres.");
+      }
+      if (description.trim().length < 20) {
+        throw new Error("Descreva o problema com mais detalhes (mínimo 20 caracteres).");
+      }
       await apiReportProblem({
         title: title.trim(),
         description: description.trim(),
@@ -33,12 +41,15 @@ export default function ReportarProblemaPage() {
 
   return (
     <main className="container grid user-page">
-      <section className="hero-header">
-        <h1 className="hero-title">Reportar problema</h1>
-        <p className="hero-subtitle">Ajude a melhorar o PingPong Paid'egua</p>
-      </section>
+      <Hero
+        title="Reportar problema"
+        subtitle="Ajude a melhorar o PingPong Paid'egua"
+      />
 
-      <section className="card arena-card grid report-problem-card">
+      <Card className="grid report-problem-card">
+        <p className="arena-muted">
+          Obrigado por contribuir. Informe o título e descreva o cenário com evento, categoria e atleta (quando aplicável).
+        </p>
         <form onSubmit={onSubmit} className="grid">
           <label className="grid" htmlFor="bug-title">
             <span>Título</span>
@@ -76,7 +87,8 @@ export default function ReportarProblemaPage() {
           {message ? <p className="support-success">{message}</p> : null}
           {error ? <p className="warn">{error}</p> : null}
         </form>
-      </section>
+        {message ? <div className="ui-toast">Obrigado! Seu reporte foi enviado com sucesso.</div> : null}
+      </Card>
     </main>
   );
 }

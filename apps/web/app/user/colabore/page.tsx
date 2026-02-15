@@ -1,6 +1,8 @@
 ﻿"use client";
 
 import { useMemo, useState } from "react";
+import { Hero } from "../../../components/ui/Hero";
+import { Card } from "../../../components/ui/Card";
 
 const PIX_QR_DEFAULT = "/pix-qrcode.png";
 const PIX_KEY_DEFAULT = "227b600a-3d60-4229-90c8-3286d822b6ae";
@@ -64,6 +66,7 @@ export default function ColaborePage() {
   const [amount, setAmount] = useState("20");
   const [showFallback, setShowFallback] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const numericAmount = useMemo(() => {
     const normalized = Number(String(amount).replace(",", "."));
@@ -86,7 +89,9 @@ export default function ColaborePage() {
     try {
       await navigator.clipboard.writeText(pixKey);
       setCopySuccess(true);
+      setToast("Chave PIX copiada.");
       setTimeout(() => setCopySuccess(false), 2500);
+      setTimeout(() => setToast(null), 2500);
     } catch {
       setCopySuccess(false);
     }
@@ -94,12 +99,15 @@ export default function ColaborePage() {
 
   return (
     <main className="container grid user-page">
-      <section className="hero-header">
-        <h1 className="hero-title">Colabore com o projeto</h1>
-        <p className="hero-subtitle">Contribua com PIX para manter o sistema no ar</p>
-      </section>
+      <Hero
+        title="Colabore com o projeto"
+        subtitle="Contribua com PIX para manter o sistema no ar"
+      />
 
-      <section className="card arena-card grid donate-card">
+      <Card className="grid donate-card">
+        <p className="arena-muted">
+          Sua colaboração ajuda a manter a infraestrutura, scraping e recursos de compartilhamento.
+        </p>
         <label className="grid" htmlFor="pix-value">
           <span>Valor da colaboração (R$)</span>
           <input
@@ -150,7 +158,8 @@ export default function ColaborePage() {
         <div className="row">
           <button type="button" onClick={() => (window.location.href = "/")}>Voltar para home</button>
         </div>
-      </section>
+        {toast ? <div className="ui-toast">{toast}</div> : null}
+      </Card>
     </main>
   );
 }

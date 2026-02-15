@@ -1,4 +1,7 @@
-﻿export interface ShareImageOptions {
+export type ShareExportFormat = "portrait" | "square" | "landscape";
+
+export interface ShareImageOptions {
+  format?: ShareExportFormat;
   title: string;
   subtitle?: string;
   subtitleSecondary?: string;
@@ -18,6 +21,7 @@
 }
 
 export interface GroupSimulationShareOptions {
+  format?: ShareExportFormat;
   eventName: string;
   categoryName: string;
   groups: Array<{
@@ -28,6 +32,12 @@ export interface GroupSimulationShareOptions {
     }>;
   }>;
   branding?: string;
+}
+
+export function resolveCanvasSize(format: ShareExportFormat | undefined): { width: number; height: number } {
+  if (format === "square") return { width: 1080, height: 1080 };
+  if (format === "landscape") return { width: 1920, height: 1080 };
+  return { width: 1080, height: 1350 };
 }
 
 function wrapText(
@@ -150,6 +160,59 @@ function drawBall(context: CanvasRenderingContext2D, x: number, y: number, radiu
   context.fill();
 }
 
+function drawTemplateHeader(
+  context: CanvasRenderingContext2D,
+  width: number,
+  title: string,
+  subtitle?: string,
+): number {
+  context.font = "italic 800 56px 'IBM Plex Sans', sans-serif";
+  context.fillStyle = "#eef5ff";
+  const titleLines = wrapText(context, title.toUpperCase(), width - 140);
+  let y = 90;
+  for (const line of titleLines.slice(0, 2)) {
+    const lineWidth = context.measureText(line).width;
+    context.fillText(line, (width - lineWidth) / 2, y);
+    y += 62;
+  }
+
+  if (subtitle) {
+    context.font = "italic 700 36px 'IBM Plex Sans', sans-serif";
+    context.fillStyle = "#ffd43b";
+    const lines = wrapText(context, subtitle.toUpperCase(), width - 160);
+    for (const line of lines.slice(0, 2)) {
+      const lineWidth = context.measureText(line).width;
+      context.fillText(line, (width - lineWidth) / 2, y);
+      y += 42;
+    }
+  }
+
+  const glowLine = context.createLinearGradient(60, y, width - 60, y);
+  glowLine.addColorStop(0, "rgba(255,212,59,0)");
+  glowLine.addColorStop(0.5, "rgba(255,212,59,1)");
+  glowLine.addColorStop(1, "rgba(255,212,59,0)");
+  context.fillStyle = glowLine;
+  context.fillRect(60, y, width - 120, 3);
+  return y + 24;
+}
+
+function drawTemplateFooter(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  branding = "PingPong Paid'egua",
+): void {
+  const year = new Date().getFullYear();
+  const footerText = `Fonte: ${branding} • ${year}`;
+  context.font = "italic 700 24px 'IBM Plex Sans', sans-serif";
+  context.fillStyle = "#ffd43b";
+  context.fillText(footerText, 50, height - 32);
+
+  context.font = "600 18px 'IBM Plex Sans', sans-serif";
+  context.fillStyle = "rgba(227, 240, 255, 0.9)";
+  context.fillText("pingpongpaidegua.vercel.app", width - 290, height - 34);
+}
+
 function fitTextWithEllipsis(
   context: CanvasRenderingContext2D,
   value: string,
@@ -219,8 +282,7 @@ function drawMedalIcon(
 }
 
 export async function createShareImageBlob(options: ShareImageOptions): Promise<Blob> {
-  const width = 1080;
-  const height = 1350;
+  const { width, height } = resolveCanvasSize(options.format);
   const padding = 70;
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -250,25 +312,7 @@ export async function createShareImageBlob(options: ShareImageOptions): Promise<
   context.fillStyle = overlayGradient;
   context.fillRect(0, 0, width, height);
 
-  let y = 140;
-  context.font = "italic 700 74px 'IBM Plex Sans', sans-serif";
-  context.fillStyle = "#eef5ff";
-  const titleLines = wrapText(context, options.title.toUpperCase(), width - padding * 2);
-  for (const line of titleLines.slice(0, 2)) {
-    context.fillText(line, padding, y);
-    y += 82;
-  }
-
-  if (options.subtitle) {
-    context.font = "italic 700 44px 'IBM Plex Sans', sans-serif";
-    context.fillStyle = "#ffd43b";
-    const subLines = wrapText(context, options.subtitle.toUpperCase(), width - padding * 2);
-    for (const line of subLines.slice(0, 2)) {
-      context.fillText(line, padding, y);
-      y += 50;
-    }
-    y += 4;
-  }
+  let y = drawTemplateHeader(context, width, options.title, options.subtitle);
 
   if (options.subtitleSecondary) {
     context.font = "italic 700 42px 'IBM Plex Sans', sans-serif";
@@ -414,8 +458,9 @@ export async function createShareImageBlob(options: ShareImageOptions): Promise<
   if (options.footer) {
     context.font = "italic 700 30px 'IBM Plex Sans', sans-serif";
     context.fillStyle = "#ffd43b";
-    context.fillText(options.footer, padding, height - 54);
+    context.fillText(options.footer, padding, height - 70);
   }
+  drawTemplateFooter(context, width, height);
 
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob((value) => resolve(value), "image/png"),
@@ -429,7 +474,7 @@ export async function createShareImageBlob(options: ShareImageOptions): Promise<
 export async function createGroupSimulationShareImageBlob(
   options: GroupSimulationShareOptions,
 ): Promise<Blob> {
-  const width = 1080;
+  const { width, height: minHeight } = resolveCanvasSize(options.format);
   const paddingX = 52;
   const topPadding = 54;
   const groupsPerRow = 2;
@@ -455,7 +500,7 @@ export async function createGroupSimulationShareImageBlob(
 
   const headerHeight = 300;
   const contentHeight = headerHeight + groupsTotalHeight + warningHeight + footerSpace;
-  const height = Math.max(1350, Math.ceil(contentHeight));
+  const height = Math.max(minHeight, Math.ceil(contentHeight));
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -486,44 +531,9 @@ export async function createGroupSimulationShareImageBlob(
     context.fill();
   }
 
-  const drawCenteredLine = (
-    text: string,
-    yPos: number,
-    maxWidth: number,
-    style: { font: string; color: string },
-  ): number => {
-    context.font = style.font;
-    context.fillStyle = style.color;
-    const lines = wrapText(context, text, maxWidth);
-    let cursorY = yPos;
-    for (const line of lines.slice(0, 2)) {
-      const lineWidth = context.measureText(line).width;
-      context.fillText(line, (width - lineWidth) / 2, cursorY);
-      cursorY += 62;
-    }
-    return cursorY;
-  };
-
   let y = topPadding;
 
-  y = drawCenteredLine(options.eventName.toUpperCase(), y, width - paddingX * 2, {
-    font: "italic 800 56px 'IBM Plex Sans', sans-serif",
-    color: "#ffd43b",
-  });
-
-  context.font = "italic 700 50px 'IBM Plex Sans', sans-serif";
-  context.fillStyle = "#eaf3ff";
-  const subtitle = "TÊNIS DE MESA BRASIL";
-  context.fillText(subtitle, (width - context.measureText(subtitle).width) / 2, y);
-  y += 28;
-
-  const glowLine = context.createLinearGradient(paddingX, y, width - paddingX, y);
-  glowLine.addColorStop(0, "rgba(255,212,59,0)");
-  glowLine.addColorStop(0.5, "rgba(255,212,59,1)");
-  glowLine.addColorStop(1, "rgba(255,212,59,0)");
-  context.fillStyle = glowLine;
-  context.fillRect(paddingX, y, width - paddingX * 2, 4);
-  y += 56;
+  y = drawTemplateHeader(context, width, options.eventName, "Tênis de Mesa Brasil");
 
   drawRoundedRect(context, paddingX, y - 44, width - paddingX * 2, 74, 18);
   context.fillStyle = "rgba(9, 33, 86, 0.7)";
@@ -618,9 +628,7 @@ export async function createGroupSimulationShareImageBlob(
   context.fillStyle = "#ffe28f";
   context.fillText("Aviso: apenas simulação de grupo, não é o grupo oficial!", paddingX + 18, warningY + 31);
 
-  context.font = "italic 700 30px 'IBM Plex Sans', sans-serif";
-  context.fillStyle = "#ffd43b";
-  context.fillText(`Fonte: ${options.branding ?? "PingPong Paid'egua"}`, paddingX, height - 44);
+  drawTemplateFooter(context, width, height, options.branding ?? "PingPong Paid'egua");
 
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob((value) => resolve(value), "image/png"),

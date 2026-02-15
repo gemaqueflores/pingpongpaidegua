@@ -3,6 +3,10 @@
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { apiGetAthleteSummary } from "../../../../../../lib/user-api";
+import { HeroTitle } from "../../../../../../components/ui/HeroTitle";
+import { Card } from "../../../../../../components/ui/Card";
+import { MatchCard } from "../../../../../../components/ui/MatchCard";
+import { Skeleton } from "../../../../../../components/ui/Skeleton";
 
 type GroupMode = "category" | "schedule";
 
@@ -172,16 +176,6 @@ function resolveMatchTone(match: SummaryMatch): MatchTone {
   return "neutral";
 }
 
-function toneRowClass(tone: MatchTone): string {
-  if (tone === "win") {
-    return "match-row-win";
-  }
-  if (tone === "lose") {
-    return "match-row-lose";
-  }
-  return "";
-}
-
 export default function AthleteSummaryPage() {
   const params = useParams<{ id: string; athleteId: string }>();
   const eventId = Number(params.id);
@@ -253,19 +247,26 @@ export default function AthleteSummaryPage() {
 
   return (
     <main className="container grid user-page">
-      <section className="hero-header">
-        <h1 className="hero-title">Resumo do Atleta</h1>
-        <p className="hero-subtitle">Tênis de Mesa / Table Tennis</p>
-        <button type="button" onClick={() => (window.location.href = `/user/events/${eventId}`)}>
-          Voltar para evento
-        </button>
-      </section>
+      <HeroTitle
+        title="Resumo do Atleta"
+        subtitle="Tênis de Mesa / Table Tennis"
+        actions={
+          <button type="button" onClick={() => (window.location.href = `/user/events/${eventId}`)}>
+            Voltar para evento
+          </button>
+        }
+      />
 
       {!summary ? (
-        <p>Carregando...</p>
+        <Card className="grid">
+          <Skeleton height="24px" width="260px" />
+          <Skeleton height="20px" />
+          <Skeleton height="20px" />
+          <Skeleton height="20px" />
+        </Card>
       ) : (
         <>
-          <section className="card arena-card grid">
+          <Card className="grid">
             <h2>{summary.athlete.name}</h2>
             <p>
               Nome reduzido: <strong>{summary.athlete.shortName || "-"}</strong>
@@ -313,9 +314,9 @@ export default function AthleteSummaryPage() {
             <div>
               <a href={`/user/career/${encodeURIComponent(summary.athlete.athleteKey)}`}>Abrir carreira</a>
             </div>
-          </section>
+          </Card>
 
-          <section className="card arena-card grid">
+          <Card className="grid">
             <div className="row" style={{ justifyContent: "space-between" }}>
               <h2>Jogos</h2>
               <div className="balloon-group" role="group" aria-label="Agrupar jogos">
@@ -343,46 +344,28 @@ export default function AthleteSummaryPage() {
             {groups.map((group) => (
               <div key={group.id} className="match-group">
                 <h3 className="match-group-title">{group.title}</h3>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      {groupMode === "schedule" ? <th>Categoria</th> : null}
-                      <th>Fase</th>
-                      <th>Rodada</th>
-                      <th>Mesa</th>
-                      <th>Data/Hora</th>
-                      <th>Confronto</th>
-                      <th>Final</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.matches.map((match) => (
-                      (() => {
-                        const scoreSetsLabel = formatScoreSets(match);
-                        const tone = resolveMatchTone(match);
-                        return (
-                          <tr key={match.matchKey} className={toneRowClass(tone)}>
-                            {groupMode === "schedule" ? <td>{match.category.name}</td> : null}
-                            <td>{match.phase}</td>
-                            <td>{match.round ?? "-"}</td>
-                            <td>{match.tableNumber ?? "-"}</td>
-                            <td>{formatDatetime(match.matchDatetime)}</td>
-                            <td>
-                              {toReducedName(match.players[0]?.name) + " x " + toReducedName(match.players[1]?.name)}
-                            </td>
-                            <td>
-                              <div>{formatFinalSets(match)}</div>
-                              {scoreSetsLabel ? <small title={scoreSetsLabel}>{scoreSetsLabel}</small> : null}
-                            </td>
-                          </tr>
-                        );
-                      })()
-                    ))}
-                  </tbody>
-                </table>
+                <div className="match-card-grid">
+                  {group.matches.map((match) => {
+                    const scoreSetsLabel = formatScoreSets(match);
+                    const tone = resolveMatchTone(match);
+                    return (
+                      <MatchCard
+                        key={match.matchKey}
+                        categoryName={groupMode === "schedule" ? match.category.name : group.title}
+                        phase={match.phase}
+                        round={`${match.round ?? "-"} | Mesa ${match.tableNumber ?? "-"}`}
+                        datetime={formatDatetime(match.matchDatetime)}
+                        confrontation={`${toReducedName(match.players[0]?.name)} x ${toReducedName(match.players[1]?.name)}`}
+                        setsLine={scoreSetsLabel || "-"}
+                        finalLine={formatFinalSets(match)}
+                        tone={tone}
+                      />
+                    );
+                  })}
+                </div>
               </div>
             ))}
-          </section>
+          </Card>
         </>
       )}
     </main>

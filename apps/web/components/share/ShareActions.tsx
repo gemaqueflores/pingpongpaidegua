@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useState } from "react";
 import { downloadBlob } from "../../lib/share-image";
 
@@ -122,6 +123,20 @@ export function ShareActions(props: ShareActionsProps) {
       .finally(() => setBusy(false));
   }
 
+  function exportPng(): void {
+    setBusy(true);
+    setMessage(null);
+    void getImageBlob()
+      .then((blob) => {
+        downloadBlob(blob, props.fileName);
+        setMessage("Imagem exportada em PNG.");
+      })
+      .catch((error) => {
+        setMessage(error instanceof Error ? error.message : "Falha ao exportar PNG.");
+      })
+      .finally(() => setBusy(false));
+  }
+
   async function shareInstagram(kind: "feed" | "story" | "reels"): Promise<void> {
     setBusy(true);
     setMessage(null);
@@ -129,8 +144,7 @@ export function ShareActions(props: ShareActionsProps) {
     try {
       const blob = await getImageBlob();
       downloadBlob(blob, props.fileName);
-      const label =
-        kind === "feed" ? "Feed" : kind === "story" ? "Story" : "Reels";
+      const label = kind === "feed" ? "Feed" : kind === "story" ? "Story" : "Reels";
       setMessage(`Imagem baixada. Abra o Instagram e publique no ${label}.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha ao preparar compartilhamento.");
@@ -151,7 +165,7 @@ export function ShareActions(props: ShareActionsProps) {
           title="WhatsApp"
         >
           <span className="share-app-icon" aria-hidden><WhatsAppIcon /></span>
-          {!props.iconOnly ? <span>WhatsApp</span> : null}
+          {!props.iconOnly ? <span>Compartilhar no WhatsApp</span> : null}
         </button>
 
         <div className="share-instagram-wrap">
@@ -164,19 +178,13 @@ export function ShareActions(props: ShareActionsProps) {
             title="Instagram"
           >
             <span className="share-app-icon" aria-hidden><InstagramIcon /></span>
-            {!props.iconOnly ? <span>Instagram</span> : null}
+            {!props.iconOnly ? <span>Compartilhar no Instagram</span> : null}
           </button>
           {instagramMenuOpen ? (
             <div className="share-instagram-menu" role="menu" aria-label="Destino Instagram">
-              <button type="button" role="menuitem" disabled={busy} onClick={() => void shareInstagram("feed")}>
-                Feed
-              </button>
-              <button type="button" role="menuitem" disabled={busy} onClick={() => void shareInstagram("story")}>
-                Story
-              </button>
-              <button type="button" role="menuitem" disabled={busy} onClick={() => void shareInstagram("reels")}>
-                Reels
-              </button>
+              <button type="button" role="menuitem" disabled={busy} onClick={() => void shareInstagram("feed")}>Feed</button>
+              <button type="button" role="menuitem" disabled={busy} onClick={() => void shareInstagram("story")}>Story</button>
+              <button type="button" role="menuitem" disabled={busy} onClick={() => void shareInstagram("reels")}>Reels</button>
             </div>
           ) : null}
         </div>
@@ -190,7 +198,19 @@ export function ShareActions(props: ShareActionsProps) {
           title="Telegram"
         >
           <span className="share-app-icon" aria-hidden><TelegramIcon /></span>
-          {!props.iconOnly ? <span>Telegram</span> : null}
+          {!props.iconOnly ? <span>Compartilhar no Telegram</span> : null}
+        </button>
+
+        <button
+          type="button"
+          className="share-app-button"
+          disabled={busy}
+          onClick={exportPng}
+          aria-label="Exportar para PNG"
+          title="Exportar para PNG"
+        >
+          <span className="share-app-icon" aria-hidden>PNG</span>
+          {!props.iconOnly ? <span>Exportar para PNG</span> : null}
         </button>
       </div>
       {message ? <p className="share-inline-message">{message}</p> : null}
