@@ -644,6 +644,7 @@ export class UserService {
       };
       const simulation = simulateGroupsForCategory({
         seed: `event:${eventId}:category:${category.id}:scope:${registrationScope}`,
+        categoryName: category.name,
         athletes: athletes.map((athlete) => ({
           athleteId: athlete.id,
           nameDisplay: athlete.nameDisplay,

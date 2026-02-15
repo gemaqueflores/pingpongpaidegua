@@ -13,6 +13,23 @@ function athlete(id: number, club: string, rating: number) {
   };
 }
 
+function athleteWithPoints(input: {
+  id: number;
+  club: string;
+  rankingPoints: number | null;
+  ratingPoints: number | null;
+  name?: string;
+}) {
+  return {
+    athleteId: input.id,
+    nameDisplay: input.name ?? `ATLETA ${input.id}`,
+    clubId: null,
+    clubName: input.club,
+    rankingPoints: input.rankingPoints,
+    ratingPoints: input.ratingPoints,
+  };
+}
+
 test("simulador distribui tamanhos de grupos de forma balanceada", () => {
   const result = simulateGroupsForCategory({
     seed: "event:1:cat:1",
@@ -330,4 +347,56 @@ test("preferencia historica invalida e ignorada para respeitar a regra", () => {
 
   assert.equal(result.groups.length, 3);
   assert.ok(result.warnings.some((warning) => warning.includes("Preferencia historica")));
+});
+
+test("categoria iniciando com R ordena por ratingPoints", () => {
+  const result = simulateGroupsForCategory({
+    seed: "sort:basis:rating",
+    categoryName: "RIF",
+    athletes: [
+      athleteWithPoints({ id: 1, club: "A", rankingPoints: 2000, ratingPoints: 1200 }),
+      athleteWithPoints({ id: 2, club: "B", rankingPoints: 1000, ratingPoints: 1800 }),
+      athleteWithPoints({ id: 3, club: "C", rankingPoints: 1500, ratingPoints: 1600 }),
+    ],
+    preferredGroupCount: 1,
+  });
+
+  assert.equal(result.stats.sortBasis, "rating");
+  assert.equal(result.stats.primaryFieldUsed, "ratingPoints");
+  assert.deepEqual(result.stats.initialDistribution[0].athleteIds, [2, 3, 1]);
+});
+
+test("categoria nao R ordena por rankingPoints", () => {
+  const result = simulateGroupsForCategory({
+    seed: "sort:basis:ranking",
+    categoryName: "SUB-11 FEM",
+    athletes: [
+      athleteWithPoints({ id: 1, club: "A", rankingPoints: 1200, ratingPoints: 2000 }),
+      athleteWithPoints({ id: 2, club: "B", rankingPoints: 1800, ratingPoints: 1000 }),
+      athleteWithPoints({ id: 3, club: "C", rankingPoints: 1600, ratingPoints: 1500 }),
+    ],
+    preferredGroupCount: 1,
+  });
+
+  assert.equal(result.stats.sortBasis, "ranking");
+  assert.equal(result.stats.primaryFieldUsed, "rankingPoints");
+  assert.deepEqual(result.stats.initialDistribution[0].athleteIds, [2, 3, 1]);
+});
+
+test("ordenacao aplica fallback para campo alternativo quando principal ausente", () => {
+  const result = simulateGroupsForCategory({
+    seed: "sort:fallback",
+    categoryName: "RATING OPEN",
+    athletes: [
+      athleteWithPoints({ id: 1, club: "A", rankingPoints: 1000, ratingPoints: null }),
+      athleteWithPoints({ id: 2, club: "B", rankingPoints: 900, ratingPoints: 1100 }),
+      athleteWithPoints({ id: 3, club: "C", rankingPoints: 800, ratingPoints: null }),
+    ],
+    preferredGroupCount: 1,
+  });
+
+  assert.equal(result.stats.sortBasis, "rating");
+  assert.equal(result.stats.primaryFieldUsed, "ratingPoints");
+  assert.equal(result.stats.fallbackUsedCount, 2);
+  assert.deepEqual(result.stats.initialDistribution[0].athleteIds, [2, 1, 3]);
 });

@@ -18,6 +18,9 @@ export interface GroupSimulationGroup {
 export interface GroupSimulationStats {
   seed: string;
   distributionMode: "ZIGUE_ZAGUE_INVERTIDO";
+  sortBasis: "rating" | "ranking";
+  primaryFieldUsed: "ratingPoints" | "rankingPoints";
+  fallbackUsedCount: number;
   athleteCount: number;
   groupCount: number;
   minGroupSize: number;
@@ -38,6 +41,15 @@ export interface GroupSimulationResult {
   warnings: string[];
 }
 
+type SortBasis = "rating" | "ranking";
+
+type SortResult = {
+  sortedAthletes: GroupSimulationAthleteInput[];
+  sortBasis: SortBasis;
+  primaryFieldUsed: "ratingPoints" | "rankingPoints";
+  fallbackUsedCount: number;
+};
+
 type SwapCandidate = {
   leftGroupIndex: number;
   leftAthleteIndex: number;
@@ -46,25 +58,6 @@ type SwapCandidate = {
   nextCollisions: number;
   nextStrengthPenalty: number;
 };
-
-function stableHash(input: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash +=
-      (hash << 1) +
-      (hash << 4) +
-      (hash << 7) +
-      (hash << 8) +
-      (hash << 24);
-  }
-  return Math.abs(hash >>> 0);
-}
-
-function seededNoise(seed: string, token: string): number {
-  const value = stableHash(`${seed}|${token}`);
-  return (value % 10_000) / 10_000;
-}
 
 function buildFallbackGroupSizes(athleteCount: number): number[] {
   if (athleteCount <= 0) {
@@ -119,31 +112,65 @@ function normalizeClubKey(athlete: GroupSimulationAthleteInput): string {
   return normalized ? `name:${normalized}` : "sem-clube";
 }
 
+function resolveSortBasis(categoryName: string | null | undefined): SortBasis {
+  const normalized = String(categoryName ?? "").trim();
+  return /^r/i.test(normalized) ? "rating" : "ranking";
+}
+
+function normalizedNameForSort(name: string): string {
+  return normalizeAthleteName(name);
+}
+
 export function sortAthletesByScore(
   athletes: GroupSimulationAthleteInput[],
-  seed: string,
-): GroupSimulationAthleteInput[] {
-  return [...athletes].sort((a, b) => {
-    const ratingA = a.ratingPoints ?? Number.MIN_SAFE_INTEGER;
-    const ratingB = b.ratingPoints ?? Number.MIN_SAFE_INTEGER;
-    if (ratingA !== ratingB) {
-      return ratingB - ratingA;
+  input: { categoryName?: string | null },
+): SortResult {
+  const sortBasis = resolveSortBasis(input.categoryName);
+  const primaryFieldUsed = sortBasis === "rating" ? "ratingPoints" : "rankingPoints";
+  const secondaryFieldUsed = sortBasis === "rating" ? "rankingPoints" : "ratingPoints";
+
+  let fallbackUsedCount = 0;
+  const withSortScore = athletes.map((athlete) => {
+    const primaryValue = athlete[primaryFieldUsed];
+    const secondaryValue = athlete[secondaryFieldUsed];
+    const usedFallback = primaryValue === null || primaryValue === undefined;
+    if (usedFallback) {
+      fallbackUsedCount += 1;
     }
 
-    const rankingA = a.rankingPoints ?? Number.MIN_SAFE_INTEGER;
-    const rankingB = b.rankingPoints ?? Number.MIN_SAFE_INTEGER;
-    if (rankingA !== rankingB) {
-      return rankingB - rankingA;
-    }
-
-    const tieNoiseA = seededNoise(seed, `${a.athleteId}|tie`);
-    const tieNoiseB = seededNoise(seed, `${b.athleteId}|tie`);
-    if (tieNoiseA !== tieNoiseB) {
-      return tieNoiseA - tieNoiseB;
-    }
-
-    return a.nameDisplay.localeCompare(b.nameDisplay, "pt-BR", { sensitivity: "base" });
+    return {
+      athlete,
+      primaryValue: primaryValue ?? Number.MIN_SAFE_INTEGER,
+      secondaryValue: secondaryValue ?? Number.MIN_SAFE_INTEGER,
+      normalizedName: normalizedNameForSort(athlete.nameDisplay),
+    };
   });
+
+  withSortScore.sort((left, right) => {
+    if (left.primaryValue !== right.primaryValue) {
+      return right.primaryValue - left.primaryValue;
+    }
+
+    if (left.secondaryValue !== right.secondaryValue) {
+      return right.secondaryValue - left.secondaryValue;
+    }
+
+    const byName = left.normalizedName.localeCompare(right.normalizedName, "pt-BR", {
+      sensitivity: "base",
+    });
+    if (byName !== 0) {
+      return byName;
+    }
+
+    return left.athlete.athleteId - right.athlete.athleteId;
+  });
+
+  return {
+    sortedAthletes: withSortScore.map((item) => item.athlete),
+    sortBasis,
+    primaryFieldUsed,
+    fallbackUsedCount,
+  };
 }
 
 export function distributeInInvertedSnake(
@@ -407,6 +434,7 @@ export function optimizeByClubSwap(input: {
 export function simulateGroupsForCategory(input: {
   seed: string;
   athletes: GroupSimulationAthleteInput[];
+  categoryName?: string | null;
   preferredGroupCount?: number | null;
 }): GroupSimulationResult {
   const warnings: string[] = [];
@@ -433,6 +461,9 @@ export function simulateGroupsForCategory(input: {
       stats: {
         seed: input.seed,
         distributionMode: "ZIGUE_ZAGUE_INVERTIDO",
+        sortBasis: "ranking",
+        primaryFieldUsed: "rankingPoints",
+        fallbackUsedCount: 0,
         athleteCount: 0,
         groupCount: 0,
         minGroupSize: 0,
@@ -469,7 +500,8 @@ export function simulateGroupsForCategory(input: {
   const maxGroupSize = Math.ceil(athleteCount / groupCount);
   const minGroupSize = Math.floor(athleteCount / groupCount);
 
-  const sortedAthletes = sortAthletesByScore(athletes, input.seed);
+  const sortedResult = sortAthletesByScore(athletes, { categoryName: input.categoryName });
+  const sortedAthletes = sortedResult.sortedAthletes;
   const cobra = allocateGroupsCobra({
     athletesSorted: sortedAthletes.map((athlete, index) => ({
       athleteId: athlete.athleteId,
@@ -523,6 +555,9 @@ export function simulateGroupsForCategory(input: {
     stats: {
       seed: input.seed,
       distributionMode: "ZIGUE_ZAGUE_INVERTIDO",
+      sortBasis: sortedResult.sortBasis,
+      primaryFieldUsed: sortedResult.primaryFieldUsed,
+      fallbackUsedCount: sortedResult.fallbackUsedCount,
       athleteCount,
       groupCount,
       minGroupSize,
