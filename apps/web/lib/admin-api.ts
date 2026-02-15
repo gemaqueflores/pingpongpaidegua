@@ -2,7 +2,7 @@ import { getApiBase, getHeaders, handleResponse } from "./auth";
 
 const API_BASE = getApiBase();
 
-export type EventLevel = "ESTADUAL" | "COPA" | "NACIONAL";
+export type EventLevel = "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN";
 export type EventSituation =
   | "DRAFT"
   | "PRE_INSCRICOES"

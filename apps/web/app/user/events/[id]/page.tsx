@@ -131,7 +131,11 @@ export default function EventDetailPage() {
     return clubs.filter((club) => club.name.toUpperCase().includes(query));
   }, [clubSearch, clubs]);
 
-  const eventType = event ? inferEventType(event.nome) : null;
+  const eventType = event
+    ? event.nivel === "OPEN"
+      ? "OPEN"
+      : inferEventType(event.nome)
+    : null;
   const phaseLabel = event?.groupsDefined
     ? "Grupos oficiais definidos"
     : event?.groupSimulationEligible

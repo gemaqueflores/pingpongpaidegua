@@ -17,6 +17,7 @@ export interface UserEventRow {
   id: number;
   cbtmEventId: number;
   nome: string;
+  nivel: "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN" | null;
   inicioInscricoes: string | null;
   fimInscricoes: string | null;
   inicioRealizacao: string | null;

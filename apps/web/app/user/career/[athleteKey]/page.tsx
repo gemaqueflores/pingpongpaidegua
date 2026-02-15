@@ -37,7 +37,7 @@ type CareerEvent = {
   id: number;
   cbtmEventId: number;
   nome: string;
-  nivel: "ESTADUAL" | "COPA" | "NACIONAL" | null;
+  nivel: "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN" | null;
   dataInicio: string | null;
   dataFim: string | null;
   concluido: boolean;

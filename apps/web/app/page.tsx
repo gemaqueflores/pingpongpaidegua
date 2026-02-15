@@ -9,7 +9,7 @@ import { Skeleton } from "../components/ui/Skeleton";
 import { Badge } from "../components/ui/Badge";
 
 type EventRow = UserEventRow;
-type EventTypeFilter = "ALL" | "ESTADUAL" | "COPA" | "BRASILEIRAO";
+type EventTypeFilter = "ALL" | "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN";
 type EventStatusFilter = "ALL" | "OPEN" | "DONE";
 
 type AthleteDirectoryRow = {
@@ -58,7 +58,13 @@ function sortEventsByStatusAndDate(rows: EventRow[]): EventRow[] {
   });
 }
 
-function inferEventType(name: string): Exclude<EventTypeFilter, "ALL"> {
+function inferEventType(event: EventRow): Exclude<EventTypeFilter, "ALL"> {
+  if (event.nivel === "OPEN") return "OPEN";
+  if (event.nivel === "ESTADUAL") return "ESTADUAL";
+  if (event.nivel === "COPA") return "COPA";
+  if (event.nivel === "NACIONAL") return "BRASILEIRAO";
+
+  const name = event.nome;
   const normalized = name
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -104,7 +110,7 @@ export default function HomePage() {
   );
   const filteredEvents = useMemo(() => {
     return sortedEvents.filter((event) => {
-      const type = inferEventType(event.nome);
+      const type = inferEventType(event);
       const status = event.userStatus === "CONCLUIDO" ? "DONE" : "OPEN";
       if (eventTypeFilter !== "ALL" && type !== eventTypeFilter) return false;
       if (eventStatusFilter !== "ALL" && status !== eventStatusFilter) return false;
@@ -136,7 +142,7 @@ export default function HomePage() {
   const athletesByLetter = useMemo(() => {
     const query = athleteSearch.trim().toUpperCase();
     return athletes.filter((athlete) => {
-      if ((athlete.firstLetter || "A") !== letterTab) return false;
+      if (!query && (athlete.firstLetter || "A") !== letterTab) return false;
       if (!query) return true;
       return (
         athlete.nameDisplay.toUpperCase().includes(query) ||
@@ -212,7 +218,7 @@ export default function HomePage() {
           </div>
           <div className="row">
             <div className="balloon-group" role="group" aria-label="Filtro por tipo">
-              {(["ALL", "ESTADUAL", "COPA", "BRASILEIRAO"] as EventTypeFilter[]).map((type) => (
+              {(["ALL", "ESTADUAL", "COPA", "BRASILEIRAO", "OPEN"] as EventTypeFilter[]).map((type) => (
                 <button
                   key={type}
                   type="button"

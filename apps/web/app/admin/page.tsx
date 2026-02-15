@@ -56,7 +56,7 @@ type WarningSummary = {
   count: number;
 };
 
-const EVENT_LEVELS: EventLevel[] = ["ESTADUAL", "COPA", "NACIONAL"];
+const EVENT_LEVELS: EventLevel[] = ["ESTADUAL", "COPA", "NACIONAL", "OPEN"];
 const EVENT_TIME_ZONE = "America/Sao_Paulo";
 
 function formatEventDate(value: string | null | undefined): string {

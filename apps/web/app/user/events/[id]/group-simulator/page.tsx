@@ -283,7 +283,24 @@ export default function GroupSimulatorPage() {
                                   <span>Atleta</span>
                                   <span>{pointsLabel}</span>
                                 </div>
-                                {group.athletes.map((athlete, athleteIndex) => (
+                                {[...group.athletes]
+                                  .sort((left, right) => {
+                                    const leftPoints = useRatingPoints
+                                      ? (left.ratingPoints ?? left.rankingPoints ?? Number.MIN_SAFE_INTEGER)
+                                      : (left.rankingPoints ?? left.ratingPoints ?? Number.MIN_SAFE_INTEGER);
+                                    const rightPoints = useRatingPoints
+                                      ? (right.ratingPoints ?? right.rankingPoints ?? Number.MIN_SAFE_INTEGER)
+                                      : (right.rankingPoints ?? right.ratingPoints ?? Number.MIN_SAFE_INTEGER);
+                                    if (leftPoints !== rightPoints) {
+                                      return rightPoints - leftPoints;
+                                    }
+                                    return (left.nameReduced || left.nameDisplay).localeCompare(
+                                      right.nameReduced || right.nameDisplay,
+                                      "pt-BR",
+                                      { sensitivity: "base" },
+                                    );
+                                  })
+                                  .map((athlete, athleteIndex) => (
                                   <div
                                     key={`${group.groupName}-${athlete.athleteId}`}
                                     className={`group-athlete-row ${athleteIndex === 0 ? "group-athlete-seed" : ""}`}
@@ -301,7 +318,7 @@ export default function GroupSimulatorPage() {
                                         : (athlete.rankingPoints ?? "-")}
                                     </span>
                                   </div>
-                                ))}
+                                  ))}
                               </div>
                             </section>
                           ))}
