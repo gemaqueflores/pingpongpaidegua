@@ -3,6 +3,55 @@
 import { useMemo, useState } from "react";
 
 const PIX_QR_DEFAULT = "/pix-qrcode.png";
+const PIX_KEY_DEFAULT = "227b600a-3d60-4229-90c8-3286d822b6ae";
+const PIX_MERCHANT_NAME_DEFAULT = "LEONARDO MURILO GEMAQUE FLORES";
+const PIX_MERCHANT_CITY_DEFAULT = "MARABA";
+
+function normalizePixText(value: string, maxLength: number): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 .\-]/g, "")
+    .slice(0, maxLength);
+}
+
+function tlv(id: string, value: string): string {
+  const size = String(value.length).padStart(2, "0");
+  return `${id}${size}${value}`;
+}
+
+function crc16(payload: string): string {
+  let crc = 0xffff;
+  for (let i = 0; i < payload.length; i += 1) {
+    crc ^= payload.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j += 1) {
+      if ((crc & 0x8000) !== 0) {
+        crc = (crc << 1) ^ 0x1021;
+      } else {
+        crc <<= 1;
+      }
+      crc &= 0xffff;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, "0");
+}
+
+function buildPixPayload(pixKey: string, merchantName: string, merchantCity: string): string {
+  const merchantAccount = `${tlv("00", "br.gov.bcb.pix")}${tlv("01", pixKey)}`;
+  const data =
+    tlv("00", "01") +
+    tlv("26", merchantAccount) +
+    tlv("52", "0000") +
+    tlv("53", "986") +
+    tlv("58", "BR") +
+    tlv("59", normalizePixText(merchantName, 25)) +
+    tlv("60", normalizePixText(merchantCity, 15)) +
+    tlv("62", tlv("05", "***")) +
+    "6304";
+
+  return `${data}${crc16(data)}`;
+}
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -14,6 +63,7 @@ function formatCurrency(value: number): string {
 export default function ColaborePage() {
   const [amount, setAmount] = useState("20");
   const [showFallback, setShowFallback] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const numericAmount = useMemo(() => {
     const normalized = Number(String(amount).replace(",", "."));
@@ -23,7 +73,24 @@ export default function ColaborePage() {
     return normalized;
   }, [amount]);
 
-  const qrCodeUrl = process.env.NEXT_PUBLIC_PIX_QR_CODE_URL || PIX_QR_DEFAULT;
+  const pixKey = process.env.NEXT_PUBLIC_PIX_KEY || PIX_KEY_DEFAULT;
+  const merchantName = process.env.NEXT_PUBLIC_PIX_MERCHANT_NAME || PIX_MERCHANT_NAME_DEFAULT;
+  const merchantCity = process.env.NEXT_PUBLIC_PIX_MERCHANT_CITY || PIX_MERCHANT_CITY_DEFAULT;
+
+  const pixPayload = useMemo(() => buildPixPayload(pixKey, merchantName, merchantCity), [pixKey, merchantName, merchantCity]);
+  const pixQrFromPayload = useMemo(() => `/api/pix-qrcode?data=${encodeURIComponent(pixPayload)}`, [pixPayload]);
+
+  const qrCodeUrl = process.env.NEXT_PUBLIC_PIX_QR_CODE_URL || pixQrFromPayload || PIX_QR_DEFAULT;
+
+  const handleCopyPixKey = async () => {
+    try {
+      await navigator.clipboard.writeText(pixKey);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2500);
+    } catch {
+      setCopySuccess(false);
+    }
+  };
 
   return (
     <main className="container grid user-page">
@@ -58,9 +125,20 @@ export default function ColaborePage() {
           />
         </div>
 
+        <div className="row">
+          <button type="button" className="secondary" onClick={handleCopyPixKey}>
+            Copiar chave PIX
+          </button>
+          {copySuccess ? <span className="arena-muted">Chave copiada.</span> : null}
+        </div>
+
+        <p className="arena-muted">
+          Chave PIX: <strong>{pixKey}</strong>
+        </p>
+
         {showFallback ? (
           <p className="warn">
-            QRCode PIX não encontrado em <code>{PIX_QR_DEFAULT}</code>. Adicione a imagem no diretório
+            QRCode PIX indisponível. Adicione a imagem no diretório
             <code>apps/web/public</code> ou configure <code>NEXT_PUBLIC_PIX_QR_CODE_URL</code>.
           </p>
         ) : null}
@@ -76,3 +154,5 @@ export default function ColaborePage() {
     </main>
   );
 }
+
+
