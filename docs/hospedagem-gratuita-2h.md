@@ -44,13 +44,15 @@ Este projeto pode operar com custo zero no modo de atualizacao periodica (nao re
 4. Deploy.
 
 ### 3) Scrape automatico a cada 2h (GitHub Actions)
-1. No GitHub, configure segredo:
-   - `DATABASE_URL`
-2. (Opcional) adicione:
-   - `SCRAPER_EVENT_URL` se precisar customizar.
-3. Habilite workflow:
+1. No GitHub, configure os secrets para SSH da VM Oracle:
+   - `ORACLE_SSH_HOST` (IP publico da VM)
+   - `ORACLE_SSH_USER` (ex.: `ubuntu`)
+   - `ORACLE_SSH_PRIVATE_KEY` (conteudo da chave privada `.pem`/`.key`)
+   - `ORACLE_SSH_PORT` (opcional, default `22`)
+   - `ORACLE_APP_DIR` (opcional, default `~/pingpongpaidegua`)
+2. Habilite workflow:
    - `.github/workflows/scrape-every-2h.yml`
-4. Teste manual via `Run workflow` com `event_ids` opcional.
+3. Teste manual via `Run workflow` com `event_ids` opcional.
 
 ### 4) Operacao sugerida
 - Durante evento: scrape automatico a cada 2h.
@@ -61,6 +63,14 @@ Este projeto pode operar com custo zero no modo de atualizacao periodica (nao re
   - artes de compartilhamento.
 
 ## Observacoes
-- Sem worker 24/7, o botao `scrape-now` depende de execucao manual (workflow dispatch ou rotina equivalente).
+- O workflow agora roda o scrape dentro da VM (via SSH), sem expor `5432` na internet.
 - Se quiser manter `scrape-now` imediato, mantenha worker online com Redis.
 
+## Producao Oracle + Vercel (HTTPS sem Cloudflare)
+- Runbook completo:
+  - `docs/runbook-producao-oracle-vercel.md`
+- Esse runbook cobre:
+  - correcoes de OCI para 80/443;
+  - nginx + certbot webroot;
+  - CORS para Vercel preview;
+  - estabilizacao da VM (swap + compose).

@@ -11,40 +11,56 @@ on:
         default: ""
 
 jobs:
-  scrape:
+  scrape-on-vm:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 25
     env:
-      NODE_ENV: production
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      SCRAPER_MODE: live
-      SCRAPER_HEADLESS: "true"
-      SCRAPER_REFRESH_CRON_MS: "7200000"
       SCRAPE_EVENT_IDS: ${{ github.event.inputs.event_ids }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Prisma generate
-        run: npm run prisma:generate
-
-      - name: Build shared packages
+      - name: Validar secrets de SSH
         run: |
-          npm run build --workspace @cbtm/shared
-          npm run build --workspace @cbtm/parser
+          test -n "${{ secrets.ORACLE_SSH_HOST }}"
+          test -n "${{ secrets.ORACLE_SSH_USER }}"
+          test -n "${{ secrets.ORACLE_SSH_PRIVATE_KEY }}"
 
-      - name: Run scrape once
-        run: npm run scrape:once --workspace apps/worker
+      - name: Rodar scrape remoto na VM Oracle
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ORACLE_SSH_HOST }}
+          username: ${{ secrets.ORACLE_SSH_USER }}
+          key: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.ORACLE_SSH_PORT || 22 }}
+          script_stop: true
+          envs: SCRAPE_EVENT_IDS
+          script: |
+            set -e
+            APP_DIR="${{ secrets.ORACLE_APP_DIR }}"
+            if [ -z "$APP_DIR" ]; then
+              APP_DIR="$HOME/pingpongpaidegua"
+            fi
 
+            cd "$APP_DIR"
+
+            if command -v docker >/dev/null 2>&1; then
+              if docker compose version >/dev/null 2>&1; then
+                COMPOSE_BIN="docker compose"
+              elif command -v docker-compose >/dev/null 2>&1; then
+                COMPOSE_BIN="docker-compose"
+              else
+                echo "Docker Compose nao encontrado na VM."
+                exit 1
+              fi
+            else
+              echo "Docker nao encontrado na VM."
+              exit 1
+            fi
+
+            $COMPOSE_BIN up -d postgres redis worker
+
+            if [ -n "$SCRAPE_EVENT_IDS" ]; then
+              $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_EVENT_IDS" worker node apps/worker/dist/run-once.js
+            else
+              $COMPOSE_BIN exec -T worker node apps/worker/dist/run-once.js
+            fi
+
+            $COMPOSE_BIN logs --tail=80 worker

@@ -44,4 +44,6 @@ export const config = {
   rawCaptureMaxRunsPerEvent: Number(process.env.RAW_CAPTURE_MAX_RUNS_PER_EVENT ?? "20"),
   rawCaptureCleanupEnabled: process.env.RAW_CAPTURE_CLEANUP_ENABLED !== "false",
   rawCaptureCleanupEveryMs: Number(process.env.RAW_CAPTURE_CLEANUP_EVERY_MS ?? "86400000"),
+  dbRetryAttempts: Number(process.env.DB_RETRY_ATTEMPTS ?? "5"),
+  dbRetryDelayMs: Number(process.env.DB_RETRY_DELAY_MS ?? "1000"),
 };

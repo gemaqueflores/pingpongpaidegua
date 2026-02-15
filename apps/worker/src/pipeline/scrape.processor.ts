@@ -11,6 +11,30 @@ export class ScrapeProcessor {
   private readonly captureService = new CaptureService();
   private readonly upsertService = new UpsertService();
 
+  private async withDbRetry<T>(operation: () => Promise<T>, step: string): Promise<T> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= Math.max(1, config.dbRetryAttempts); attempt += 1) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+        if (attempt >= config.dbRetryAttempts) {
+          break;
+        }
+
+        log("warn", "Falha transiente de banco, tentando novamente", {
+          step,
+          attempt,
+          nextAttemptInMs: config.dbRetryDelayMs,
+          error: String(error),
+        });
+        await new Promise((resolve) => setTimeout(resolve, config.dbRetryDelayMs));
+      }
+    }
+
+    throw new Error(`Falha de banco em ${step}: ${String(lastError)}`);
+  }
+
   async processEventJob(eventId: number, reason?: string): Promise<void> {
     log("info", "Iniciando processamento de scrape", {
       eventId,
@@ -61,16 +85,20 @@ export class ScrapeProcessor {
       return;
     }
 
-    const scrapeRun = await prisma.scrapeRun.create({
-      data: {
-        eventId,
-        status: "PARTIAL",
-        insertedCounts: {},
-        updatedCounts: {},
-        extractionStats: {},
-        warnings: [],
-      },
-    });
+    const scrapeRun = await this.withDbRetry(
+      () =>
+        prisma.scrapeRun.create({
+          data: {
+            eventId,
+            status: "PARTIAL",
+            insertedCounts: {},
+            updatedCounts: {},
+            extractionStats: {},
+            warnings: [],
+          },
+        }),
+      "scrapeRun.create",
+    );
 
     try {
       const capture = await Promise.race([
@@ -123,39 +151,47 @@ export class ScrapeProcessor {
       const combinedWarnings = [...upsertResult.warnings, ...capture.warnings];
       const status: ScrapeStatus = combinedWarnings.length > 0 ? "PARTIAL" : "SUCCESS";
 
-      await prisma.event.update({
-        where: { id: eventId },
-        data: {
-          lastScrapeAt: new Date(),
-        },
-      });
-
-      await prisma.scrapeRun.update({
-        where: { id: scrapeRun.id },
-        data: {
-          finishedAt: new Date(),
-          status,
-          insertedCounts: upsertResult.inserted,
-          updatedCounts: upsertResult.updated,
-          extractionStats: {
-            ...upsertResult.extractionStats,
-            capture: {
-              source: capture.source,
-              payloadCount: capture.payloads.length,
-              eliminationPayloadCount: capture.eliminationPayloads.length,
-              categoriesFound: capture.categoriesDiscovered.length,
-              categoriesValid: capture.categoriesDiscovered.filter((item) => item.valid).length,
-              categoriesVisited: capture.categoriesVisited,
-              tabsVisited: capture.tabsVisited,
-              paginationRequests: capture.paginationRequests,
+      await this.withDbRetry(
+        () =>
+          prisma.event.update({
+            where: { id: eventId },
+            data: {
+              lastScrapeAt: new Date(),
             },
-            eventSituation,
-            scrapePolicy: { ...scrapePolicy },
-          },
-          warnings: combinedWarnings,
-          errorMessage: null,
-        },
-      });
+          }),
+        "event.update:lastScrapeAt",
+      );
+
+      await this.withDbRetry(
+        () =>
+          prisma.scrapeRun.update({
+            where: { id: scrapeRun.id },
+            data: {
+              finishedAt: new Date(),
+              status,
+              insertedCounts: upsertResult.inserted,
+              updatedCounts: upsertResult.updated,
+              extractionStats: {
+                ...upsertResult.extractionStats,
+                capture: {
+                  source: capture.source,
+                  payloadCount: capture.payloads.length,
+                  eliminationPayloadCount: capture.eliminationPayloads.length,
+                  categoriesFound: capture.categoriesDiscovered.length,
+                  categoriesValid: capture.categoriesDiscovered.filter((item) => item.valid).length,
+                  categoriesVisited: capture.categoriesVisited,
+                  tabsVisited: capture.tabsVisited,
+                  paginationRequests: capture.paginationRequests,
+                },
+                eventSituation,
+                scrapePolicy: { ...scrapePolicy },
+              },
+              warnings: combinedWarnings,
+              errorMessage: null,
+            },
+          }),
+        "scrapeRun.update:success",
+      );
 
       log("info", "Scrape concluido", {
         eventId,
@@ -168,19 +204,31 @@ export class ScrapeProcessor {
         reason: reason ?? null,
       });
     } catch (error) {
-      await prisma.scrapeRun.update({
-        where: { id: scrapeRun.id },
-        data: {
-          finishedAt: new Date(),
-          status: "ERROR",
-          extractionStats: {
-            errorAt: "processEventJob",
-            eventSituation,
-            scrapePolicy: { ...scrapePolicy },
-          },
-          errorMessage: String(error),
-        },
-      });
+      try {
+        await this.withDbRetry(
+          () =>
+            prisma.scrapeRun.update({
+              where: { id: scrapeRun.id },
+              data: {
+                finishedAt: new Date(),
+                status: "ERROR",
+                extractionStats: {
+                  errorAt: "processEventJob",
+                  eventSituation,
+                  scrapePolicy: { ...scrapePolicy },
+                },
+                errorMessage: String(error),
+              },
+            }),
+          "scrapeRun.update:error",
+        );
+      } catch (updateError) {
+        log("error", "Falha ao persistir erro de scrapeRun", {
+          eventId,
+          scrapeRunId: scrapeRun.id,
+          error: String(updateError),
+        });
+      }
 
       log("error", "Falha no scrape", {
         eventId,
