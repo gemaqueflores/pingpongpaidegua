@@ -51,6 +51,9 @@ export interface GroupSimulationCategory {
     }>;
   }>;
   stats: {
+    sortBasis?: "rating" | "ranking";
+    primaryFieldUsed?: "ratingPoints" | "rankingPoints";
+    fallbackUsedCount?: number;
     seed: string;
     distributionMode: "ZIGUE_ZAGUE_INVERTIDO";
     athleteCount: number;

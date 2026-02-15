@@ -37,6 +37,13 @@ function getCategoryGenderBucket(categoryName: string): number {
   return 3;
 }
 
+function isRatingCategory(categoryName: string, sortBasis?: "rating" | "ranking"): boolean {
+  if (sortBasis) {
+    return sortBasis === "rating";
+  }
+  return categoryName.trim().toUpperCase().startsWith("R");
+}
+
 export default function GroupSimulatorPage() {
   const params = useParams<{ id: string }>();
   const eventId = Number(params.id);
@@ -170,6 +177,14 @@ export default function GroupSimulatorPage() {
                   >
                     {sortedCategories.map((category) => (
                       <article key={category.categoryId} className="sim-category-card sim-category-slide">
+                        {(() => {
+                          const useRatingPoints = isRatingCategory(
+                            category.categoryName,
+                            category.stats?.sortBasis,
+                          );
+                          const pointsLabel = useRatingPoints ? "Rating" : "Ranking";
+                          return (
+                            <>
                         <div className="sim-category-card-header">
                           <h3>{category.categoryName}</h3>
                           <ShareActions
@@ -206,7 +221,7 @@ export default function GroupSimulatorPage() {
                                   <tr>
                                     <th>Atleta</th>
                                     <th>Clube</th>
-                                    <th>Rating</th>
+                                    <th>{pointsLabel}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -214,7 +229,11 @@ export default function GroupSimulatorPage() {
                                     <tr key={`${group.groupName}-${athlete.athleteId}`}>
                                       <td>{athlete.nameReduced || athlete.nameDisplay}</td>
                                       <td>{athlete.clubName ?? "-"}</td>
-                                      <td>{athlete.ratingPoints ?? "-"}</td>
+                                      <td>
+                                        {useRatingPoints
+                                          ? (athlete.ratingPoints ?? "-")
+                                          : (athlete.rankingPoints ?? "-")}
+                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -222,7 +241,9 @@ export default function GroupSimulatorPage() {
                             </section>
                           ))}
                         </div>
-
+                            </>
+                          );
+                        })()}
                       </article>
                     ))}
                   </div>
