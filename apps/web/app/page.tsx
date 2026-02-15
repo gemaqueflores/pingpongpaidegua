@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGetAthletesDirectory, apiGetEvents, type UserEventRow } from "../lib/user-api";
 
 type EventRow = UserEventRow;
@@ -61,6 +61,7 @@ export default function HomePage() {
   const [athletes, setAthletes] = useState<AthleteDirectoryRow[]>([]);
   const [eventTab, setEventTab] = useState<EventListTab>("EM ABERTO");
   const [letterTab, setLetterTab] = useState("A");
+  const letterButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   useEffect(() => {
     void apiGetEvents().then((rows) => setEvents(rows as EventRow[])).catch(() => setEvents([]));
@@ -92,6 +93,18 @@ export default function HomePage() {
       setLetterTab(availableLetters[0]);
     }
   }, [availableLetters, letterTab]);
+
+  useEffect(() => {
+    const activeButton = letterButtonRefs.current[letterTab];
+    if (!activeButton) {
+      return;
+    }
+    activeButton.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [letterTab]);
 
   const athletesByLetter = useMemo(() => {
     return athletes.filter((athlete) => (athlete.firstLetter || "A") === letterTab);
@@ -187,13 +200,16 @@ export default function HomePage() {
         </section>
 
         <section className="card arena-card grid">
-        <div className="row" style={{ justifyContent: "space-between" }}>
+        <div className="row home-athletes-header" style={{ justifyContent: "space-between" }}>
           <h2>Atletas da base</h2>
-          <div className="balloon-group" role="group" aria-label="Filtro por letra">
+          <div className="balloon-group letter-tab-strip" role="group" aria-label="Filtro por letra">
             {availableLetters.map((letter) => (
               <button
                 key={letter}
                 type="button"
+                ref={(element) => {
+                  letterButtonRefs.current[letter] = element;
+                }}
                 className={`balloon-button ${letterTab === letter ? "active" : ""}`}
                 onClick={() => setLetterTab(letter)}
               >
@@ -234,3 +250,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+

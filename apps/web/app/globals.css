@@ -558,6 +558,23 @@ h3 {
   border-color: transparent;
 }
 
+.user-theme .letter-tab-strip {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.user-theme .letter-tab-strip .balloon-button {
+  flex: 0 0 auto;
+  min-width: 36px;
+  text-align: center;
+}
+
 .user-theme .pill {
   background: rgba(12, 50, 108, 0.95);
   color: var(--text-main);
@@ -872,6 +889,15 @@ h3 {
   .career-athlete-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .home-athletes-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .home-athletes-header .letter-tab-strip {
+    width: 100%;
   }
 
   .user-theme .hero-subtitle {
