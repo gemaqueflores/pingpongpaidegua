@@ -84,16 +84,16 @@ jobs:
             $COMPOSE_BIN exec -T worker sh -lc "node -v && pwd && ls -la apps/worker/dist | sed -n '1,80p'" || true
 
             RUN_ONCE_EXIT=0
-            RUN_ONCE_OUTPUT=""
+            RUN_ONCE_LOG="$(mktemp)"
             if [ -n "$SCRAPE_EVENT_IDS" ]; then
               echo "SCRAPE_EVENT_IDS=$SCRAPE_EVENT_IDS"
-              if RUN_ONCE_OUTPUT=$($COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_EVENT_IDS" worker sh -lc "$RUN_ONCE_CMD" 2>&1); then
+              if $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_EVENT_IDS" worker sh -lc "$RUN_ONCE_CMD" >"$RUN_ONCE_LOG" 2>&1; then
                 RUN_ONCE_EXIT=0
               else
                 RUN_ONCE_EXIT=$?
               fi
             else
-              if RUN_ONCE_OUTPUT=$($COMPOSE_BIN exec -T worker sh -lc "$RUN_ONCE_CMD" 2>&1); then
+              if $COMPOSE_BIN exec -T worker sh -lc "$RUN_ONCE_CMD" >"$RUN_ONCE_LOG" 2>&1; then
                 RUN_ONCE_EXIT=0
               else
                 RUN_ONCE_EXIT=$?
@@ -101,7 +101,7 @@ jobs:
             fi
 
             echo "Saida do run-once:"
-            echo "$RUN_ONCE_OUTPUT"
+            cat "$RUN_ONCE_LOG" || true
             echo "run-once exit code: $RUN_ONCE_EXIT"
             $COMPOSE_BIN logs --tail=200 worker || true
 
