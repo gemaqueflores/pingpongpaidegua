@@ -2905,14 +2905,43 @@ export class UserService {
   }
 
   private async getEfficiencyWeights() {
-    const config = await this.prisma.efficiencyConfig.findUnique({
-      where: { id: 1 },
-      select: {
-        pesoOuro: true,
-        pesoPrata: true,
-        pesoBronze: true,
-      },
-    });
+    let config:
+      | {
+          pesoOuro: number;
+          pesoPrata: number;
+          pesoBronze: number;
+        }
+      | null = null;
+
+    try {
+      const prismaWithEfficiency = this.prisma as unknown as {
+        efficiencyConfig?: {
+          findUnique?: (args: {
+            where: { id: number };
+            select: {
+              pesoOuro: boolean;
+              pesoPrata: boolean;
+              pesoBronze: boolean;
+            };
+          }) => Promise<{
+            pesoOuro: number;
+            pesoPrata: number;
+            pesoBronze: number;
+          } | null>;
+        };
+      };
+
+      config = await prismaWithEfficiency.efficiencyConfig?.findUnique?.({
+        where: { id: 1 },
+        select: {
+          pesoOuro: true,
+          pesoPrata: true,
+          pesoBronze: true,
+        },
+      }) ?? null;
+    } catch {
+      config = null;
+    }
 
     if (!config) {
       return DEFAULT_EFFICIENCY_WEIGHTS;
