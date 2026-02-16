@@ -109,10 +109,10 @@ test("AthleteSummaryCard snapshot", () => {
         athleteKey: "ATLETA-EXEMPLO",
         stateCode: "PA",
         visibleColumns: [
+          { key: "open", label: "Open" },
           { key: "estadual", label: "Estadual" },
           { key: "copa", label: "Copa" },
           { key: "brasileirao", label: "Brasileirão" },
-          { key: "open", label: "Open" },
           { key: "total", label: "Total" },
         ],
       }}

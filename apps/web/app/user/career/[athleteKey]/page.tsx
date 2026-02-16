@@ -320,10 +320,10 @@ export default function AthleteCareerPage() {
   const federationText = payload ? formatAthleteFederation(payload.athlete) : null;
 
   const shareColumns: Array<{ key: "estadual" | "copa" | "brasileirao" | "open" | "total"; label: string }> = [
+    { key: "open", label: "Open" },
     { key: "estadual", label: "Estadual" },
     { key: "copa", label: "Copa" },
     { key: "brasileirao", label: "Brasileirão" },
-    { key: "open", label: "Open" },
     { key: "total", label: "Total" },
   ];
 

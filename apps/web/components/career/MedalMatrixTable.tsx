@@ -37,10 +37,10 @@ export function MedalMatrixTable({ matrix }: MedalMatrixTableProps) {
           <thead>
             <tr>
               <th>Medalha</th>
+              <th>Open</th>
               <th>Estadual</th>
               <th>Copa</th>
               <th>Brasileirão</th>
-              <th>Open</th>
               <th>Total</th>
             </tr>
           </thead>
@@ -50,10 +50,10 @@ export function MedalMatrixTable({ matrix }: MedalMatrixTableProps) {
                 <td>
                   {row.emoji} {row.label}
                 </td>
+                <td>{formatCount(row.values.open)}</td>
                 <td>{formatCount(row.values.estadual)}</td>
                 <td>{formatCount(row.values.copa)}</td>
                 <td>{formatCount(row.values.brasileirao)}</td>
-                <td>{formatCount(row.values.open)}</td>
                 <td><strong>{formatCount(row.values.total)}</strong></td>
               </tr>
             ))}
