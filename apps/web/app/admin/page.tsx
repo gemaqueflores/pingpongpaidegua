@@ -619,10 +619,10 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="container grid">
-      <div className="row" style={{ justifyContent: "space-between" }}>
+    <main className="container grid admin-page">
+      <div className="row admin-topbar" style={{ justifyContent: "space-between" }}>
         <h1>Admin</h1>
-        <div className="row">
+        <div className="row admin-topbar-actions">
           <button
             className="secondary"
             onClick={() => {
@@ -660,13 +660,13 @@ export default function AdminPage() {
         </section>
       ) : null}
 
-      <section className="card grid">
+      <section className="card grid admin-card">
         <h2>{editingEventId ? `Editar evento #${editingEventId}` : "Novo evento monitorado"}</h2>
 
-        <div className="row" style={{ flexWrap: "wrap" }}>
-          <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome do evento" />
-          <input value={cbtmEventId} onChange={(e) => setCbtmEventId(e.target.value)} placeholder="ID CBTM" />
-          <select value={nivel} onChange={(e) => setNivel((e.target.value as EventLevel) || "")}>
+        <div className="row admin-form-row" style={{ flexWrap: "wrap" }}>
+          <input className="admin-input" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome do evento" />
+          <input className="admin-input admin-input-id" value={cbtmEventId} onChange={(e) => setCbtmEventId(e.target.value)} placeholder="ID CBTM" />
+          <select className="admin-input admin-input-level" value={nivel} onChange={(e) => setNivel((e.target.value as EventLevel) || "")}>
             <option value="">Nivel (opcional)</option>
             {EVENT_LEVELS.map((item) => (
               <option key={item} value={item}>
@@ -674,7 +674,7 @@ export default function AdminPage() {
               </option>
             ))}
           </select>
-          <label className="row" style={{ gap: 8 }}>
+          <label className="row admin-checkbox-row" style={{ gap: 8 }}>
             <input
               type="checkbox"
               checked={concluidoForm}
@@ -684,10 +684,11 @@ export default function AdminPage() {
           </label>
         </div>
 
-        <div className="row" style={{ flexWrap: "wrap" }}>
-          <label style={{ display: "grid" }}>
+        <div className="row admin-form-row" style={{ flexWrap: "wrap" }}>
+          <label className="admin-field" style={{ display: "grid" }}>
             <span>Inicio inscricoes</span>
             <input
+              className="admin-input"
               type="text"
               inputMode="numeric"
               placeholder="dd/mm/yyyy"
@@ -696,9 +697,10 @@ export default function AdminPage() {
               disabled={concluidoForm}
             />
           </label>
-          <label style={{ display: "grid" }}>
+          <label className="admin-field" style={{ display: "grid" }}>
             <span>Fim inscricoes</span>
             <input
+              className="admin-input"
               type="text"
               inputMode="numeric"
               placeholder="dd/mm/yyyy"
@@ -707,9 +709,10 @@ export default function AdminPage() {
               disabled={concluidoForm}
             />
           </label>
-          <label style={{ display: "grid" }}>
+          <label className="admin-field" style={{ display: "grid" }}>
             <span>Inicio realizacao</span>
             <input
+              className="admin-input"
               type="text"
               inputMode="numeric"
               placeholder="dd/mm/yyyy"
@@ -718,9 +721,10 @@ export default function AdminPage() {
               disabled={concluidoForm}
             />
           </label>
-          <label style={{ display: "grid" }}>
+          <label className="admin-field" style={{ display: "grid" }}>
             <span>Fim realizacao</span>
             <input
+              className="admin-input"
               type="text"
               inputMode="numeric"
               placeholder="dd/mm/yyyy"
@@ -737,8 +741,8 @@ export default function AdminPage() {
           <p style={{ margin: 0 }}>Evento nao concluido: preencha todas as datas no formato dd/mm/yyyy.</p>
         )}
 
-        <div className="row">
-          <button onClick={saveEvent} disabled={savingEvent}>
+        <div className="row admin-action-row">
+          <button className="admin-btn-primary" onClick={saveEvent} disabled={savingEvent}>
             {savingEvent
               ? "Salvando..."
               : editingEventId
@@ -746,17 +750,18 @@ export default function AdminPage() {
                 : "Criar e iniciar scrape"}
           </button>
           {editingEventId ? (
-            <button className="secondary" onClick={resetEventForm}>
+            <button className="secondary admin-btn-secondary" onClick={resetEventForm}>
               Cancelar edicao
             </button>
           ) : null}
         </div>
       </section>
 
-      <section className="card">
+      <section className="card admin-card">
         <h2>Eventos</h2>
         {loading ? <p>Carregando...</p> : null}
-        <table>
+        <div className="admin-table-wrap">
+        <table className="admin-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -803,6 +808,7 @@ export default function AdminPage() {
                   {scrapeProgressByEvent[event.id] ? (
                     <span
                       className="pill"
+                      title={scrapeProgressByEvent[event.id].message}
                       style={{
                         background:
                           scrapeProgressByEvent[event.id].phase === "error"
@@ -824,16 +830,16 @@ export default function AdminPage() {
                     "-"
                   )}
                 </td>
-                <td className="row" style={{ flexWrap: "wrap" }}>
-                  <button onClick={() => loadEventDetails(event.id)}>Detalhes</button>
-                  <button onClick={() => startEditEvent(event)}>Editar</button>
-                  <button onClick={() => scrapeNow(event)} disabled={busyScrapeEventId === event.id}>
+                <td className="row admin-table-actions" style={{ flexWrap: "wrap" }}>
+                  <button className="admin-btn-secondary" onClick={() => loadEventDetails(event.id)}>Detalhes</button>
+                  <button className="admin-btn-secondary" onClick={() => startEditEvent(event)}>Editar</button>
+                  <button className="admin-btn-primary" onClick={() => scrapeNow(event)} disabled={busyScrapeEventId === event.id}>
                     {busyScrapeEventId === event.id ? "Enfileirando..." : "Atualizar agora"}
                   </button>
-                  <button className="secondary" onClick={() => toggleConcluido(event)}>
+                  <button className="secondary admin-btn-secondary" onClick={() => toggleConcluido(event)}>
                     {event.concluido ? "Reabrir" : "Concluir"}
                   </button>
-                  <button className="secondary" onClick={() => deleteEvent(event)}>
+                  <button className="secondary admin-btn-secondary" onClick={() => deleteEvent(event)}>
                     Excluir evento
                   </button>
                 </td>
@@ -841,9 +847,10 @@ export default function AdminPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
 
-      <section className="card">
+      <section className="card admin-card">
         <h2>Scrape runs {selectedEvent ? `- ${selectedEvent.nome}` : ""}</h2>
         {selectedEvent ? (
           <p style={{ marginTop: 0 }}>
@@ -853,7 +860,8 @@ export default function AdminPage() {
         ) : (
           <p>Selecione um evento para visualizar.</p>
         )}
-        <table>
+        <div className="admin-table-wrap">
+        <table className="admin-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -884,6 +892,7 @@ export default function AdminPage() {
             ))}
           </tbody>
         </table>
+        </div>
 
         {selectedRun ? (
           <div style={{ marginTop: 16 }}>
@@ -895,7 +904,8 @@ export default function AdminPage() {
                 <p style={{ margin: "0 0 8px 0" }}>
                   Total: <strong>{selectedRunWarnings.length}</strong>
                 </p>
-                <table>
+                <div className="admin-table-wrap">
+                <table className="admin-table">
                   <thead>
                     <tr>
                       <th>Tipo</th>
@@ -911,6 +921,7 @@ export default function AdminPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
                 <details style={{ marginTop: 8 }}>
                   <summary>Mensagens completas</summary>
                   <ul>
@@ -925,11 +936,12 @@ export default function AdminPage() {
         ) : null}
       </section>
 
-      <section className="card grid">
+      <section className="card grid admin-card">
         <h2>Conflitos de atleta {selectedEvent ? `- ${selectedEvent.nome}` : ""}</h2>
         {!selectedEvent ? <p>Selecione um evento para listar conflitos.</p> : null}
 
-        <table>
+        <div className="admin-table-wrap">
+        <table className="admin-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -956,12 +968,13 @@ export default function AdminPage() {
                       : candidates.map((candidate) => `${candidate.nameDisplay} (${candidate.score})`).join(" | ")}
                   </td>
                   <td>{conflict.resolvedAthleteId ? "Resolvido" : "Pendente"}</td>
-                  <td className="row">
+                  <td className="row admin-table-actions">
                     {conflict.resolvedAthleteId ? (
                       <span className="pill">Atleta #{conflict.resolvedAthleteId}</span>
                     ) : (
                       <>
                         <select
+                          className="admin-input"
                           value={selectedAthlete}
                           onChange={(event) =>
                             setResolutionByConflict((previous) => ({
@@ -976,7 +989,7 @@ export default function AdminPage() {
                             </option>
                           ))}
                         </select>
-                        <button onClick={() => resolveConflict(conflict)} disabled={candidates.length === 0}>
+                        <button className="admin-btn-primary" onClick={() => resolveConflict(conflict)} disabled={candidates.length === 0}>
                           Resolver
                         </button>
                       </>
@@ -987,6 +1000,7 @@ export default function AdminPage() {
             })}
           </tbody>
         </table>
+        </div>
       </section>
     </main>
   );

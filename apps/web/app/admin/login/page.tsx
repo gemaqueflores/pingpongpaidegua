@@ -61,20 +61,21 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main className="container">
-      <div className="card" style={{ maxWidth: 460, margin: "50px auto" }}>
+    <main className="container admin-page">
+      <div className="card admin-card" style={{ maxWidth: 460, margin: "50px auto" }}>
         <h1>Login Admin</h1>
         <p>Area restrita para administracao</p>
 
         <form className="grid" onSubmit={onSubmit}>
           <label>
             Usuario
-            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+            <input className="admin-input" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
           </label>
 
           <label>
             Senha
             <input
+              className="admin-input"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -82,11 +83,11 @@ export default function AdminLoginPage() {
             />
           </label>
 
-          <button disabled={loading}>{loading ? "Entrando..." : "Entrar"}</button>
+          <button className="admin-btn-primary" disabled={loading}>{loading ? "Entrando..." : "Entrar"}</button>
         </form>
 
         <div className="row" style={{ marginTop: 12 }}>
-          <button type="button" className="secondary" onClick={() => setForgotMode((current) => !current)}>
+          <button type="button" className="secondary admin-btn-secondary" onClick={() => setForgotMode((current) => !current)}>
             Esqueci a senha
           </button>
         </div>
@@ -96,7 +97,7 @@ export default function AdminLoginPage() {
             <p style={{ margin: 0, color: "#576965" }}>
               O link de reset sera enviado para o e-mail configurado.
             </p>
-            <button type="submit" disabled={forgotLoading}>
+            <button className="admin-btn-primary" type="submit" disabled={forgotLoading}>
               {forgotLoading ? "Solicitando..." : "Enviar link de reset"}
             </button>
           </form>

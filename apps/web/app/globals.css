@@ -1435,3 +1435,131 @@ h3 {
     top: 0;
   }
 }
+
+/* Admin mobile UX */
+.admin-page {
+  gap: 14px;
+}
+
+.admin-card {
+  gap: 12px;
+}
+
+.admin-topbar {
+  align-items: center;
+}
+
+.admin-topbar-actions button {
+  min-height: 42px;
+}
+
+.admin-form-row {
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.admin-field {
+  min-width: 200px;
+  flex: 1 1 220px;
+  gap: 4px;
+}
+
+.admin-input {
+  min-height: 42px;
+}
+
+.admin-input-id {
+  max-width: 160px;
+}
+
+.admin-input-level {
+  max-width: 190px;
+}
+
+.admin-checkbox-row {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  min-height: 42px;
+}
+
+.admin-action-row {
+  gap: 10px;
+}
+
+.admin-btn-primary,
+.admin-btn-secondary {
+  min-height: 42px;
+}
+
+.admin-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.admin-table {
+  min-width: 980px;
+}
+
+.admin-table th,
+.admin-table td {
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.admin-table-actions {
+  min-width: 240px;
+  gap: 8px;
+}
+
+.admin-table-actions button,
+.admin-table-actions select {
+  min-height: 38px;
+}
+
+@media (max-width: 900px) {
+  .admin-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .admin-topbar-actions {
+    width: 100%;
+  }
+
+  .admin-topbar-actions button {
+    width: 100%;
+  }
+
+  .admin-form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-input-id,
+  .admin-input-level,
+  .admin-field {
+    max-width: none;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .admin-checkbox-row {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .admin-action-row {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-action-row button {
+    width: 100%;
+  }
+}
