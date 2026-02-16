@@ -98,6 +98,18 @@ jobs:
               $COMPOSE_BIN exec -T worker sh -lc "$RUN_ONCE_CMD" >"$RUN_ONCE_LOG" 2>&1
               RUN_ONCE_EXIT=$?
             fi
+
+            if [ "$RUN_ONCE_EXIT" -ne 0 ]; then
+              echo "Primeira tentativa do run-once falhou (exit=$RUN_ONCE_EXIT). Tentando novamente em 15s..."
+              sleep 15
+              if [ -n "$SCRAPE_IDS" ]; then
+                $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD" >"$RUN_ONCE_LOG" 2>&1
+                RUN_ONCE_EXIT=$?
+              else
+                $COMPOSE_BIN exec -T worker sh -lc "$RUN_ONCE_CMD" >"$RUN_ONCE_LOG" 2>&1
+                RUN_ONCE_EXIT=$?
+              fi
+            fi
             set -e
 
             echo "Checkpoint: execucao finalizada"
