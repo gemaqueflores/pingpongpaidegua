@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 
@@ -6,8 +6,9 @@ const MENU_ITEMS = [
   { href: "/", label: "Home" },
   { href: "/#eventos-em-destaque", label: "Eventos" },
   { href: "/#atletas-da-base", label: "Carreira" },
-  { href: "/user/reportar-problema", label: "Reporte" },
-  { href: "/user/colabore", label: "Apoie" },
+  { href: "/eficiencia", label: "Eficiência" },
+  { href: "/reportar-problema", label: "Reporte" },
+  { href: "/colabore", label: "Apoie" },
 ];
 
 export function UserHeader() {
@@ -47,10 +48,10 @@ export function UserHeader() {
           </a>
 
           <nav className="row app-user-header-cta" aria-label="Ações rápidas">
-            <a className="app-cta-button" href="/user/reportar-problema">
+            <a className="app-cta-button" href="/reportar-problema">
               Reportar
             </a>
-            <a className="app-cta-button app-cta-button-secondary" href="/user/colabore">
+            <a className="app-cta-button app-cta-button-secondary" href="/colabore">
               Apoie
             </a>
           </nav>

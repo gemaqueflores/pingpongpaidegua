@@ -1009,6 +1009,27 @@ a {
   color: #eef5ff;
 }
 
+.user-theme .data-table tbody tr.eff-row-gold td,
+.user-theme .data-table tbody tr.eff-row-gold:nth-child(even) td,
+.user-theme .data-table tbody tr.eff-row-gold:hover td {
+  background: rgba(255, 212, 59, 0.32);
+  color: #fff9e6;
+}
+
+.user-theme .data-table tbody tr.eff-row-silver td,
+.user-theme .data-table tbody tr.eff-row-silver:nth-child(even) td,
+.user-theme .data-table tbody tr.eff-row-silver:hover td {
+  background: rgba(220, 230, 246, 0.28);
+  color: #f5f9ff;
+}
+
+.user-theme .data-table tbody tr.eff-row-bronze td,
+.user-theme .data-table tbody tr.eff-row-bronze:nth-child(even) td,
+.user-theme .data-table tbody tr.eff-row-bronze:hover td {
+  background: rgba(255, 184, 106, 0.28);
+  color: #fff7ee;
+}
+
 .user-theme .classification-row-ouro td {
   background: rgba(255, 212, 59, 0.24);
   color: #fff9e6;
@@ -1806,14 +1827,17 @@ a {
 /* Admin mobile UX */
 .admin-page {
   gap: 14px;
+  padding-bottom: 32px;
 }
 
 .admin-card {
   gap: 12px;
+  border-radius: 14px;
 }
 
 .admin-topbar {
   align-items: center;
+  gap: 10px;
 }
 
 .admin-topbar-actions button {
@@ -1829,6 +1853,11 @@ a {
   min-width: 200px;
   flex: 1 1 220px;
   gap: 4px;
+}
+
+.admin-field > span {
+  font-weight: 600;
+  font-size: 0.92rem;
 }
 
 .admin-input {
@@ -1852,6 +1881,7 @@ a {
 
 .admin-action-row {
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .admin-btn-primary,
@@ -1865,6 +1895,7 @@ a {
   -webkit-overflow-scrolling: touch;
   border: 1px solid var(--line);
   border-radius: 12px;
+  background: rgba(4, 18, 58, 0.38);
 }
 
 .admin-table {
@@ -1875,6 +1906,13 @@ a {
 .admin-table td {
   white-space: nowrap;
   vertical-align: top;
+}
+
+.admin-table thead th {
+  position: sticky;
+  top: 0;
+  background: rgba(9, 24, 74, 0.96);
+  z-index: 2;
 }
 
 .admin-table-actions {
@@ -1892,6 +1930,15 @@ a {
     align-items: flex-start;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .admin-page {
+    gap: 10px;
+  }
+
+  .admin-card {
+    padding: 14px;
+    border-radius: 12px;
   }
 
   .admin-topbar-actions {
@@ -1929,4 +1976,54 @@ a {
   .admin-action-row button {
     width: 100%;
   }
+
+  .admin-table {
+    min-width: 860px;
+  }
+
+  .admin-table-actions {
+    min-width: 200px;
+  }
 }
+
+@media (max-width: 560px) {
+  .admin-page {
+    padding-inline: 10px;
+  }
+
+  .admin-card h2 {
+    font-size: 1.05rem;
+    line-height: 1.3;
+  }
+
+  .admin-input,
+  .admin-btn-primary,
+  .admin-btn-secondary {
+    min-height: 44px;
+  }
+
+  .admin-table {
+    min-width: 760px;
+  }
+}
+
+.club-efficiency-broadcast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  line-height: 1.35;
+}
+
+.club-efficiency-broadcast span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(8, 30, 91, 0.45);
+  border: 1px solid rgba(73, 118, 233, 0.4);
+  font-weight: 600;
+  white-space: nowrap;
+}
+

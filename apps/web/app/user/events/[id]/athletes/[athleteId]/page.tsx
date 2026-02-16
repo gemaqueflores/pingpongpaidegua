@@ -251,7 +251,7 @@ export default function AthleteSummaryPage() {
         title="Resumo do Atleta"
         subtitle="Tênis de Mesa / Table Tennis"
         actions={
-          <button type="button" onClick={() => (window.location.href = `/user/events/${eventId}`)}>
+          <button type="button" onClick={() => (window.location.href = `/events/${eventId}`)}>
             Voltar para evento
           </button>
         }
@@ -312,7 +312,7 @@ export default function AthleteSummaryPage() {
               )}
             </div>
             <div>
-              <a href={`/user/career/${encodeURIComponent(summary.athlete.athleteKey)}`}>Abrir carreira</a>
+              <a href={`/career/${encodeURIComponent(summary.athlete.athleteKey)}`}>Abrir carreira</a>
             </div>
           </Card>
 
@@ -371,4 +371,5 @@ export default function AthleteSummaryPage() {
     </main>
   );
 }
+
 

@@ -7,12 +7,15 @@ import {
   apiDeleteEvent,
   apiGetAdminEvents,
   apiGetAthleteConflicts,
+  apiGetEfficiencyConfig,
   apiGetScrapeRuns,
   apiMarkCompleted,
   apiResolveAthleteConflict,
   apiScrapeNow,
+  apiUpdateEfficiencyConfig,
   apiUpdateEvent,
   type AdminEventRow,
+  type EfficiencyConfig,
   type EventLevel,
   type EventSituation,
 } from "../../lib/admin-api";
@@ -214,6 +217,11 @@ export default function AdminPage() {
   const [busyScrapeStage, setBusyScrapeStage] = useState<ScrapeStage | null>(null);
   const [notice, setNotice] = useState<NoticeState>(null);
   const [scrapeProgressByEvent, setScrapeProgressByEvent] = useState<Record<number, ScrapeProgressState>>({});
+  const [efficiencyConfig, setEfficiencyConfig] = useState<EfficiencyConfig | null>(null);
+  const [efficiencySaving, setEfficiencySaving] = useState(false);
+  const [pesoOuro, setPesoOuro] = useState("400");
+  const [pesoPrata, setPesoPrata] = useState("240");
+  const [pesoBronze, setPesoBronze] = useState("120");
 
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
   const [nome, setNome] = useState("TMB Challenge Plus - Evento 5246");
@@ -248,6 +256,7 @@ export default function AdminPage() {
     }
 
     void refreshEvents();
+    void loadEfficiencyConfig();
   }, [router]);
 
   function resetEventForm() {
@@ -363,6 +372,63 @@ export default function AdminPage() {
       });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadEfficiencyConfig() {
+    try {
+      const config = await apiGetEfficiencyConfig();
+      setEfficiencyConfig(config);
+      setPesoOuro(String(config.pesoOuro));
+      setPesoPrata(String(config.pesoPrata));
+      setPesoBronze(String(config.pesoBronze));
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text: error instanceof Error ? error.message : "Falha ao carregar configuracao de eficiencia.",
+      });
+    }
+  }
+
+  async function saveEfficiencyConfig() {
+    const parsedOuro = Number(pesoOuro);
+    const parsedPrata = Number(pesoPrata);
+    const parsedBronze = Number(pesoBronze);
+
+    if (
+      !Number.isInteger(parsedOuro) ||
+      !Number.isInteger(parsedPrata) ||
+      !Number.isInteger(parsedBronze) ||
+      parsedOuro < 0 ||
+      parsedPrata < 0 ||
+      parsedBronze < 0
+    ) {
+      setNotice({
+        type: "error",
+        text: "Pesos invalidos: use inteiros maiores ou iguais a zero.",
+      });
+      return;
+    }
+
+    setEfficiencySaving(true);
+    try {
+      const saved = await apiUpdateEfficiencyConfig({
+        pesoOuro: parsedOuro,
+        pesoPrata: parsedPrata,
+        pesoBronze: parsedBronze,
+      });
+      setEfficiencyConfig(saved);
+      setNotice({
+        type: "success",
+        text: "Configuracao de eficiencia atualizada com sucesso.",
+      });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text: error instanceof Error ? error.message : "Falha ao salvar configuracao de eficiencia.",
+      });
+    } finally {
+      setEfficiencySaving(false);
     }
   }
 
@@ -677,6 +743,55 @@ export default function AdminPage() {
           </p>
         </section>
       ) : null}
+
+      <section className="card grid admin-card">
+        <h2>Configuracao de Eficiencia</h2>
+        <div className="row admin-form-row" style={{ flexWrap: "wrap" }}>
+          <label className="admin-field" style={{ display: "grid" }}>
+            <span>Peso Ouro</span>
+            <input
+              className="admin-input"
+              type="number"
+              min={0}
+              step={1}
+              value={pesoOuro}
+              onChange={(event) => setPesoOuro(event.target.value)}
+            />
+          </label>
+          <label className="admin-field" style={{ display: "grid" }}>
+            <span>Peso Prata</span>
+            <input
+              className="admin-input"
+              type="number"
+              min={0}
+              step={1}
+              value={pesoPrata}
+              onChange={(event) => setPesoPrata(event.target.value)}
+            />
+          </label>
+          <label className="admin-field" style={{ display: "grid" }}>
+            <span>Peso Bronze</span>
+            <input
+              className="admin-input"
+              type="number"
+              min={0}
+              step={1}
+              value={pesoBronze}
+              onChange={(event) => setPesoBronze(event.target.value)}
+            />
+          </label>
+        </div>
+        <div className="row admin-action-row">
+          <button className="admin-btn-primary" onClick={saveEfficiencyConfig} disabled={efficiencySaving}>
+            {efficiencySaving ? "Salvando..." : "Salvar pesos"}
+          </button>
+          {efficiencyConfig ? (
+            <span className="pill">
+              Atual: Ouro {efficiencyConfig.pesoOuro} | Prata {efficiencyConfig.pesoPrata} | Bronze {efficiencyConfig.pesoBronze}
+            </span>
+          ) : null}
+        </div>
+      </section>
 
       <section className="card grid admin-card">
         <h2>{editingEventId ? `Editar evento #${editingEventId}` : "Novo evento monitorado"}</h2>

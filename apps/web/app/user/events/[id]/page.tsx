@@ -6,7 +6,10 @@ import {
   apiGetAthletes,
   apiGetClubAthletes,
   apiGetClubs,
+  apiGetEventEfficiency,
   apiGetEvents,
+  type EventEfficiencyResponse,
+  type EventEfficiencyRow,
   type UserEventRow,
 } from "../../../../lib/user-api";
 import { Hero } from "../../../../components/ui/Hero";
@@ -15,7 +18,8 @@ import { Badge } from "../../../../components/ui/Badge";
 import { Skeleton } from "../../../../components/ui/Skeleton";
 
 type EventRow = UserEventRow;
-type EventTab = "grupos" | "clubes" | "atletas";
+type EventTab = "grupos" | "clubes" | "atletas" | "eficiencia";
+type EfficiencyViewMode = "quantidade" | "pontuacao";
 
 type ClubRow = {
   id: number;
@@ -106,6 +110,9 @@ export default function EventDetailPage() {
   const [athleteSearch, setAthleteSearch] = useState("");
   const [athletes, setAthletes] = useState<AthleteRow[]>([]);
   const [loadingEvent, setLoadingEvent] = useState(true);
+  const [efficiencyData, setEfficiencyData] = useState<EventEfficiencyResponse | null>(null);
+  const [efficiencyLoading, setEfficiencyLoading] = useState(false);
+  const [efficiencyMode, setEfficiencyMode] = useState<EfficiencyViewMode>("pontuacao");
 
   useEffect(() => {
     void apiGetEvents()
@@ -114,6 +121,17 @@ export default function EventDetailPage() {
       })
       .finally(() => setLoadingEvent(false));
   }, [eventId]);
+
+  useEffect(() => {
+    if (activeTab !== "eficiencia" || efficiencyData) {
+      return;
+    }
+
+    setEfficiencyLoading(true);
+    void apiGetEventEfficiency(eventId)
+      .then((response) => setEfficiencyData(response))
+      .finally(() => setEfficiencyLoading(false));
+  }, [activeTab, efficiencyData, eventId]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -202,7 +220,46 @@ export default function EventDetailPage() {
     { id: "grupos", label: "Grupos" },
     { id: "clubes", label: "Clubes" },
     { id: "atletas", label: "Atletas" },
+    { id: "eficiencia", label: "Eficiência" },
   ];
+
+  const rankedEfficiencyRows = useMemo(() => {
+    const rows = [...(efficiencyData?.ranking ?? [])];
+    rows.sort((left, right) => {
+      if (left.ouro !== right.ouro) {
+        return right.ouro - left.ouro;
+      }
+      if (left.prata !== right.prata) {
+        return right.prata - left.prata;
+      }
+      if (left.bronze !== right.bronze) {
+        return right.bronze - left.bronze;
+      }
+      const leftTotal = efficiencyMode === "pontuacao" ? left.totalPontuacao : left.totalQuantidade;
+      const rightTotal = efficiencyMode === "pontuacao" ? right.totalPontuacao : right.totalQuantidade;
+      if (leftTotal !== rightTotal) {
+        return rightTotal - leftTotal;
+      }
+      return left.clubName.localeCompare(right.clubName, "pt-BR", { sensitivity: "base" });
+    });
+    return rows;
+  }, [efficiencyData?.ranking, efficiencyMode]);
+
+  function valueForMode(row: EventEfficiencyRow, medalha: "ouro" | "prata" | "bronze" | "total"): number {
+    if (efficiencyMode === "quantidade") {
+      if (medalha === "total") return row.totalQuantidade;
+      return row[medalha];
+    }
+    if (medalha === "total") return row.totalPontuacao;
+    return row.pontuacao[medalha];
+  }
+
+  function podiumClass(index: number): string {
+    if (index === 0) return "eff-row-gold";
+    if (index === 1) return "eff-row-silver";
+    if (index === 2) return "eff-row-bronze";
+    return "";
+  }
 
   return (
     <main className="container grid user-page">
@@ -265,7 +322,7 @@ export default function EventDetailPage() {
           {event?.groupsDefined ? <p>Grupos oficiais já divulgados para este evento.</p> : null}
           <div className="row">
             <button
-              onClick={() => (window.location.href = `/user/events/${eventId}/group-simulator`)}
+              onClick={() => (window.location.href = `/events/${eventId}/group-simulator`)}
               disabled={Boolean(event?.groupsDefined) || !Boolean(event?.groupSimulationEligible)}
               title={event?.groupsDefined ? "Simulação indisponível: grupos oficiais já publicados." : undefined}
             >
@@ -325,7 +382,7 @@ export default function EventDetailPage() {
                         <ul>
                           {athletesInClub.map((athlete) => (
                             <li key={athlete.id}>
-                              <a href={`/user/events/${eventId}/athletes/${athlete.id}`}>
+                              <a href={`/events/${eventId}/athletes/${athlete.id}`}>
                                 {athlete.nameDisplay ?? athlete.name}
                               </a>
                             </li>
@@ -368,7 +425,7 @@ export default function EventDetailPage() {
                   <td>{athlete.club?.name ?? "-"}</td>
                   <td>{formatAthleteFederation(athlete)}</td>
                   <td>
-                    <a href={`/user/events/${eventId}/athletes/${athlete.id}`}>Detalhes</a>
+                    <a href={`/events/${eventId}/athletes/${athlete.id}`}>Detalhes</a>
                   </td>
                 </tr>
               ))}
@@ -376,7 +433,77 @@ export default function EventDetailPage() {
           </table>
         </Card>
       ) : null}
+
+      {activeTab === "eficiencia" ? (
+        <Card className="grid">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <h2>Eficiência dos clubes</h2>
+            <div className="balloon-group" role="group" aria-label="Modo de exibição da eficiência">
+              <button
+                type="button"
+                className={`balloon-button ${efficiencyMode === "quantidade" ? "active" : ""}`}
+                onClick={() => setEfficiencyMode("quantidade")}
+              >
+                Quantidade
+              </button>
+              <button
+                type="button"
+                className={`balloon-button ${efficiencyMode === "pontuacao" ? "active" : ""}`}
+                onClick={() => setEfficiencyMode("pontuacao")}
+              >
+                Pontuação
+              </button>
+            </div>
+          </div>
+          {efficiencyData ? (
+            <p className="arena-muted" style={{ marginTop: 0 }}>
+              Exibir por: {efficiencyMode === "pontuacao" ? "Pontuação" : "Quantidade"} | Pesos atuais: Ouro {efficiencyData.weights.pesoOuro}, Prata {efficiencyData.weights.pesoPrata}, Bronze {efficiencyData.weights.pesoBronze}
+            </p>
+          ) : null}
+
+          {efficiencyLoading ? <p>Carregando eficiência...</p> : null}
+          {!efficiencyLoading && rankedEfficiencyRows.length === 0 ? (
+            <p>Nenhum clube com dados de eficiência para este evento.</p>
+          ) : null}
+
+          {!efficiencyLoading && rankedEfficiencyRows.length > 0 ? (
+            <div className="global-mobile-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Clube</th>
+                    <th>Atletas</th>
+                    <th>Ouro</th>
+                    <th>Prata</th>
+                    <th>Bronze</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rankedEfficiencyRows.map((row, index) => (
+                    <tr key={row.clubId} className={podiumClass(index)}>
+                      <td>{index + 1}</td>
+                      <td>
+                        <a href={`/eficiencia/${row.clubId}`}>{row.clubName}</a>
+                      </td>
+                      <td>{row.athleteCount}</td>
+                      <td>{valueForMode(row, "ouro")}</td>
+                      <td>{valueForMode(row, "prata")}</td>
+                      <td>{valueForMode(row, "bronze")}</td>
+                      <td>
+                        <strong>{valueForMode(row, "total")}</strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
     </main>
   );
 }
+
 

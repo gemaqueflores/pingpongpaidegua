@@ -141,7 +141,7 @@ export default function GroupSimulatorPage() {
         subtitle="Arena de projeção de grupos"
         actions={
           <>
-            <button onClick={() => (window.location.href = `/user/events/${eventId}`)}>Voltar ao evento</button>
+            <button onClick={() => (window.location.href = `/events/${eventId}`)}>Voltar ao evento</button>
             <button className="secondary" onClick={() => (window.location.href = "/")}>
               Home
             </button>
@@ -340,3 +340,4 @@ export default function GroupSimulatorPage() {
     </main>
   );
 }
+

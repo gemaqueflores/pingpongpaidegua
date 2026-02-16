@@ -8,6 +8,7 @@ import { MatchCard } from "../components/ui/MatchCard";
 import { StatBlock } from "../components/ui/StatBlock";
 import { AthleteSummaryCard } from "../components/career/AthleteSummaryCard";
 import { MedalMatrixTable } from "../components/career/MedalMatrixTable";
+import { ClubEfficiencyCareerPanel } from "../components/user/ClubEfficiencyCareerPanel";
 
 test("Hero snapshot", () => {
   const html = renderToStaticMarkup(
@@ -129,4 +130,73 @@ test("Template export contract", async () => {
   assert.equal(typeof module.createGroupSimulationShareImageBlob, "function");
   assert.equal(typeof module.downloadBlob, "function");
   assert.equal(typeof module.resolveCanvasSize, "function");
+});
+
+test("ClubEfficiencyCareerPanel snapshot", () => {
+  const html = renderToStaticMarkup(
+    <ClubEfficiencyCareerPanel
+      expandedEvents={{ 11: true }}
+      onToggleEvent={() => undefined}
+      data={{
+        club: { id: 77, name: "PARA CLUBE - PA" },
+        weights: { pesoOuro: 400, pesoPrata: 240, pesoBronze: 120 },
+        summary: {
+          nEventos: 5,
+          ultimoEventoNome: "1TMB26",
+          ultimoEventoId: 11,
+          nAtletasUltimoEvento: 18,
+          proximoEventoNome: "2TMB26",
+          proximoEventoId: 12,
+          nAtletasProximoEvento: 17,
+          medalhasTotais: { ouro: 6, prata: 4, bronze: 7, total: 17 },
+        },
+        broadcastByType: {
+          BRASILEIRAO: { ouro: 1, prata: 0, bronze: 1, total: 2 },
+          COPA: { ouro: 2, prata: 1, bronze: 0, total: 3 },
+          ESTADUAL: { ouro: 3, prata: 2, bronze: 4, total: 9 },
+          OPEN: { ouro: 0, prata: 1, bronze: 2, total: 3 },
+        },
+        scoreCard: {
+          quantidade: { ouro: 6, prata: 4, bronze: 7, total: 17 },
+          pontuacao: { ouro: 2400, prata: 960, bronze: 840, total: 4200 },
+        },
+        history: [
+          {
+            eventId: 11,
+            eventName: "1TMB26",
+            eventType: "ESTADUAL",
+            dataInicio: "2026-02-21T03:00:00.000Z",
+            dataFim: "2026-02-23T03:00:00.000Z",
+            athleteCount: 18,
+            ouro: 3,
+            prata: 2,
+            bronze: 1,
+            totalQuantidade: 6,
+            pontuacao: { ouro: 1200, prata: 480, bronze: 120, total: 1800 },
+            medalists: [
+              { athleteId: 1, athleteName: "ATLETA A", categoryName: "ABS C", medalha: "ouro" },
+              { athleteId: 2, athleteName: "ATLETA B", categoryName: "ABS D", medalha: "prata" },
+            ],
+          },
+        ],
+        athletesContribution: [
+          {
+            athleteId: 1,
+            athleteName: "ATLETA A",
+            eventos: 4,
+            ouro: 2,
+            prata: 1,
+            bronze: 1,
+            totalQuantidade: 4,
+            pontuacao: { ouro: 800, prata: 240, bronze: 120, total: 1160 },
+          },
+        ],
+      }}
+    />,
+  );
+
+  assert.match(html, /Resumo rápido de eficiência/);
+  assert.match(html, /Próximo evento/);
+  assert.match(html, /Histórico por evento/);
+  assert.match(html, /Contribuição por atleta/);
 });

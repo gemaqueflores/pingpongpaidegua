@@ -48,6 +48,13 @@ export interface AdminEventRow {
   };
 }
 
+export interface EfficiencyConfig {
+  id: number;
+  pesoOuro: number;
+  pesoPrata: number;
+  pesoBronze: number;
+}
+
 export async function apiLogin(username: string, password: string) {
   const response = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
@@ -166,6 +173,29 @@ export async function apiResolveAthleteConflict(eventId: number, conflictId: num
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify({ athleteId }),
+  });
+
+  return handleResponse(response);
+}
+
+export async function apiGetEfficiencyConfig(): Promise<EfficiencyConfig> {
+  const response = await fetch(`${API_BASE}/admin/events/efficiency-config`, {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+
+  return handleResponse(response);
+}
+
+export async function apiUpdateEfficiencyConfig(payload: {
+  pesoOuro: number;
+  pesoPrata: number;
+  pesoBronze: number;
+}): Promise<EfficiencyConfig> {
+  const response = await fetch(`${API_BASE}/admin/events/efficiency-config`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify(payload),
   });
 
   return handleResponse(response);
