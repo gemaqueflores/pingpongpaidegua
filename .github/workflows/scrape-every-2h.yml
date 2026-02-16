@@ -18,10 +18,25 @@ jobs:
       SCRAPE_EVENT_IDS: ${{ github.event.inputs.event_ids }}
     steps:
       - name: Validar secrets de SSH
+        env:
+          ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
+          ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
+          ORACLE_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
         run: |
-          test -n "${{ secrets.ORACLE_SSH_HOST }}"
-          test -n "${{ secrets.ORACLE_SSH_USER }}"
-          test -n "${{ secrets.ORACLE_SSH_PRIVATE_KEY }}"
+          set -e
+          missing=()
+
+          [ -n "$ORACLE_SSH_HOST" ] || missing+=("ORACLE_SSH_HOST")
+          [ -n "$ORACLE_SSH_USER" ] || missing+=("ORACLE_SSH_USER")
+          [ -n "$ORACLE_SSH_PRIVATE_KEY" ] || missing+=("ORACLE_SSH_PRIVATE_KEY")
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Secrets ausentes/vazios: ${missing[*]}"
+            echo "Configure em Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          echo "Secrets obrigatorios de SSH OK."
 
       - name: Rodar scrape remoto na VM Oracle
         uses: appleboy/ssh-action@v1.2.0
