@@ -144,6 +144,11 @@ h3 {
   flex-wrap: wrap;
 }
 
+.hero-actions-row {
+  min-width: 0;
+  max-width: 100%;
+}
+
 button,
 input,
 select,
@@ -538,6 +543,8 @@ a {
 
 .career-hero-stats-scroll {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .match-card-grid {
@@ -793,7 +800,7 @@ a {
 .user-theme .container {
   position: relative;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: visible;
 }
 
 .user-theme .user-page > * {
@@ -1467,6 +1474,9 @@ a {
 
 .athlete-summary-card {
   gap: 14px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .home-event-filters {
@@ -1494,6 +1504,19 @@ a {
 
 .athlete-summary-head h2 {
   margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.athlete-summary-head > div:first-child {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.athlete-summary-share {
+  flex: 0 1 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .career-medal-matrix h3 {
@@ -1663,16 +1686,69 @@ a {
 }
 
 @media (max-width: 560px) {
-  .career-hero-stats-scroll {
+  html,
+  body {
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 4px;
+  }
+
+  .user-theme.product-shell {
+    min-width: 560px;
+  }
+
+  .user-theme .container {
+    min-width: 560px;
+    max-width: none;
+  }
+
+  .hero-actions-row,
+  .user-theme .event-actions,
+  .user-theme .event-metrics,
+  .user-theme .share-actions-row,
+  .user-theme .balloon-group,
+  .user-theme .sim-category-tabs,
+  .user-theme .letter-tab-strip {
+    overflow-x: visible;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: auto;
+    white-space: normal;
+    flex-wrap: wrap;
+    max-width: none;
+    padding-bottom: 0;
+    scrollbar-gutter: auto;
+    touch-action: auto;
+  }
+
+  .hero-actions-row > *,
+  .user-theme .event-actions > *,
+  .user-theme .event-metrics > *,
+  .user-theme .share-actions-row > *,
+  .user-theme .balloon-group > *,
+  .user-theme .sim-category-tabs > *,
+  .user-theme .letter-tab-strip > * {
+    flex: 0 1 auto;
+  }
+
+  .athlete-summary-share .share-actions-row {
+    width: auto;
+  }
+
+  .athlete-summary-share .share-actions-row > * {
+    flex: 0 1 auto;
+  }
+
+  .career-hero-stats-scroll {
+    overflow-x: visible;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: auto;
+    padding-bottom: 0;
+    scrollbar-gutter: auto;
+    touch-action: auto;
   }
 
   .career-hero-stats {
-    flex-wrap: nowrap;
-    width: max-content;
-    min-width: max-content;
+    flex-wrap: wrap;
+    width: auto;
+    min-width: 0;
   }
 
   .career-hero-stats .stat-block {
@@ -1681,6 +1757,13 @@ a {
 
   .home-event-filters .balloon-group {
     width: 100%;
+  }
+
+  .user-theme .data-table,
+  .career-medal-matrix-scroll,
+  .admin-table-wrap {
+    overflow-x: visible;
+    -webkit-overflow-scrolling: auto;
   }
 
   .user-theme .row {
@@ -1704,17 +1787,7 @@ a {
 
   .user-theme .event-metrics {
     display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    white-space: nowrap;
     gap: 8px;
-    padding-bottom: 2px;
-  }
-
-  .user-theme .event-metrics > * {
-    flex: 0 0 auto;
   }
 
   .user-theme .hero-header {

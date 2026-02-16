@@ -43,48 +43,50 @@ export function AthleteSummaryCard({
           {federationText ? <p className="arena-muted">UF/Região: <strong>{federationText}</strong></p> : null}
           <p className="arena-muted">Nome reduzido: <strong>{athleteReducedName || "-"}</strong></p>
         </div>
-        <ShareActions
-          inline
-          iconOnly
-          shareText={`Confira a carreira de ${athleteReducedName || athleteName}`}
-          fileName={`carreira-${share.athleteKey}.png`}
-          buildImage={() =>
-            createShareImageBlob({
-              title: athleteName,
-              subtitle: "Tênis de Mesa / Table Tennis",
-              subtitleSecondary: "Carreira",
-              lines: [],
-              metrics: [
-                { label: "UF", value: share.stateCode ?? "-" },
-                { label: "Pontos disputados", value: kpis.pointsDetail.split("/")[1] ?? "0" },
-                { label: "Pontos conquistados", value: kpis.pointsDetail.split("/")[0] ?? "0" },
-                { label: "Eficiência", value: kpis.ratio },
-              ],
-              medalTable: {
-                title: "",
-                columns: share.visibleColumns.map((column) => ({ key: column.key, label: column.label })),
-                rows: [
-                  {
-                    medalType: "ouro",
-                    label: "Ouro",
-                    values: share.visibleColumns.map((column) => medalMatrix.ouro[column.key]),
-                  },
-                  {
-                    medalType: "prata",
-                    label: "Prata",
-                    values: share.visibleColumns.map((column) => medalMatrix.prata[column.key]),
-                  },
-                  {
-                    medalType: "bronze",
-                    label: "Bronze",
-                    values: share.visibleColumns.map((column) => medalMatrix.bronze[column.key]),
-                  },
+        <div className="athlete-summary-share">
+          <ShareActions
+            inline
+            iconOnly
+            shareText={`Confira a carreira de ${athleteReducedName || athleteName}`}
+            fileName={`carreira-${share.athleteKey}.png`}
+            buildImage={() =>
+              createShareImageBlob({
+                title: athleteName,
+                subtitle: "Tênis de Mesa / Table Tennis",
+                subtitleSecondary: "Carreira",
+                lines: [],
+                metrics: [
+                  { label: "UF", value: share.stateCode ?? "-" },
+                  { label: "Pontos disputados", value: kpis.pointsDetail.split("/")[1] ?? "0" },
+                  { label: "Pontos conquistados", value: kpis.pointsDetail.split("/")[0] ?? "0" },
+                  { label: "Eficiência", value: kpis.ratio },
                 ],
-              },
-              footer: "Fonte: PingPong Paid'egua",
-            })
-          }
-        />
+                medalTable: {
+                  title: "",
+                  columns: share.visibleColumns.map((column) => ({ key: column.key, label: column.label })),
+                  rows: [
+                    {
+                      medalType: "ouro",
+                      label: "Ouro",
+                      values: share.visibleColumns.map((column) => medalMatrix.ouro[column.key]),
+                    },
+                    {
+                      medalType: "prata",
+                      label: "Prata",
+                      values: share.visibleColumns.map((column) => medalMatrix.prata[column.key]),
+                    },
+                    {
+                      medalType: "bronze",
+                      label: "Bronze",
+                      values: share.visibleColumns.map((column) => medalMatrix.bronze[column.key]),
+                    },
+                  ],
+                },
+                footer: "Fonte: PingPong Paid'egua",
+              })
+            }
+          />
+        </div>
       </div>
 
       <div className="career-hero-stats-scroll">

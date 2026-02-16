@@ -13,7 +13,7 @@ export function Hero({ title, subtitle, actions }: HeroProps) {
     <section className="hero-header" style={{ padding: designTokens.spacing.md }}>
       <h1 className="hero-title" style={{ fontFamily: designTokens.typography.titleFamily }}>{title}</h1>
       {subtitle ? <p className="hero-subtitle" style={{ color: designTokens.colors.accent }}>{subtitle}</p> : null}
-      {actions ? <div className="row">{actions}</div> : null}
+      {actions ? <div className="row hero-actions-row">{actions}</div> : null}
     </section>
   );
 }
