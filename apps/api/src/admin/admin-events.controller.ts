@@ -18,6 +18,7 @@ import { UpdateAdminEventDto } from "./dto/update-admin-event.dto";
 import { ResolveAthleteConflictDto } from "./dto/resolve-athlete-conflict.dto";
 import { RawCaptureCleanupDto } from "./dto/raw-capture-cleanup.dto";
 import { ScrapeNowDto } from "./dto/scrape-now.dto";
+import { UpdateEfficiencyConfigDto } from "./dto/update-efficiency-config.dto";
 
 @Controller("admin/events")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -28,6 +29,16 @@ export class AdminEventsController {
   @Get()
   async listEvents() {
     return this.service.listEvents();
+  }
+
+  @Get("efficiency-config")
+  async getEfficiencyConfig() {
+    return this.service.getEfficiencyConfig();
+  }
+
+  @Put("efficiency-config")
+  async updateEfficiencyConfig(@Body() body: UpdateEfficiencyConfigDto) {
+    return this.service.updateEfficiencyConfig(body);
   }
 
   @Post()

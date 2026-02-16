@@ -80,6 +80,33 @@ test("simulador usa distribuicao em zigue-zague invertido (A-B-C-C-B-A)", () => 
   );
 });
 
+test("com 10 atletas em 3 grupos a sobra fica no ultimo grupo e mantem COBRA no final", () => {
+  const result = simulateGroupsForCategory({
+    seed: "event:10:cat:cobra-tail",
+    athletes: [
+      athlete(1, "A", 1000),
+      athlete(2, "B", 990),
+      athlete(3, "C", 980),
+      athlete(4, "D", 970),
+      athlete(5, "E", 960),
+      athlete(6, "F", 950),
+      athlete(7, "G", 940),
+      athlete(8, "H", 930),
+      athlete(9, "I", 920),
+      athlete(10, "J", 910),
+    ],
+  });
+
+  assert.deepEqual(
+    result.stats.initialDistribution.map((group) => group.athleteIds),
+    [
+      [1, 6, 7],
+      [2, 5, 8],
+      [3, 4, 9, 10],
+    ],
+  );
+});
+
 test("simulador aplica swap para reduzir colisoes quando possivel", () => {
   const result = simulateGroupsForCategory({
     seed: "event:swap:cat:1",
@@ -98,6 +125,9 @@ test("simulador aplica swap para reduzir colisoes quando possivel", () => {
 
   assert.ok(result.stats.collisionsBefore > result.stats.collisionsAfter);
   assert.ok(result.stats.swapsApplied > 0);
+  assert.equal(result.groups[0].athletes[0]?.athleteId, 1);
+  assert.equal(result.groups[1].athletes[0]?.athleteId, 2);
+  assert.equal(result.groups[2].athletes[0]?.athleteId, 3);
 });
 
 test("simulador mantem colisoes quando cenario e insolavel e gera warning", () => {
@@ -442,4 +472,36 @@ test("quando colisao e inevitavel, mantem distribuicao cobra da categoria", () =
 
   assert.equal(result.stats.collisionsBefore, result.stats.collisionsAfter);
   assert.equal(result.stats.swapsApplied, 0);
+});
+
+test("RGM remaneja TOMAZ e ADRIAN sem trocar cabecas de chave", () => {
+  const result = simulateGroupsForCategory({
+    seed: "rgm:swap:tomaz-adrian",
+    categoryName: "RGM",
+    athletes: [
+      athleteWithPoints({ id: 1, name: "DOMINI", club: "APTM", rankingPoints: 0, ratingPoints: 1297 }),
+      athleteWithPoints({ id: 2, name: "JUCIVAL", club: "BEL", rankingPoints: 0, ratingPoints: 1190 }),
+      athleteWithPoints({ id: 3, name: "FABRIZIO", club: "PARA", rankingPoints: 0, ratingPoints: 1187 }),
+      athleteWithPoints({ id: 4, name: "MATHEUS", club: "PAYSANDU", rankingPoints: 0, ratingPoints: 1160 }),
+      athleteWithPoints({ id: 5, name: "PEDRO", club: "PARA CLUBE", rankingPoints: 0, ratingPoints: 1145 }),
+      athleteWithPoints({ id: 6, name: "PABLO", club: "ASSEMBLEIA", rankingPoints: 0, ratingPoints: 1120 }),
+      athleteWithPoints({ id: 7, name: "TOMAZ", club: "APTM", rankingPoints: 0, ratingPoints: 1104 }),
+      athleteWithPoints({ id: 8, name: "ADRIAN", club: "BEL", rankingPoints: 0, ratingPoints: 1048 }),
+      athleteWithPoints({ id: 9, name: "BRUNO", club: "PARA", rankingPoints: 0, ratingPoints: 1036 }),
+      athleteWithPoints({ id: 10, name: "ADRIANO", club: "YOSHIDA", rankingPoints: 0, ratingPoints: 1030 }),
+    ],
+  });
+
+  assert.deepEqual(result.stats.initialDistribution.map((group) => group.athleteIds), [
+    [1, 6, 7],
+    [2, 5, 8],
+    [3, 4, 9, 10],
+  ]);
+  assert.equal(result.groups[0].athletes[0].athleteId, 1);
+  assert.equal(result.groups[1].athletes[0].athleteId, 2);
+  assert.equal(result.groups[2].athletes[0].athleteId, 3);
+  assert.ok(result.groups[0].athletes.some((athleteItem) => athleteItem.athleteId === 8));
+  assert.ok(result.groups[1].athletes.some((athleteItem) => athleteItem.athleteId === 7));
+  assert.ok(result.stats.collisionsAfter < result.stats.collisionsBefore);
+  assert.equal(result.stats.swapsApplied, 1);
 });

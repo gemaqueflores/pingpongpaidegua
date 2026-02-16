@@ -250,6 +250,23 @@ function sanitizeUserWarnings(warnings: string[]): string[] {
 @Injectable()
 export class UserService {
   private readonly prisma: PrismaReadService;
+  private globalEfficiencyCache:
+    | {
+        expiresAt: number;
+        data: {
+          weights: { pesoOuro: number; pesoPrata: number; pesoBronze: number };
+          ranking: ClubEfficiencyRow[];
+        };
+      }
+    | null = null;
+  private readonly clubEfficiencyCache = new Map<
+    number,
+    {
+      expiresAt: number;
+      data: unknown;
+    }
+  >();
+  private static readonly EFFICIENCY_CACHE_TTL_MS = 60_000;
 
   constructor(@Inject(PrismaReadService) prisma: PrismaReadService) {
     this.prisma = prisma;
@@ -550,7 +567,17 @@ export class UserService {
   }
 
   async listGlobalEfficiency() {
-    return this.computeEfficiencyRanking({});
+    const now = Date.now();
+    if (this.globalEfficiencyCache && this.globalEfficiencyCache.expiresAt > now) {
+      return this.globalEfficiencyCache.data;
+    }
+
+    const data = await this.computeEfficiencyRanking({});
+    this.globalEfficiencyCache = {
+      expiresAt: now + UserService.EFFICIENCY_CACHE_TTL_MS,
+      data,
+    };
+    return data;
   }
 
   private async computeEfficiencyRanking(input: { eventId?: number }) {
@@ -705,14 +732,16 @@ export class UserService {
       }
 
       const fullCategoryMatches = fullCategoryMatchesMap.get(categoryId) ?? [];
-      for (const athlete of athletesInCategory) {
-        const classification = computeCategoryClassificationSummaries(fullCategoryMatches, {
-          athleteIds: [athlete.athleteId],
+      const positionByAthleteId = this.computeCategoryPositionByAthleteId(
+        fullCategoryMatches,
+        athletesInCategory.map((athlete) => ({
+          athleteId: athlete.athleteId,
           athleteName: athlete.athleteName,
-          athleteNameNormalized: normalizeAthleteName(athlete.athleteName),
-        })[0];
+        })),
+      );
 
-        const position = classification?.position ?? null;
+      for (const athlete of athletesInCategory) {
+        const position = positionByAthleteId.get(athlete.athleteId) ?? null;
         if (position !== 1 && position !== 2 && position !== 3) {
           continue;
         }
@@ -762,6 +791,12 @@ export class UserService {
   }
 
   async getClubEfficiencyCareer(clubId: number) {
+    const now = Date.now();
+    const cacheHit = this.clubEfficiencyCache.get(clubId);
+    if (cacheHit && cacheHit.expiresAt > now) {
+      return cacheHit.data;
+    }
+
     const club = await this.prisma.club.findUnique({
       where: { id: clubId },
       select: { id: true, name: true },
@@ -979,6 +1014,13 @@ export class UserService {
       const categoryAthletes = clubAthletesInCategory.get(category.id) ?? [];
       if (categoryAthletes.length === 0) continue;
       const categoryMatches = fullCategoryMatchesMap.get(category.id) ?? [];
+      const positionByAthleteId = this.computeCategoryPositionByAthleteId(
+        categoryMatches,
+        categoryAthletes.map((athlete) => ({
+          athleteId: athlete.athleteId,
+          athleteName: athlete.athleteName,
+        })),
+      );
 
       const event = eventById.get(category.eventId);
       if (!event) continue;
@@ -999,13 +1041,7 @@ export class UserService {
         };
 
       for (const athlete of categoryAthletes) {
-        const summary = computeCategoryClassificationSummaries(categoryMatches, {
-          athleteIds: [athlete.athleteId],
-          athleteName: athlete.athleteName,
-          athleteNameNormalized: normalizeAthleteName(athlete.athleteName),
-        })[0];
-        if (!summary) continue;
-        const position = summary.position;
+        const position = positionByAthleteId.get(athlete.athleteId) ?? null;
         if (position !== 1 && position !== 2 && position !== 3) continue;
 
         let medal: "ouro" | "prata" | "bronze";
@@ -1041,7 +1077,7 @@ export class UserService {
       historyByEvent.set(event.id, historyEntry);
     }
 
-    const now = Date.now();
+    const timelineNow = Date.now();
     const concludedEvents = events.filter((event) => event.concluido);
     const upcomingEvents = events.filter((event) => {
       if (event.concluido) {
@@ -1051,7 +1087,7 @@ export class UserService {
       if (!startDate) {
         return false;
       }
-      return new Date(startDate).getTime() > now;
+      return new Date(startDate).getTime() > timelineNow;
     });
 
     const sortedConcludedEvents = [...concludedEvents].sort((left, right) => {
@@ -1111,6 +1147,7 @@ export class UserService {
           }),
         };
       })
+      .filter((row) => row.totalQuantidade > 0)
       .sort((left, right) => {
         const leftDate = left.dataInicio ? new Date(left.dataInicio).getTime() : Number.MIN_SAFE_INTEGER;
         const rightDate = right.dataInicio ? new Date(right.dataInicio).getTime() : Number.MIN_SAFE_INTEGER;
@@ -1167,7 +1204,7 @@ export class UserService {
     const medalsEstadual = medalsByType.get("ESTADUAL") ?? createEmptyEfficiencyMedalCounter();
     const medalsOpen = medalsByType.get("OPEN") ?? createEmptyEfficiencyMedalCounter();
 
-    return {
+    const response = {
       club: { id: club.id, name: club.name },
       weights,
       summary: {
@@ -1210,6 +1247,39 @@ export class UserService {
       history,
       athletesContribution,
     };
+    this.clubEfficiencyCache.set(clubId, {
+      expiresAt: now + UserService.EFFICIENCY_CACHE_TTL_MS,
+      data: response,
+    });
+    return response;
+  }
+
+  private computeCategoryPositionByAthleteId(
+    categoryMatches: CategoryAnalyticsMatch[],
+    athletes: Array<{ athleteId: number; athleteName: string }>,
+  ): Map<number, number | null> {
+    if (athletes.length === 0) {
+      return new Map<number, number | null>();
+    }
+
+    const uniqueAthletes = new Map<number, { athleteId: number; athleteName: string }>();
+    for (const athlete of athletes) {
+      if (!uniqueAthletes.has(athlete.athleteId)) {
+        uniqueAthletes.set(athlete.athleteId, athlete);
+      }
+    }
+
+    const positionByAthleteId = new Map<number, number | null>();
+    for (const athlete of uniqueAthletes.values()) {
+      const summary = computeCategoryClassificationSummaries(categoryMatches, {
+        athleteIds: [athlete.athleteId],
+        athleteName: athlete.athleteName,
+        athleteNameNormalized: normalizeAthleteName(athlete.athleteName),
+      })[0];
+      positionByAthleteId.set(athlete.athleteId, summary?.position ?? null);
+    }
+
+    return positionByAthleteId;
   }
 
   async simulateGroups(

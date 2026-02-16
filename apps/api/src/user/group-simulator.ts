@@ -85,15 +85,15 @@ function buildFallbackGroupSizes(athleteCount: number): number[] {
   if (remainder === 1) {
     // Evita grupo com 1 atleta: converte uma sobra em grupo de 4.
     if (sizes.length > 0) {
-      sizes[0] = 4;
+      sizes[sizes.length - 1] = 4;
     } else {
       sizes.push(athleteCount);
     }
   } else if (remainder === 2) {
     // Sobra 2 atletas: transforma dois grupos em 4 atletas.
     if (sizes.length >= 2) {
-      sizes[0] = 4;
-      sizes[1] = 4;
+      sizes[sizes.length - 1] = 4;
+      sizes[sizes.length - 2] = 4;
     } else if (sizes.length === 1) {
       sizes[0] = 5;
     } else {
@@ -380,6 +380,8 @@ function isBetterCandidate(
 export function optimizeByClubSwap(input: {
   groups: GroupSimulationGroup[];
   maxIterations: number;
+  lockedAthleteIds?: number[];
+  maxSwaps?: number;
 }): {
   groups: GroupSimulationGroup[];
   collisionsBefore: number;
@@ -388,13 +390,15 @@ export function optimizeByClubSwap(input: {
   iterations: number;
 } {
   const groups = copyGroups(input.groups);
+  const lockedAthleteIds = new Set(input.lockedAthleteIds ?? []);
   let currentCollisions = countClubCollisions(groups);
   let currentStrengthPenalty = computeStrengthPenalty(groups);
   const collisionsBefore = currentCollisions;
   let swapsApplied = 0;
   let iterations = 0;
+  const maxSwaps = Math.max(0, input.maxSwaps ?? 1);
 
-  while (iterations < input.maxIterations) {
+  while (iterations < input.maxIterations && swapsApplied < maxSwaps) {
     iterations += 1;
     let bestCandidate: SwapCandidate | null = null;
 
@@ -413,9 +417,19 @@ export function optimizeByClubSwap(input: {
             rightAthleteIndex < rightGroup.athletes.length;
             rightAthleteIndex += 1
           ) {
+            // Mantém a estrutura COBRA por faixas: só permite remanejamento entre slots equivalentes.
+            if (leftAthleteIndex !== rightAthleteIndex) {
+              continue;
+            }
             const leftAthlete = leftGroup.athletes[leftAthleteIndex];
             const rightAthlete = rightGroup.athletes[rightAthleteIndex];
             if (leftAthlete.athleteId === rightAthlete.athleteId) {
+              continue;
+            }
+            if (
+              lockedAthleteIds.has(leftAthlete.athleteId) ||
+              lockedAthleteIds.has(rightAthlete.athleteId)
+            ) {
               continue;
             }
 
@@ -565,6 +579,9 @@ export function simulateGroupsForCategory(input: {
   const optimized = optimizeByClubSwap({
     groups: initialGroups,
     maxIterations: Math.max(1, athleteCount * groupCount * 2),
+    lockedAthleteIds: initialGroups
+      .map((group) => group.athletes[0]?.athleteId)
+      .filter((athleteId): athleteId is number => Number.isInteger(athleteId)),
   });
   const initialAthleteIds = collectAthleteIds(initialGroups);
   const optimizedAthleteIds = collectAthleteIds(optimized.groups);

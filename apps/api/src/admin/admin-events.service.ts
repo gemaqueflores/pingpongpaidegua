@@ -8,6 +8,11 @@ import { RawCaptureRetentionService } from "./raw-capture-retention.service";
 
 type DateBoundary = "start" | "end";
 const EVENT_TZ_OFFSET_MINUTES = -3 * 60;
+const DEFAULT_EFFICIENCY_CONFIG = {
+  pesoOuro: 400,
+  pesoPrata: 240,
+  pesoBronze: 120,
+} as const;
 
 @Injectable()
 export class AdminEventsService {
@@ -82,6 +87,40 @@ export class AdminEventsService {
     }
 
     return event;
+  }
+
+  async getEfficiencyConfig() {
+    const config = await this.prisma.efficiencyConfig.findUnique({
+      where: { id: 1 },
+    });
+
+    if (config) {
+      return config;
+    }
+
+    return this.prisma.efficiencyConfig.create({
+      data: {
+        id: 1,
+        ...DEFAULT_EFFICIENCY_CONFIG,
+      },
+    });
+  }
+
+  async updateEfficiencyConfig(input: { pesoOuro: number; pesoPrata: number; pesoBronze: number }) {
+    return this.prisma.efficiencyConfig.upsert({
+      where: { id: 1 },
+      create: {
+        id: 1,
+        pesoOuro: input.pesoOuro,
+        pesoPrata: input.pesoPrata,
+        pesoBronze: input.pesoBronze,
+      },
+      update: {
+        pesoOuro: input.pesoOuro,
+        pesoPrata: input.pesoPrata,
+        pesoBronze: input.pesoBronze,
+      },
+    });
   }
 
   async updateEvent(id: number, dto: UpdateAdminEventDto) {
