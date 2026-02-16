@@ -59,10 +59,10 @@ jobs:
             echo "Diretorio da aplicacao: $APP_DIR"
 
             if command -v docker >/dev/null 2>&1; then
-              if docker compose version >/dev/null 2>&1; then
-                COMPOSE_BIN="docker compose"
-              elif command -v docker-compose >/dev/null 2>&1; then
+              if command -v docker-compose >/dev/null 2>&1; then
                 COMPOSE_BIN="docker-compose"
+              elif docker compose version >/dev/null 2>&1; then
+                COMPOSE_BIN="docker compose"
               else
                 echo "Docker Compose nao encontrado na VM."
                 exit 1
