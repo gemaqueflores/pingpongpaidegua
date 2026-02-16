@@ -41,6 +41,133 @@ export interface UserClubRow {
   athleteCount?: number;
 }
 
+export interface EventEfficiencyRow {
+  clubId: number;
+  clubName: string;
+  athleteCount: number;
+  ouro: number;
+  prata: number;
+  bronze: number;
+  totalQuantidade: number;
+  totalPontuacao: number;
+  pontuacao: {
+    ouro: number;
+    prata: number;
+    bronze: number;
+    total: number;
+  };
+}
+
+export interface EventEfficiencyResponse {
+  eventId: number;
+  weights: {
+    pesoOuro: number;
+    pesoPrata: number;
+    pesoBronze: number;
+  };
+  ranking: EventEfficiencyRow[];
+}
+
+export interface GlobalEfficiencyResponse {
+  weights: {
+    pesoOuro: number;
+    pesoPrata: number;
+    pesoBronze: number;
+  };
+  ranking: EventEfficiencyRow[];
+}
+
+export type EfficiencyCompetitionType = "BRASILEIRAO" | "COPA" | "ESTADUAL" | "OPEN";
+
+export interface ClubEfficiencyCareerResponse {
+  club: {
+    id: number;
+    name: string;
+  };
+  weights: {
+    pesoOuro: number;
+    pesoPrata: number;
+    pesoBronze: number;
+  };
+  summary: {
+    nEventos: number;
+    ultimoEventoNome: string | null;
+    ultimoEventoId: number | null;
+    nAtletasUltimoEvento: number;
+    proximoEventoNome: string | null;
+    proximoEventoId: number | null;
+    nAtletasProximoEvento: number;
+    medalhasTotais: {
+      ouro: number;
+      prata: number;
+      bronze: number;
+      total: number;
+    };
+  };
+  broadcastByType: Record<
+    EfficiencyCompetitionType,
+    {
+      ouro: number;
+      prata: number;
+      bronze: number;
+      total: number;
+    }
+  >;
+  scoreCard: {
+    quantidade: {
+      ouro: number;
+      prata: number;
+      bronze: number;
+      total: number;
+    };
+    pontuacao: {
+      ouro: number;
+      prata: number;
+      bronze: number;
+      total: number;
+    };
+  };
+  history: Array<{
+    eventId: number;
+    eventName: string;
+    eventType: EfficiencyCompetitionType;
+    dataInicio: string | null;
+    dataFim: string | null;
+    athleteCount: number;
+    ouro: number;
+    prata: number;
+    bronze: number;
+    totalQuantidade: number;
+    pontuacao: {
+      ouro: number;
+      prata: number;
+      bronze: number;
+      total: number;
+    };
+    medalists: Array<{
+      athleteId: number;
+      athleteName: string;
+      categoryName: string;
+      medalha: "ouro" | "prata" | "bronze";
+    }>;
+  }>;
+  athletesContribution: Array<{
+    athleteId: number;
+    athleteName: string;
+    eventos: number;
+    ouro: number;
+    prata: number;
+    bronze: number;
+    totalQuantidade: number;
+    pontuacao: {
+      ouro: number;
+      prata: number;
+      bronze: number;
+      total: number;
+    };
+  }>;
+}
+
 export interface GroupSimulationCategory {
   categoryId: number;
   categoryName: string;
@@ -151,6 +278,24 @@ export async function apiGetCategories(eventId: number) {
   return handleResponse(response);
 }
 
+export async function apiGetEventEfficiency(eventId: number): Promise<EventEfficiencyResponse> {
+  const response = await fetch(`${API_BASE}/events/${eventId}/efficiency`, {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+
+  return handleResponse(response);
+}
+
+export async function apiGetGlobalEfficiency(): Promise<GlobalEfficiencyResponse> {
+  const response = await fetch(`${API_BASE}/efficiency`, {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+
+  return handleResponse(response);
+}
+
 export async function apiGetGroupSimulation(
   eventId: number,
   options?: { categoryId?: number; registrationScope?: GroupSimulationScope; debug?: boolean },
@@ -220,6 +365,15 @@ export async function apiGetAthletesDirectory(search = "") {
 
 export async function apiGetAthleteCareer(athleteKey: string) {
   const response = await fetch(`${API_BASE}/athletes/${encodeURIComponent(athleteKey)}/career`, {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+
+  return handleResponse(response);
+}
+
+export async function apiGetClubEfficiencyCareer(clubId: number): Promise<ClubEfficiencyCareerResponse> {
+  const response = await fetch(`${API_BASE}/clubs/${clubId}/efficiency-career`, {
     headers: getHeaders(),
     cache: "no-store",
   });

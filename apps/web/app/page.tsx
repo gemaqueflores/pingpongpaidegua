@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiGetAthletesDirectory, apiGetEvents, type UserEventRow } from "../lib/user-api";
+import {
+  apiGetAthletesDirectory,
+  apiGetGlobalEfficiency,
+  apiGetEvents,
+  type GlobalEfficiencyResponse,
+  type UserEventRow,
+} from "../lib/user-api";
 import { Hero } from "../components/ui/Hero";
 import { Card } from "../components/ui/Card";
 import { EventCard } from "../components/ui/EventCard";
@@ -79,12 +85,19 @@ function inferEventType(event: EventRow): Exclude<EventTypeFilter, "ALL"> {
 
 const PAGE_SIZE = 24;
 
+function formatClubMedalBadge(ouro: number, prata: number, bronze: number): string {
+  const total = ouro + prata + bronze;
+  return `🥇${ouro} 🥈${prata} 🥉${bronze} (${String(total).padStart(2, "0")})`;
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>([]);
   const [athletes, setAthletes] = useState<AthleteDirectoryRow[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [loadingAthletes, setLoadingAthletes] = useState(true);
+  const [loadingClubs, setLoadingClubs] = useState(false);
+  const [globalEfficiency, setGlobalEfficiency] = useState<GlobalEfficiencyResponse | null>(null);
   const [letterTab, setLetterTab] = useState("A");
   const [visibleAthletes, setVisibleAthletes] = useState(PAGE_SIZE);
   const [eventTypeFilter, setEventTypeFilter] = useState<EventTypeFilter>("ALL");
@@ -112,6 +125,14 @@ export default function HomePage() {
       null,
     [sortedEvents],
   );
+
+  useEffect(() => {
+    setLoadingClubs(true);
+    void apiGetGlobalEfficiency()
+      .then((result) => setGlobalEfficiency(result))
+      .catch(() => setGlobalEfficiency(null))
+      .finally(() => setLoadingClubs(false));
+  }, []);
   const filteredEvents = useMemo(() => {
     return sortedEvents.filter((event) => {
       const type = inferEventType(event);
@@ -172,7 +193,7 @@ export default function HomePage() {
             <>
               <button
                 type="button"
-                onClick={() => router.push("/user/reportar-problema")}
+                onClick={() => router.push("/reportar-problema")}
                 aria-label="Reportar problema"
               >
                 Reportar problema
@@ -180,7 +201,7 @@ export default function HomePage() {
               <button
                 type="button"
                 className="secondary"
-                onClick={() => router.push("/user/colabore")}
+                onClick={() => router.push("/colabore")}
                 aria-label="Apoiar o projeto"
               >
                 Apoie o projeto
@@ -201,13 +222,13 @@ export default function HomePage() {
               {`${formatDate(highlightedEvent.dataInicio)} até ${formatDate(highlightedEvent.dataFim)}`}
             </p>
             <div className="row">
-              <button type="button" onClick={() => router.push(`/user/events/${highlightedEvent.id}`)}>
+              <button type="button" onClick={() => router.push(`/events/${highlightedEvent.id}`)}>
                 Ver Evento
               </button>
               <button
                 type="button"
                 className="secondary"
-                onClick={() => router.push(`/user/events/${highlightedEvent.id}/group-simulator`)}
+                onClick={() => router.push(`/events/${highlightedEvent.id}/group-simulator`)}
                 disabled={!highlightedEvent.groupSimulationEligible}
               >
                 Simular Grupos
@@ -270,8 +291,8 @@ export default function HomePage() {
                   totalCategorias={event.totalCategorias}
                   groupSimulationEligible={event.groupSimulationEligible}
                   groupsDefined={event.groupsDefined}
-                  onOpen={() => router.push(`/user/events/${event.id}`)}
-                  onSimulate={() => router.push(`/user/events/${event.id}/group-simulator`)}
+                  onOpen={() => router.push(`/events/${event.id}`)}
+                  onSimulate={() => router.push(`/events/${event.id}/group-simulator`)}
                 />
               ))}
             </div>
@@ -279,6 +300,41 @@ export default function HomePage() {
 
           {!loadingEvents && filteredEvents.length === 0 ? (
             <p className="arena-muted">Nenhum evento encontrado.</p>
+          ) : null}
+        </Card>
+
+        <Card id="clubes-eficiencia" className="grid" variant="event">
+          <div className="row home-athletes-header" style={{ justifyContent: "space-between" }}>
+            <h2>Clubes</h2>
+            <Badge tone="default">Todos os eventos da base</Badge>
+          </div>
+
+          {loadingClubs ? (
+            <div className="athlete-list-grid">
+              <Skeleton height="60px" />
+              <Skeleton height="60px" />
+              <Skeleton height="60px" />
+            </div>
+          ) : (
+            <div className="athlete-list-grid">
+              {(globalEfficiency?.ranking ?? []).map((club) => (
+                <article key={club.clubId} className="athlete-list-card">
+                  <div>
+                    <h3>{club.clubName}</h3>
+                  </div>
+                  <div className="row" style={{ justifyContent: "space-between" }}>
+                    <Badge tone="default">
+                      {formatClubMedalBadge(club.ouro, club.prata, club.bronze)}
+                    </Badge>
+                    <button onClick={() => router.push(`/eficiencia/${club.clubId}`)}>Eficiência</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+
+          {!loadingClubs && (globalEfficiency?.ranking?.length ?? 0) === 0 ? (
+            <p className="arena-muted">Nenhum clube encontrado na base consolidada de eventos.</p>
           ) : null}
         </Card>
 
@@ -327,7 +383,7 @@ export default function HomePage() {
                   </div>
                   <div className="row" style={{ justifyContent: "space-between" }}>
                     <Badge tone="default">Eventos: {String(athlete.totalEvents)}</Badge>
-                    <button onClick={() => router.push(`/user/career/${encodeURIComponent(athlete.athleteKey)}`)}>
+                    <button onClick={() => router.push(`/career/${encodeURIComponent(athlete.athleteKey)}`)}>
                       Carreira
                     </button>
                   </div>
@@ -354,3 +410,4 @@ export default function HomePage() {
     </div>
   );
 }
+
