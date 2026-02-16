@@ -49,12 +49,19 @@ jobs:
           envs: SCRAPE_EVENT_IDS
           script: |
             set -e
+            on_error() {
+              code=$?
+              echo "Falha no scrape remoto (exit=$code). Ultimos logs do worker:"
+              $COMPOSE_BIN logs --tail=200 worker || true
+              exit $code
+            }
             APP_DIR="${{ secrets.ORACLE_APP_DIR }}"
             if [ -z "$APP_DIR" ]; then
               APP_DIR="$HOME/pingpongpaidegua"
             fi
 
             cd "$APP_DIR"
+            echo "Diretorio da aplicacao: $APP_DIR"
 
             if command -v docker >/dev/null 2>&1; then
               if docker compose version >/dev/null 2>&1; then
@@ -69,13 +76,22 @@ jobs:
               echo "Docker nao encontrado na VM."
               exit 1
             fi
+            trap on_error ERR
 
             $COMPOSE_BIN up -d postgres redis worker
+            $COMPOSE_BIN ps
 
-            if [ -n "$SCRAPE_EVENT_IDS" ]; then
-              $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_EVENT_IDS" worker node apps/worker/dist/run-once.js
-            else
-              $COMPOSE_BIN exec -T worker node apps/worker/dist/run-once.js
+            RUN_ONCE_CMD="node apps/worker/dist/run-once.js"
+            if ! $COMPOSE_BIN exec -T worker test -f apps/worker/dist/run-once.js; then
+              RUN_ONCE_CMD="npm run scrape:once"
             fi
 
-            $COMPOSE_BIN logs --tail=80 worker
+            echo "Comando de run-once: $RUN_ONCE_CMD"
+            if [ -n "$SCRAPE_EVENT_IDS" ]; then
+              echo "SCRAPE_EVENT_IDS=$SCRAPE_EVENT_IDS"
+              $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_EVENT_IDS" worker sh -lc "$RUN_ONCE_CMD"
+            else
+              $COMPOSE_BIN exec -T worker sh -lc "$RUN_ONCE_CMD"
+            fi
+
+            $COMPOSE_BIN logs --tail=120 worker
