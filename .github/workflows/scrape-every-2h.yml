@@ -46,7 +46,7 @@ jobs:
           key: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
           port: ${{ secrets.ORACLE_SSH_PORT || 22 }}
           command_timeout: 45m
-          script_stop: true
+          script_stop: false
           envs: SCRAPE_EVENT_IDS
           script: |
             set -eo pipefail
