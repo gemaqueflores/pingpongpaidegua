@@ -20,7 +20,7 @@ type EventTab = "grupos" | "clubes" | "atletas";
 type ClubRow = {
   id: number;
   name: string;
-  athleteCount: number;
+  athleteCount?: number;
 };
 
 type AthleteRow = {
@@ -100,6 +100,7 @@ export default function EventDetailPage() {
   const [clubSearch, setClubSearch] = useState("");
   const [expandedClubs, setExpandedClubs] = useState<Record<number, boolean>>({});
   const [clubAthletesByClub, setClubAthletesByClub] = useState<Record<number, AthleteRow[]>>({});
+  const [clubCountFallbackById, setClubCountFallbackById] = useState<Record<number, number>>({});
   const [clubLoadingById, setClubLoadingById] = useState<Record<number, boolean>>({});
 
   const [athleteSearch, setAthleteSearch] = useState("");
@@ -125,10 +126,41 @@ export default function EventDetailPage() {
     setClubsLoading(true);
     setExpandedClubs({});
     setClubAthletesByClub({});
+    setClubCountFallbackById({});
     void apiGetClubs(eventId)
-      .then((rows) => setClubs(rows as ClubRow[]))
+      .then((rows) => {
+        const clubRows = rows as ClubRow[];
+        setClubs(clubRows);
+
+        const missingCount = clubRows.filter((club) => !Number.isFinite(club.athleteCount));
+        if (missingCount.length > 0) {
+          void hydrateMissingClubCounts(missingCount);
+        }
+      })
       .finally(() => setClubsLoading(false));
   }, [eventId]);
+
+  async function hydrateMissingClubCounts(clubRows: ClubRow[]) {
+    const entries = await Promise.all(
+      clubRows.map(async (club) => {
+        try {
+          const data = await apiGetClubAthletes(eventId, club.id);
+          const athletes = (data.athletes ?? []) as AthleteRow[];
+          return [club.id, athletes.length] as const;
+        } catch {
+          return [club.id, 0] as const;
+        }
+      }),
+    );
+
+    setClubCountFallbackById((previous) => {
+      const next = { ...previous };
+      for (const [clubId, count] of entries) {
+        next[clubId] = count;
+      }
+      return next;
+    });
+  }
 
   async function toggleClub(clubId: number) {
     const isExpanded = Boolean(expandedClubs[clubId]);
@@ -267,11 +299,15 @@ export default function EventDetailPage() {
             {filteredClubs.map((club) => {
               const isExpanded = Boolean(expandedClubs[club.id]);
               const athletesInClub = clubAthletesByClub[club.id] ?? [];
+              const resolvedCount =
+                (Number.isFinite(club.athleteCount) ? Number(club.athleteCount) : null) ??
+                clubCountFallbackById[club.id] ??
+                athletesInClub.length;
               return (
                 <article key={club.id} className="athlete-list-card">
                   <div className="row" style={{ justifyContent: "space-between" }}>
                     <h3 style={{ margin: 0 }}>{club.name}</h3>
-                    <Badge tone="default">{club.athleteCount} atletas</Badge>
+                    <Badge tone="default">{resolvedCount} atletas</Badge>
                   </div>
                   <div className="row">
                     <button onClick={() => toggleClub(club.id)}>

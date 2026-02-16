@@ -38,7 +38,7 @@ export interface UserEventRow {
 export interface UserClubRow {
   id: number;
   name: string;
-  athleteCount: number;
+  athleteCount?: number;
 }
 
 export interface GroupSimulationCategory {
