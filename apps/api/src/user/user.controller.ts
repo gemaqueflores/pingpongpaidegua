@@ -43,6 +43,16 @@ export class UserController {
     return this.service.listCategories(eventId);
   }
 
+  @Get("events/:id/efficiency")
+  async listEventEfficiency(@Param("id", ParseIntPipe) eventId: number) {
+    return this.service.listEventEfficiency(eventId);
+  }
+
+  @Get("efficiency")
+  async listGlobalEfficiency() {
+    return this.service.listGlobalEfficiency();
+  }
+
   @Get("events/:id/group-simulation")
   async groupSimulation(
     @Param("id", ParseIntPipe) eventId: number,
@@ -91,6 +101,11 @@ export class UserController {
   @Get("athletes/:athleteKey/career")
   async athleteCareer(@Param("athleteKey") athleteKey: string) {
     return this.service.getAthleteCareer(athleteKey);
+  }
+
+  @Get("clubs/:clubId/efficiency-career")
+  async clubEfficiencyCareer(@Param("clubId", ParseIntPipe) clubId: number) {
+    return this.service.getClubEfficiencyCareer(clubId);
   }
 
   @Post("support/report-problem")

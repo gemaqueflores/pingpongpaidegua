@@ -36,6 +36,11 @@ import {
 
 const IGNORED_CATEGORY_IDS = ["88888888", "99999999"];
 const SUPPORT_EMAIL = "gemaqueflores@gmail.com";
+const DEFAULT_EFFICIENCY_WEIGHTS = {
+  pesoOuro: 400,
+  pesoPrata: 240,
+  pesoBronze: 120,
+} as const;
 
 type AthleteSummaryPlayer = {
   id: number | null;
@@ -127,6 +132,38 @@ type AthleteDirectoryRow = {
   totalAthleteRecords: number;
 };
 
+type ClubEfficiencyRow = {
+  clubId: number;
+  clubName: string;
+  athleteCount: number;
+  ouro: number;
+  prata: number;
+  bronze: number;
+  totalQuantidade: number;
+  totalPontuacao: number;
+  pontuacao: {
+    ouro: number;
+    prata: number;
+    bronze: number;
+    total: number;
+  };
+};
+
+type EfficiencyCompetitionType = "BRASILEIRAO" | "COPA" | "ESTADUAL" | "OPEN";
+
+type EfficiencyMedalCounter = {
+  ouro: number;
+  prata: number;
+  bronze: number;
+};
+
+type EfficiencyHistoryMedalist = {
+  athleteId: number;
+  athleteName: string;
+  categoryName: string;
+  medalha: "ouro" | "prata" | "bronze";
+};
+
 function toReducedName(name: string): string {
   const tokens = name
     .trim()
@@ -171,6 +208,21 @@ function parseSetsResultFromScoreRaw(scoreRaw: string | null | undefined): { p1S
     p1Sets,
     p2Sets,
   };
+}
+
+function createEmptyEfficiencyMedalCounter(): EfficiencyMedalCounter {
+  return { ouro: 0, prata: 0, bronze: 0 };
+}
+
+function totalEfficiencyMedals(counter: EfficiencyMedalCounter): number {
+  return counter.ouro + counter.prata + counter.bronze;
+}
+
+function toEfficiencyCompetitionType(level: "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN" | null): EfficiencyCompetitionType {
+  if (level === "OPEN") return "OPEN";
+  if (level === "COPA") return "COPA";
+  if (level === "ESTADUAL") return "ESTADUAL";
+  return "BRASILEIRAO";
 }
 
 function sanitizeUserWarnings(warnings: string[]): string[] {
@@ -486,6 +538,678 @@ export class UserService {
         cbtmCategoryId: true,
       },
     });
+  }
+
+  async listEventEfficiency(eventId: number) {
+    await this.ensureEvent(eventId);
+    const response = await this.computeEfficiencyRanking({ eventId });
+    return {
+      eventId,
+      ...response,
+    };
+  }
+
+  async listGlobalEfficiency() {
+    return this.computeEfficiencyRanking({});
+  }
+
+  private async computeEfficiencyRanking(input: { eventId?: number }) {
+    const eventFilter = typeof input.eventId === "number" ? { eventId: input.eventId } : {};
+    const athleteFilter = {
+      ...eventFilter,
+      createdFromWarning: false,
+    };
+    const categoryFilter =
+      typeof input.eventId === "number"
+        ? {
+            eventId: input.eventId,
+            OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
+          }
+        : {
+            OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
+          };
+
+    const [weights, clubs, categories] = await Promise.all([
+      this.getEfficiencyWeights(),
+      this.prisma.club.findMany({
+        where: {
+          athletes: {
+            some: {
+              ...athleteFilter,
+            },
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          athletes: {
+            where: {
+              ...athleteFilter,
+            },
+            select: {
+              id: true,
+              nameDisplay: true,
+              clubId: true,
+            },
+          },
+        },
+      }),
+      this.prisma.category.findMany({
+        where: categoryFilter,
+        select: {
+          id: true,
+        },
+      }),
+    ]);
+
+    const rowsByClubId = new Map<number, ClubEfficiencyRow>();
+    const athleteClubByAthleteId = new Map<number, number>();
+
+    for (const club of clubs) {
+      rowsByClubId.set(club.id, {
+        clubId: club.id,
+        clubName: club.name,
+        athleteCount: club.athletes.length,
+        ouro: 0,
+        prata: 0,
+        bronze: 0,
+        totalQuantidade: 0,
+        totalPontuacao: 0,
+        pontuacao: {
+          ouro: 0,
+          prata: 0,
+          bronze: 0,
+          total: 0,
+        },
+      });
+
+      for (const athlete of club.athletes) {
+        athleteClubByAthleteId.set(athlete.id, athlete.clubId);
+      }
+    }
+
+    const categoryIds = categories.map((category) => category.id);
+    if (categoryIds.length === 0 || rowsByClubId.size === 0) {
+      return { weights, ranking: [...rowsByClubId.values()] };
+    }
+
+    const [athleteCategories, fullCategoryMatchesRaw] = await Promise.all([
+      this.prisma.athleteCategory.findMany({
+        where: {
+          categoryId: { in: categoryIds },
+          athlete: {
+            ...athleteFilter,
+          },
+        },
+        select: {
+          categoryId: true,
+          athlete: {
+            select: {
+              id: true,
+              nameDisplay: true,
+              clubId: true,
+            },
+          },
+        },
+      }),
+      this.prisma.match.findMany({
+        where: {
+          categoryId: { in: categoryIds },
+          ...eventFilter,
+        },
+        include: {
+          category: true,
+          participants: {
+            include: {
+              athlete: {
+                include: {
+                  club: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const categoryAthletesMap = new Map<
+      number,
+      Array<{ athleteId: number; athleteName: string; clubId: number }>
+    >();
+
+    for (const item of athleteCategories) {
+      const bucket = categoryAthletesMap.get(item.categoryId) ?? [];
+      bucket.push({
+        athleteId: item.athlete.id,
+        athleteName: item.athlete.nameDisplay,
+        clubId: item.athlete.clubId,
+      });
+      categoryAthletesMap.set(item.categoryId, bucket);
+    }
+
+    const fullCategoryMatchesMap = new Map<number, CategoryAnalyticsMatch[]>();
+    for (const match of fullCategoryMatchesRaw) {
+      const analytics = this.buildCategoryAnalyticsMatchFromRaw(match);
+      if (!analytics) {
+        continue;
+      }
+      const bucket = fullCategoryMatchesMap.get(match.categoryId) ?? [];
+      bucket.push(analytics);
+      fullCategoryMatchesMap.set(match.categoryId, bucket);
+    }
+
+    for (const categoryId of categoryIds) {
+      const athletesInCategory = categoryAthletesMap.get(categoryId) ?? [];
+      if (athletesInCategory.length === 0) {
+        continue;
+      }
+
+      const fullCategoryMatches = fullCategoryMatchesMap.get(categoryId) ?? [];
+      for (const athlete of athletesInCategory) {
+        const classification = computeCategoryClassificationSummaries(fullCategoryMatches, {
+          athleteIds: [athlete.athleteId],
+          athleteName: athlete.athleteName,
+          athleteNameNormalized: normalizeAthleteName(athlete.athleteName),
+        })[0];
+
+        const position = classification?.position ?? null;
+        if (position !== 1 && position !== 2 && position !== 3) {
+          continue;
+        }
+
+        const clubId = athleteClubByAthleteId.get(athlete.athleteId) ?? athlete.clubId;
+        const row = rowsByClubId.get(clubId);
+        if (!row) {
+          continue;
+        }
+
+        if (position === 1) {
+          row.ouro += 1;
+        } else if (position === 2) {
+          row.prata += 1;
+        } else if (position === 3) {
+          row.bronze += 1;
+        }
+      }
+    }
+
+    for (const row of rowsByClubId.values()) {
+      row.totalQuantidade = row.ouro + row.prata + row.bronze;
+      row.pontuacao.ouro = row.ouro * weights.pesoOuro;
+      row.pontuacao.prata = row.prata * weights.pesoPrata;
+      row.pontuacao.bronze = row.bronze * weights.pesoBronze;
+      row.pontuacao.total = row.pontuacao.ouro + row.pontuacao.prata + row.pontuacao.bronze;
+      row.totalPontuacao = row.pontuacao.total;
+    }
+
+    const ranking = [...rowsByClubId.values()].sort((left, right) => {
+      if (left.ouro !== right.ouro) {
+        return right.ouro - left.ouro;
+      }
+      if (left.prata !== right.prata) {
+        return right.prata - left.prata;
+      }
+      if (left.bronze !== right.bronze) {
+        return right.bronze - left.bronze;
+      }
+      if (left.totalPontuacao !== right.totalPontuacao) {
+        return right.totalPontuacao - left.totalPontuacao;
+      }
+      return left.clubName.localeCompare(right.clubName, "pt-BR", { sensitivity: "base" });
+    });
+
+    return { weights, ranking };
+  }
+
+  async getClubEfficiencyCareer(clubId: number) {
+    const club = await this.prisma.club.findUnique({
+      where: { id: clubId },
+      select: { id: true, name: true },
+    });
+
+    if (!club) {
+      throw new NotFoundException("Clube nao encontrado");
+    }
+
+    const [weights, athletesByEvent] = await Promise.all([
+      this.getEfficiencyWeights(),
+      this.prisma.athlete.findMany({
+        where: {
+          clubId,
+          createdFromWarning: false,
+        },
+        select: {
+          id: true,
+          nameDisplay: true,
+          eventId: true,
+        },
+      }),
+    ]);
+
+    const eventIds = [...new Set(athletesByEvent.map((athlete) => athlete.eventId))];
+    if (eventIds.length === 0) {
+      return {
+        club: { id: club.id, name: club.name },
+        weights,
+        summary: {
+          nEventos: 0,
+          ultimoEventoNome: null as string | null,
+          ultimoEventoId: null as number | null,
+          nAtletasUltimoEvento: 0,
+        },
+        broadcastByType: {
+          BRASILEIRAO: { ouro: 0, prata: 0, bronze: 0, total: 0 },
+          COPA: { ouro: 0, prata: 0, bronze: 0, total: 0 },
+          ESTADUAL: { ouro: 0, prata: 0, bronze: 0, total: 0 },
+          OPEN: { ouro: 0, prata: 0, bronze: 0, total: 0 },
+        },
+        scoreCard: {
+          quantidade: { ouro: 0, prata: 0, bronze: 0, total: 0 },
+          pontuacao: { ouro: 0, prata: 0, bronze: 0, total: 0 },
+        },
+        history: [] as Array<{
+          eventId: number;
+          eventName: string;
+          eventType: EfficiencyCompetitionType;
+          dataInicio: Date | null;
+          dataFim: Date | null;
+          athleteCount: number;
+          ouro: number;
+          prata: number;
+          bronze: number;
+          totalQuantidade: number;
+          pontuacao: { ouro: number; prata: number; bronze: number; total: number };
+          medalists: EfficiencyHistoryMedalist[];
+        }>,
+        athletesContribution: [] as Array<{
+          athleteId: number;
+          athleteName: string;
+          eventos: number;
+          ouro: number;
+          prata: number;
+          bronze: number;
+          totalQuantidade: number;
+          pontuacao: { ouro: number; prata: number; bronze: number; total: number };
+        }>,
+      };
+    }
+
+    const [events, categories, fullCategoryMatchesRaw] = await Promise.all([
+      this.prisma.event.findMany({
+        where: { id: { in: eventIds } },
+        select: {
+          id: true,
+          nome: true,
+          nivel: true,
+          concluido: true,
+          inicioRealizacao: true,
+          fimRealizacao: true,
+          dataInicio: true,
+          dataFim: true,
+        },
+      }),
+      this.prisma.category.findMany({
+        where: {
+          eventId: { in: eventIds },
+          OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
+        },
+        select: {
+          id: true,
+          eventId: true,
+          name: true,
+        },
+      }),
+      this.prisma.match.findMany({
+        where: {
+          eventId: { in: eventIds },
+          category: {
+            OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
+          },
+        },
+        include: {
+          category: true,
+          participants: {
+            include: {
+              athlete: {
+                include: {
+                  club: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const eventById = new Map(events.map((event) => [event.id, event]));
+    const categoryById = new Map(categories.map((category) => [category.id, category]));
+    const categoryIds = categories.map((category) => category.id);
+
+    const athleteCategories = categoryIds.length
+      ? await this.prisma.athleteCategory.findMany({
+          where: {
+            categoryId: { in: categoryIds },
+            athlete: {
+              clubId,
+              createdFromWarning: false,
+            },
+          },
+          select: {
+            categoryId: true,
+            athlete: {
+              select: {
+                id: true,
+                nameDisplay: true,
+              },
+            },
+          },
+        })
+      : [];
+
+    const clubAthletesInCategory = new Map<
+      number,
+      Array<{ athleteId: number; athleteName: string }>
+    >();
+    for (const row of athleteCategories) {
+      const athletes = clubAthletesInCategory.get(row.categoryId) ?? [];
+      athletes.push({
+        athleteId: row.athlete.id,
+        athleteName: row.athlete.nameDisplay,
+      });
+      clubAthletesInCategory.set(row.categoryId, athletes);
+    }
+
+    const fullCategoryMatchesMap = new Map<number, CategoryAnalyticsMatch[]>();
+    for (const match of fullCategoryMatchesRaw) {
+      const analytics = this.buildCategoryAnalyticsMatchFromRaw(match);
+      if (!analytics) continue;
+      const bucket = fullCategoryMatchesMap.get(match.categoryId) ?? [];
+      bucket.push(analytics);
+      fullCategoryMatchesMap.set(match.categoryId, bucket);
+    }
+
+    const athleteNameByGroupKey = new Map<string, string>();
+    const athletePrimaryIdByGroupKey = new Map<string, number>();
+    const athleteEventSetByGroupKey = new Map<string, Set<number>>();
+    const athleteGroupKeyById = new Map<number, string>();
+    const athleteCountByEvent = new Map<number, number>();
+    for (const row of athletesByEvent) {
+      const normalized = normalizeAthleteName(row.nameDisplay);
+      const groupKey = normalized ? `name:${normalized}` : `id:${row.id}`;
+      const currentName = athleteNameByGroupKey.get(groupKey);
+      if (!currentName || row.nameDisplay.length > currentName.length) {
+        athleteNameByGroupKey.set(groupKey, row.nameDisplay);
+      }
+      const currentPrimaryId = athletePrimaryIdByGroupKey.get(groupKey);
+      if (!currentPrimaryId || row.id < currentPrimaryId) {
+        athletePrimaryIdByGroupKey.set(groupKey, row.id);
+      }
+      athleteGroupKeyById.set(row.id, groupKey);
+      const set = athleteEventSetByGroupKey.get(groupKey) ?? new Set<number>();
+      set.add(row.eventId);
+      athleteEventSetByGroupKey.set(groupKey, set);
+      athleteCountByEvent.set(row.eventId, (athleteCountByEvent.get(row.eventId) ?? 0) + 1);
+    }
+
+    const medalsByType = new Map<EfficiencyCompetitionType, EfficiencyMedalCounter>([
+      ["BRASILEIRAO", createEmptyEfficiencyMedalCounter()],
+      ["COPA", createEmptyEfficiencyMedalCounter()],
+      ["ESTADUAL", createEmptyEfficiencyMedalCounter()],
+      ["OPEN", createEmptyEfficiencyMedalCounter()],
+    ]);
+
+    const totals = createEmptyEfficiencyMedalCounter();
+    const historyByEvent = new Map<
+      number,
+      {
+        eventId: number;
+        eventName: string;
+        eventType: EfficiencyCompetitionType;
+        dataInicio: Date | null;
+        dataFim: Date | null;
+        athleteCount: number;
+        medals: EfficiencyMedalCounter;
+        medalists: EfficiencyHistoryMedalist[];
+      }
+    >();
+    const contributionByAthleteGroupKey = new Map<string, EfficiencyMedalCounter>();
+    const medalistDedup = new Set<string>();
+
+    for (const category of categories) {
+      const categoryAthletes = clubAthletesInCategory.get(category.id) ?? [];
+      if (categoryAthletes.length === 0) continue;
+      const categoryMatches = fullCategoryMatchesMap.get(category.id) ?? [];
+
+      const event = eventById.get(category.eventId);
+      if (!event) continue;
+      const eventType = toEfficiencyCompetitionType(event.nivel);
+      const eventMedals = medalsByType.get(eventType) ?? createEmptyEfficiencyMedalCounter();
+
+      const historyEntry =
+        historyByEvent.get(event.id) ??
+        {
+          eventId: event.id,
+          eventName: event.nome,
+          eventType,
+          dataInicio: event.dataInicio,
+          dataFim: event.dataFim,
+          athleteCount: athleteCountByEvent.get(event.id) ?? 0,
+          medals: createEmptyEfficiencyMedalCounter(),
+          medalists: [],
+        };
+
+      for (const athlete of categoryAthletes) {
+        const summary = computeCategoryClassificationSummaries(categoryMatches, {
+          athleteIds: [athlete.athleteId],
+          athleteName: athlete.athleteName,
+          athleteNameNormalized: normalizeAthleteName(athlete.athleteName),
+        })[0];
+        if (!summary) continue;
+        const position = summary.position;
+        if (position !== 1 && position !== 2 && position !== 3) continue;
+
+        let medal: "ouro" | "prata" | "bronze";
+        if (position === 1) medal = "ouro";
+        else if (position === 2) medal = "prata";
+        else medal = "bronze";
+
+        totals[medal] += 1;
+        eventMedals[medal] += 1;
+        historyEntry.medals[medal] += 1;
+
+        const athleteGroupKey = athleteGroupKeyById.get(athlete.athleteId) ?? `id:${athlete.athleteId}`;
+        const contribution =
+          contributionByAthleteGroupKey.get(athleteGroupKey) ?? createEmptyEfficiencyMedalCounter();
+        contribution[medal] += 1;
+        contributionByAthleteGroupKey.set(athleteGroupKey, contribution);
+
+        const dedupKey = `${event.id}:${category.id}:${athlete.athleteId}:${medal}`;
+        if (!medalistDedup.has(dedupKey)) {
+          medalistDedup.add(dedupKey);
+          historyEntry.medalists.push({
+            athleteId: athlete.athleteId,
+            athleteName:
+              athleteNameByGroupKey.get(athleteGroupKeyById.get(athlete.athleteId) ?? "") ??
+              athlete.athleteName,
+            categoryName: categoryById.get(category.id)?.name ?? "-",
+            medalha: medal,
+          });
+        }
+      }
+
+      medalsByType.set(eventType, eventMedals);
+      historyByEvent.set(event.id, historyEntry);
+    }
+
+    const now = Date.now();
+    const concludedEvents = events.filter((event) => event.concluido);
+    const upcomingEvents = events.filter((event) => {
+      if (event.concluido) {
+        return false;
+      }
+      const startDate = event.inicioRealizacao ?? event.dataInicio;
+      if (!startDate) {
+        return false;
+      }
+      return new Date(startDate).getTime() > now;
+    });
+
+    const sortedConcludedEvents = [...concludedEvents].sort((left, right) => {
+      const leftDate = left.fimRealizacao ?? left.dataFim ?? left.dataInicio;
+      const rightDate = right.fimRealizacao ?? right.dataFim ?? right.dataInicio;
+      const leftTs = leftDate ? new Date(leftDate).getTime() : Number.MIN_SAFE_INTEGER;
+      const rightTs = rightDate ? new Date(rightDate).getTime() : Number.MIN_SAFE_INTEGER;
+      if (leftTs !== rightTs) return rightTs - leftTs;
+      return right.id - left.id;
+    });
+    const sortedUpcomingEvents = [...upcomingEvents].sort((left, right) => {
+      const leftDate = left.inicioRealizacao ?? left.dataInicio;
+      const rightDate = right.inicioRealizacao ?? right.dataInicio;
+      const leftTs = leftDate ? new Date(leftDate).getTime() : Number.MAX_SAFE_INTEGER;
+      const rightTs = rightDate ? new Date(rightDate).getTime() : Number.MAX_SAFE_INTEGER;
+      if (leftTs !== rightTs) return leftTs - rightTs;
+      return left.id - right.id;
+    });
+
+    const sortedEvents = [...events].sort((left, right) => {
+      const leftDate = left.dataInicio ? new Date(left.dataInicio).getTime() : Number.MIN_SAFE_INTEGER;
+      const rightDate = right.dataInicio ? new Date(right.dataInicio).getTime() : Number.MIN_SAFE_INTEGER;
+      if (leftDate !== rightDate) return rightDate - leftDate;
+      return right.id - left.id;
+    });
+    const latestEvent = sortedConcludedEvents[0] ?? null;
+    const nextEvent = sortedUpcomingEvents[0] ?? null;
+    const latestAthletesCount = latestEvent ? athleteCountByEvent.get(latestEvent.id) ?? 0 : 0;
+    const nextAthletesCount = nextEvent ? athleteCountByEvent.get(nextEvent.id) ?? 0 : 0;
+
+    const history = [...historyByEvent.values()]
+      .map((row) => {
+        const pontuacao = {
+          ouro: row.medals.ouro * weights.pesoOuro,
+          prata: row.medals.prata * weights.pesoPrata,
+          bronze: row.medals.bronze * weights.pesoBronze,
+          total: 0,
+        };
+        pontuacao.total = pontuacao.ouro + pontuacao.prata + pontuacao.bronze;
+        return {
+          eventId: row.eventId,
+          eventName: row.eventName,
+          eventType: row.eventType,
+          dataInicio: row.dataInicio,
+          dataFim: row.dataFim,
+          athleteCount: row.athleteCount,
+          ouro: row.medals.ouro,
+          prata: row.medals.prata,
+          bronze: row.medals.bronze,
+          totalQuantidade: totalEfficiencyMedals(row.medals),
+          pontuacao,
+          medalists: row.medalists.sort((left, right) => {
+            const medalOrder = { ouro: 0, prata: 1, bronze: 2 };
+            const diff = medalOrder[left.medalha] - medalOrder[right.medalha];
+            if (diff !== 0) return diff;
+            return left.athleteName.localeCompare(right.athleteName, "pt-BR", { sensitivity: "base" });
+          }),
+        };
+      })
+      .sort((left, right) => {
+        const leftDate = left.dataInicio ? new Date(left.dataInicio).getTime() : Number.MIN_SAFE_INTEGER;
+        const rightDate = right.dataInicio ? new Date(right.dataInicio).getTime() : Number.MIN_SAFE_INTEGER;
+        if (leftDate !== rightDate) return rightDate - leftDate;
+        return left.eventName.localeCompare(right.eventName, "pt-BR", { sensitivity: "base" });
+      });
+
+    const athletesContribution = [...athleteNameByGroupKey.entries()]
+      .map(([groupKey, athleteName]) => {
+        const medals = contributionByAthleteGroupKey.get(groupKey) ?? createEmptyEfficiencyMedalCounter();
+        const pontuacao = {
+          ouro: medals.ouro * weights.pesoOuro,
+          prata: medals.prata * weights.pesoPrata,
+          bronze: medals.bronze * weights.pesoBronze,
+          total: 0,
+        };
+        pontuacao.total = pontuacao.ouro + pontuacao.prata + pontuacao.bronze;
+        return {
+          athleteId: athletePrimaryIdByGroupKey.get(groupKey) ?? 0,
+          athleteName,
+          eventos: athleteEventSetByGroupKey.get(groupKey)?.size ?? 0,
+          ouro: medals.ouro,
+          prata: medals.prata,
+          bronze: medals.bronze,
+          totalQuantidade: totalEfficiencyMedals(medals),
+          pontuacao,
+        };
+      })
+      .filter((row) => row.totalQuantidade > 0)
+      .sort((left, right) => {
+        if (left.ouro !== right.ouro) return right.ouro - left.ouro;
+        if (left.prata !== right.prata) return right.prata - left.prata;
+        if (left.bronze !== right.bronze) return right.bronze - left.bronze;
+        if (left.totalQuantidade !== right.totalQuantidade) return right.totalQuantidade - left.totalQuantidade;
+        return left.athleteName.localeCompare(right.athleteName, "pt-BR", { sensitivity: "base" });
+      });
+
+    const quantidade = {
+      ouro: totals.ouro,
+      prata: totals.prata,
+      bronze: totals.bronze,
+      total: totalEfficiencyMedals(totals),
+    };
+    const pontuacao = {
+      ouro: quantidade.ouro * weights.pesoOuro,
+      prata: quantidade.prata * weights.pesoPrata,
+      bronze: quantidade.bronze * weights.pesoBronze,
+      total: 0,
+    };
+    pontuacao.total = pontuacao.ouro + pontuacao.prata + pontuacao.bronze;
+
+    const medalsBrasileirao = medalsByType.get("BRASILEIRAO") ?? createEmptyEfficiencyMedalCounter();
+    const medalsCopa = medalsByType.get("COPA") ?? createEmptyEfficiencyMedalCounter();
+    const medalsEstadual = medalsByType.get("ESTADUAL") ?? createEmptyEfficiencyMedalCounter();
+    const medalsOpen = medalsByType.get("OPEN") ?? createEmptyEfficiencyMedalCounter();
+
+    return {
+      club: { id: club.id, name: club.name },
+      weights,
+      summary: {
+        nEventos: eventIds.length,
+        ultimoEventoNome: latestEvent?.nome ?? null,
+        ultimoEventoId: latestEvent?.id ?? null,
+        nAtletasUltimoEvento: latestAthletesCount,
+        proximoEventoNome: nextEvent?.nome ?? null,
+        proximoEventoId: nextEvent?.id ?? null,
+        nAtletasProximoEvento: nextAthletesCount,
+        medalhasTotais: {
+          ouro: quantidade.ouro,
+          prata: quantidade.prata,
+          bronze: quantidade.bronze,
+          total: quantidade.total,
+        },
+      },
+      broadcastByType: {
+        BRASILEIRAO: {
+          ...medalsBrasileirao,
+          total: totalEfficiencyMedals(medalsBrasileirao),
+        },
+        COPA: {
+          ...medalsCopa,
+          total: totalEfficiencyMedals(medalsCopa),
+        },
+        ESTADUAL: {
+          ...medalsEstadual,
+          total: totalEfficiencyMedals(medalsEstadual),
+        },
+        OPEN: {
+          ...medalsOpen,
+          total: totalEfficiencyMedals(medalsOpen),
+        },
+      },
+      scoreCard: {
+        quantidade,
+        pontuacao,
+      },
+      history,
+      athletesContribution,
+    };
   }
 
   async simulateGroups(
@@ -2178,6 +2902,27 @@ export class UserService {
       phase: groupMatch.phase,
       round: groupMatch.round,
     });
+  }
+
+  private async getEfficiencyWeights() {
+    const config = await this.prisma.efficiencyConfig.findUnique({
+      where: { id: 1 },
+      select: {
+        pesoOuro: true,
+        pesoPrata: true,
+        pesoBronze: true,
+      },
+    });
+
+    if (!config) {
+      return DEFAULT_EFFICIENCY_WEIGHTS;
+    }
+
+    return {
+      pesoOuro: config.pesoOuro,
+      pesoPrata: config.pesoPrata,
+      pesoBronze: config.pesoBronze,
+    };
   }
 
   private async ensureEvent(eventId: number) {
