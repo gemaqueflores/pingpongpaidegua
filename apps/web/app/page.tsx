@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiGetAthletesDirectory, apiGetEvents, type UserEventRow } from "../lib/user-api";
 import { Hero } from "../components/ui/Hero";
 import { Card } from "../components/ui/Card";
@@ -78,6 +79,7 @@ function inferEventType(event: EventRow): Exclude<EventTypeFilter, "ALL"> {
 const PAGE_SIZE = 24;
 
 export default function HomePage() {
+  const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>([]);
   const [athletes, setAthletes] = useState<AthleteDirectoryRow[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
@@ -168,7 +170,7 @@ export default function HomePage() {
             <>
               <button
                 type="button"
-                onClick={() => (window.location.href = "/user/reportar-problema")}
+                onClick={() => router.push("/user/reportar-problema")}
                 aria-label="Reportar problema"
               >
                 Reportar problema
@@ -176,7 +178,7 @@ export default function HomePage() {
               <button
                 type="button"
                 className="secondary"
-                onClick={() => (window.location.href = "/user/colabore")}
+                onClick={() => router.push("/user/colabore")}
                 aria-label="Colaborar com o projeto"
               >
                 Colabore com o projeto
@@ -197,13 +199,13 @@ export default function HomePage() {
               {`${formatDate(highlightedEvent.dataInicio)} até ${formatDate(highlightedEvent.dataFim)}`}
             </p>
             <div className="row">
-              <button type="button" onClick={() => (window.location.href = `/user/events/${highlightedEvent.id}`)}>
+              <button type="button" onClick={() => router.push(`/user/events/${highlightedEvent.id}`)}>
                 Ver Evento
               </button>
               <button
                 type="button"
                 className="secondary"
-                onClick={() => (window.location.href = `/user/events/${highlightedEvent.id}/group-simulator`)}
+                onClick={() => router.push(`/user/events/${highlightedEvent.id}/group-simulator`)}
                 disabled={!highlightedEvent.groupSimulationEligible}
               >
                 Simular Grupos
@@ -217,6 +219,7 @@ export default function HomePage() {
             <h2>Eventos em destaque</h2>
             <Badge tone="default">Ordenado por situacao e data</Badge>
           </div>
+          <div className="row home-event-filters">
           <div className="row">
             <div className="balloon-group" role="group" aria-label="Filtro por tipo">
               {(["ALL", "ESTADUAL", "COPA", "BRASILEIRAO", "OPEN"] as EventTypeFilter[]).map((type) => (
@@ -243,6 +246,7 @@ export default function HomePage() {
               ))}
             </div>
           </div>
+          </div>
 
           {loadingEvents ? (
             <div className="event-card-grid">
@@ -265,8 +269,8 @@ export default function HomePage() {
                   totalCategorias={event.totalCategorias}
                   groupSimulationEligible={event.groupSimulationEligible}
                   groupsDefined={event.groupsDefined}
-                  onOpen={() => (window.location.href = `/user/events/${event.id}`)}
-                  onSimulate={() => (window.location.href = `/user/events/${event.id}/group-simulator`)}
+                  onOpen={() => router.push(`/user/events/${event.id}`)}
+                  onSimulate={() => router.push(`/user/events/${event.id}/group-simulator`)}
                 />
               ))}
             </div>
@@ -278,8 +282,8 @@ export default function HomePage() {
         </Card>
 
         <Card className="grid" variant="athlete">
-          <div className="row home-athletes-header" style={{ justifyContent: "space-between" }}>
-            <h2>Atletas da base</h2>
+            <div className="row home-athletes-header" style={{ justifyContent: "space-between" }}>
+              <h2>Atletas da base</h2>
             <div className="balloon-group letter-tab-strip letter-tab-sticky" role="group" aria-label="Filtro por letra">
               {availableLetters.map((letter) => (
                 <button
@@ -296,10 +300,13 @@ export default function HomePage() {
               ))}
             </div>
             <input
+              className="home-athletes-search"
               value={athleteSearch}
               onChange={(event) => setAthleteSearch(event.target.value)}
               placeholder="Buscar atleta por nome"
               aria-label="Buscar atleta por nome"
+              autoCapitalize="none"
+              autoCorrect="off"
             />
           </div>
 
@@ -320,11 +327,7 @@ export default function HomePage() {
                   <div className="row" style={{ justifyContent: "space-between" }}>
                     <Badge tone="default">Eventos: {String(athlete.totalEvents)}</Badge>
                     {athlete.totalAthleteRecords > 0 ? <Badge tone="open">Ativo</Badge> : null}
-                    <button
-                      onClick={() =>
-                        (window.location.href = `/user/career/${encodeURIComponent(athlete.athleteKey)}`)
-                      }
-                    >
+                    <button onClick={() => router.push(`/user/career/${encodeURIComponent(athlete.athleteKey)}`)}>
                       Carreira
                     </button>
                   </div>

@@ -253,10 +253,13 @@ export default function EventDetailPage() {
           <div className="row" style={{ justifyContent: "space-between" }}>
             <h2>Clubes</h2>
             <input
+              className="home-athletes-search"
               value={clubSearch}
               onChange={(event) => setClubSearch(event.target.value)}
               placeholder="Buscar clube"
               aria-label="Buscar clube"
+              autoCapitalize="none"
+              autoCorrect="off"
             />
           </div>
           {clubsLoading ? <p>Carregando clubes...</p> : null}
@@ -308,9 +311,12 @@ export default function EventDetailPage() {
         <Card className="grid">
           <h2>Atletas do evento</h2>
           <input
+            className="home-athletes-search"
             value={athleteSearch}
             onChange={(event) => setAthleteSearch(event.target.value)}
             placeholder="Buscar atleta"
+            autoCapitalize="none"
+            autoCorrect="off"
           />
           <table className="data-table">
             <thead>

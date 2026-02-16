@@ -129,6 +129,8 @@ export default function ColaborePage() {
             src={qrCodeUrl}
             alt="QRCode PIX para colaboração"
             className="pix-qr-image"
+            loading="lazy"
+            decoding="async"
             onError={() => setShowFallback(true)}
           />
         </div>

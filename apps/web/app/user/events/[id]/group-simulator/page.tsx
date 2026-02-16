@@ -201,9 +201,12 @@ export default function GroupSimulatorPage() {
                     <>
                       <input
                         id="group-sim-category-search"
+                        className="home-athletes-search"
                         value={categorySearch}
                         onChange={(event) => setCategorySearch(event.target.value)}
                         placeholder="Digite para filtrar categorias"
+                        autoCapitalize="none"
+                        autoCorrect="off"
                       />
                       <select
                         value={selectedCategoryId ?? ""}
