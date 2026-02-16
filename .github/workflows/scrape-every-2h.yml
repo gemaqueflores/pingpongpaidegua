@@ -86,16 +86,14 @@ jobs:
 
             echo "Checkpoint: preparando execucao do run-once"
             RUN_ONCE_EXIT=0
-            RUN_ONCE_LOG="/tmp/run-once.log"
-            rm -f "$RUN_ONCE_LOG"
             SCRAPE_IDS="${SCRAPE_EVENT_IDS:-}"
             set +e
             if [ -n "$SCRAPE_IDS" ]; then
               echo "SCRAPE_EVENT_IDS=$SCRAPE_IDS"
-              $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD" >"$RUN_ONCE_LOG" 2>&1
+              $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD"
               RUN_ONCE_EXIT=$?
             else
-              $COMPOSE_BIN exec -T worker sh -lc "$RUN_ONCE_CMD" >"$RUN_ONCE_LOG" 2>&1
+              $COMPOSE_BIN exec -T worker sh -lc "$RUN_ONCE_CMD"
               RUN_ONCE_EXIT=$?
             fi
 
@@ -103,18 +101,16 @@ jobs:
               echo "Primeira tentativa do run-once falhou (exit=$RUN_ONCE_EXIT). Tentando novamente em 15s..."
               sleep 15
               if [ -n "$SCRAPE_IDS" ]; then
-                $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD" >"$RUN_ONCE_LOG" 2>&1
+                $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD"
                 RUN_ONCE_EXIT=$?
               else
-                $COMPOSE_BIN exec -T worker sh -lc "$RUN_ONCE_CMD" >"$RUN_ONCE_LOG" 2>&1
+                $COMPOSE_BIN exec -T worker sh -lc "$RUN_ONCE_CMD"
                 RUN_ONCE_EXIT=$?
               fi
             fi
             set -e
 
             echo "Checkpoint: execucao finalizada"
-            echo "Saida do run-once:"
-            cat "$RUN_ONCE_LOG" || true
             echo "run-once exit code: $RUN_ONCE_EXIT"
             $COMPOSE_BIN logs --tail=200 worker || true
 
