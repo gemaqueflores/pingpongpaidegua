@@ -48,7 +48,7 @@ jobs:
           script_stop: true
           envs: SCRAPE_EVENT_IDS
           script: |
-            set -euo pipefail
+            set -eo pipefail
             APP_DIR="${{ secrets.ORACLE_APP_DIR }}"
             if [ -z "$APP_DIR" ]; then
               APP_DIR="$HOME/pingpongpaidegua"
@@ -85,9 +85,10 @@ jobs:
 
             RUN_ONCE_EXIT=0
             RUN_ONCE_LOG="$(mktemp)"
-            if [ -n "$SCRAPE_EVENT_IDS" ]; then
-              echo "SCRAPE_EVENT_IDS=$SCRAPE_EVENT_IDS"
-              if $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_EVENT_IDS" worker sh -lc "$RUN_ONCE_CMD" >"$RUN_ONCE_LOG" 2>&1; then
+            SCRAPE_IDS="${SCRAPE_EVENT_IDS:-}"
+            if [ -n "$SCRAPE_IDS" ]; then
+              echo "SCRAPE_EVENT_IDS=$SCRAPE_IDS"
+              if $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD" >"$RUN_ONCE_LOG" 2>&1; then
                 RUN_ONCE_EXIT=0
               else
                 RUN_ONCE_EXIT=$?
