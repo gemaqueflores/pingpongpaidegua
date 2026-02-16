@@ -41,9 +41,17 @@ export class QueueService implements OnModuleDestroy {
 
   async enqueueScrapeNow(
     eventId: number,
+    stage?: 1 | 2 | 3,
   ): Promise<{ jobId: string; status: "queued"; deduplicated?: boolean }> {
     const minuteBucket = Math.floor(Date.now() / 60000);
-    const reason = "scrape-now-force";
+    const reason =
+      stage === 1
+        ? "scrape-now-force:stage-1"
+        : stage === 2
+          ? "scrape-now-force:stage-2"
+          : stage === 3
+            ? "scrape-now-force:stage-3"
+            : "scrape-now-force";
     const jobId = `event-${eventId}-${reason}-${minuteBucket}`;
     return this.enqueueUnique("scrape-event", { eventId, reason }, jobId);
   }

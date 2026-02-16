@@ -28,7 +28,14 @@ export interface EventScrapePolicy {
   captureGrupos: boolean;
   captureResultados: boolean;
   fetchEliminatoria: boolean;
+  recommendedIntervalMs: number | null;
   reason: string;
+}
+
+export interface EventAutoScheduleDecision {
+  due: boolean;
+  elapsedMs: number | null;
+  waitMs: number;
 }
 
 function toDate(value: Date | string | null | undefined): Date | null {
@@ -131,13 +138,18 @@ export function buildEventScrapePolicy(
   options: {
     now?: Date;
     isManualForce?: boolean;
-    postEventGraceHours?: number;
+    intervalBySituationMs?: Partial<Record<EventSituation, number>>;
   } = {},
 ): EventScrapePolicy {
   const now = options.now ?? new Date();
   const isManualForce = options.isManualForce ?? false;
-  const postEventGraceHours = Math.max(0, options.postEventGraceHours ?? 48);
-  const timeline = resolveEventTimeline(input);
+  const intervalBySituationMs = {
+    PRE_INSCRICOES: 5 * 60 * 60 * 1000,
+    INSCRICOES_ABERTAS: 5 * 60 * 60 * 1000,
+    POS_INSCRICOES_PRE_EVENTO: 3 * 60 * 60 * 1000,
+    EM_ANDAMENTO: 30 * 60 * 1000,
+    ...options.intervalBySituationMs,
+  } satisfies Partial<Record<EventSituation, number>>;
   const situation = computeEventSituation(input, now);
 
   if (isManualForce) {
@@ -147,6 +159,7 @@ export function buildEventScrapePolicy(
       captureGrupos: true,
       captureResultados: true,
       fetchEliminatoria: true,
+      recommendedIntervalMs: 0,
       reason: "manual-force",
     };
   }
@@ -159,6 +172,7 @@ export function buildEventScrapePolicy(
         captureGrupos: false,
         captureResultados: false,
         fetchEliminatoria: false,
+        recommendedIntervalMs: null,
         reason: "draft-no-auto-scrape",
       };
     case "PRE_INSCRICOES":
@@ -168,70 +182,50 @@ export function buildEventScrapePolicy(
         captureGrupos: false,
         captureResultados: false,
         fetchEliminatoria: false,
-        reason: "pre-inscricoes",
+        recommendedIntervalMs: intervalBySituationMs.PRE_INSCRICOES ?? 5 * 60 * 60 * 1000,
+        reason: "pre-inscricoes-redundante",
       };
     case "INSCRICOES_ABERTAS":
       return {
         autoSchedule: true,
         captureInscricoes: true,
-        captureGrupos: true,
+        captureGrupos: false,
         captureResultados: false,
         fetchEliminatoria: false,
+        recommendedIntervalMs: intervalBySituationMs.INSCRICOES_ABERTAS ?? 5 * 60 * 60 * 1000,
         reason: "inscricoes-abertas",
       };
     case "POS_INSCRICOES_PRE_EVENTO":
       return {
         autoSchedule: true,
-        captureInscricoes: true,
+        captureInscricoes: false,
         captureGrupos: true,
         captureResultados: false,
         fetchEliminatoria: false,
+        recommendedIntervalMs:
+          intervalBySituationMs.POS_INSCRICOES_PRE_EVENTO ?? 3 * 60 * 60 * 1000,
         reason: "pos-inscricoes-pre-evento",
       };
     case "EM_ANDAMENTO":
       return {
         autoSchedule: true,
         captureInscricoes: false,
-        captureGrupos: true,
+        captureGrupos: false,
         captureResultados: true,
         fetchEliminatoria: true,
+        recommendedIntervalMs: intervalBySituationMs.EM_ANDAMENTO ?? 30 * 60 * 1000,
         reason: "em-andamento",
       };
-    case "POS_EVENTO": {
-      const fimRealizacao = timeline.fimRealizacao;
-      if (!fimRealizacao) {
-        return {
-          autoSchedule: false,
-          captureInscricoes: false,
-          captureGrupos: false,
-          captureResultados: false,
-          fetchEliminatoria: false,
-          reason: "pos-evento-sem-data-final",
-        };
-      }
-
-      const graceMs = postEventGraceHours * 60 * 60 * 1000;
-      const insideGrace = now.getTime() - fimRealizacao.getTime() <= graceMs;
-      if (insideGrace) {
-        return {
-          autoSchedule: true,
-          captureInscricoes: false,
-          captureGrupos: false,
-          captureResultados: true,
-          fetchEliminatoria: true,
-          reason: "pos-evento-grace",
-        };
-      }
-
+    case "POS_EVENTO":
       return {
         autoSchedule: false,
         captureInscricoes: false,
         captureGrupos: false,
         captureResultados: false,
         fetchEliminatoria: false,
-        reason: "pos-evento-expirado",
+        recommendedIntervalMs: null,
+        reason: "pos-evento-encerrado",
       };
-    }
     default:
       return {
         autoSchedule: false,
@@ -239,7 +233,48 @@ export function buildEventScrapePolicy(
         captureGrupos: false,
         captureResultados: false,
         fetchEliminatoria: false,
+        recommendedIntervalMs: null,
         reason: "unknown",
       };
   }
+}
+
+export function shouldRunEventAutoScrape(
+  lastScrapeAt: Date | string | null | undefined,
+  policy: EventScrapePolicy,
+  now: Date = new Date(),
+): EventAutoScheduleDecision {
+  if (!policy.autoSchedule) {
+    return {
+      due: false,
+      elapsedMs: null,
+      waitMs: 0,
+    };
+  }
+
+  const intervalMs = policy.recommendedIntervalMs ?? 0;
+  if (intervalMs <= 0) {
+    return {
+      due: true,
+      elapsedMs: null,
+      waitMs: 0,
+    };
+  }
+
+  const parsed = toDate(lastScrapeAt);
+  if (!parsed) {
+    return {
+      due: true,
+      elapsedMs: null,
+      waitMs: 0,
+    };
+  }
+
+  const elapsedMs = Math.max(0, now.getTime() - parsed.getTime());
+  const waitMs = Math.max(0, intervalMs - elapsedMs);
+  return {
+    due: waitMs === 0,
+    elapsedMs,
+    waitMs,
+  };
 }

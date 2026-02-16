@@ -7,6 +7,53 @@ import { prisma } from "../prisma";
 import { CaptureService } from "../scraper/capture.service";
 import { UpsertService } from "./upsert.service";
 
+type ManualForceStage = "full" | "stage-1-reset" | "stage-2-inscricoes" | "stage-3-resultados";
+
+interface EventDataCleanupSummary {
+  matchParticipants: number;
+  athleteCategories: number;
+  athleteAliases: number;
+  conflicts: number;
+  matches: number;
+  athletes: number;
+  categories: number;
+  rawCaptures: number;
+  orphanClubs: number;
+}
+
+function resolveManualForceStage(reason?: string): ManualForceStage {
+  const normalized = String(reason ?? "").trim().toLowerCase();
+  if (!normalized.startsWith("scrape-now-force")) {
+    return "full";
+  }
+
+  if (
+    normalized.includes("stage-1") ||
+    normalized.endsWith(":1") ||
+    normalized.endsWith(":stage1")
+  ) {
+    return "stage-1-reset";
+  }
+
+  if (
+    normalized.includes("stage-2") ||
+    normalized.endsWith(":2") ||
+    normalized.endsWith(":stage2")
+  ) {
+    return "stage-2-inscricoes";
+  }
+
+  if (
+    normalized.includes("stage-3") ||
+    normalized.endsWith(":3") ||
+    normalized.endsWith(":stage3")
+  ) {
+    return "stage-3-resultados";
+  }
+
+  return "full";
+}
+
 export class ScrapeProcessor {
   private readonly captureService = new CaptureService();
   private readonly upsertService = new UpsertService();
@@ -57,7 +104,8 @@ export class ScrapeProcessor {
       return;
     }
 
-    const forceScrape = reason === "scrape-now-force";
+    const forceScrape = String(reason ?? "").startsWith("scrape-now-force");
+    const manualForceStage = forceScrape ? resolveManualForceStage(reason) : "full";
     if (event.concluido && !forceScrape) {
       log("info", "Evento concluido, scrape ignorado", {
         eventId,
@@ -69,10 +117,30 @@ export class ScrapeProcessor {
     }
 
     const eventSituation = computeEventSituation(event);
-    const scrapePolicy = buildEventScrapePolicy(event, {
+    const baseScrapePolicy = buildEventScrapePolicy(event, {
       isManualForce: forceScrape,
-      postEventGraceHours: config.postEventGraceHours,
     });
+
+    const scrapePolicy =
+      manualForceStage === "stage-2-inscricoes"
+        ? {
+            ...baseScrapePolicy,
+            captureInscricoes: true,
+            captureGrupos: false,
+            captureResultados: false,
+            fetchEliminatoria: false,
+            reason: "manual-force-stage-2-inscricoes",
+          }
+        : manualForceStage === "stage-3-resultados"
+          ? {
+              ...baseScrapePolicy,
+              captureInscricoes: false,
+              captureGrupos: false,
+              captureResultados: true,
+              fetchEliminatoria: true,
+              reason: "manual-force-stage-3-resultados",
+            }
+          : baseScrapePolicy;
 
     if (!scrapePolicy.autoSchedule && !forceScrape) {
       log("info", "Evento fora da policy automatica de scrape", {
@@ -99,6 +167,91 @@ export class ScrapeProcessor {
         }),
       "scrapeRun.create",
     );
+
+    if (manualForceStage === "stage-1-reset") {
+      try {
+        const cleanupSummary = await this.withDbRetry(
+          () => this.clearEventData(eventId),
+          "event.clearData",
+        );
+
+        await this.withDbRetry(
+          () =>
+            prisma.event.update({
+              where: { id: eventId },
+              data: {
+                lastScrapeAt: new Date(),
+              },
+            }),
+          "event.update:lastScrapeAt:stage1",
+        );
+
+        await this.withDbRetry(
+          () =>
+            prisma.scrapeRun.update({
+              where: { id: scrapeRun.id },
+              data: {
+                finishedAt: new Date(),
+                status: "SUCCESS",
+                insertedCounts: {},
+                updatedCounts: {},
+                extractionStats: {
+                  eventSituation,
+                  scrapePolicy: { ...scrapePolicy, reason: "manual-force-stage-1-reset" },
+                  manualStage: "stage-1-reset",
+                  cleanupSummary: { ...cleanupSummary },
+                },
+                warnings: [],
+                errorMessage: null,
+              },
+            }),
+          "scrapeRun.update:stage1",
+        );
+
+        log("info", "Limpeza manual concluida", {
+          eventId,
+          scrapeRunId: scrapeRun.id,
+          cleanupSummary,
+          reason: reason ?? null,
+        });
+        return;
+      } catch (error) {
+        try {
+          await this.withDbRetry(
+            () =>
+              prisma.scrapeRun.update({
+                where: { id: scrapeRun.id },
+                data: {
+                  finishedAt: new Date(),
+                  status: "ERROR",
+                  extractionStats: {
+                    errorAt: "manual-stage-1-reset",
+                    eventSituation,
+                    scrapePolicy: { ...scrapePolicy, reason: "manual-force-stage-1-reset" },
+                  },
+                  errorMessage: String(error),
+                },
+              }),
+            "scrapeRun.update:stage1:error",
+          );
+        } catch (updateError) {
+          log("error", "Falha ao persistir erro da limpeza manual", {
+            eventId,
+            scrapeRunId: scrapeRun.id,
+            error: String(updateError),
+          });
+        }
+
+        log("error", "Falha na limpeza manual do evento", {
+          eventId,
+          scrapeRunId: scrapeRun.id,
+          error: String(error),
+        });
+        throw error;
+      } finally {
+        await this.releaseEventLock(eventId);
+      }
+    }
 
     try {
       const capture = await Promise.race([
@@ -281,6 +434,95 @@ export class ScrapeProcessor {
       data: {
         scrapeLockedAt: null,
       },
+    });
+  }
+
+  private async clearEventData(eventId: number): Promise<EventDataCleanupSummary> {
+    return prisma.$transaction(async (tx) => {
+      const athletes = await tx.athlete.findMany({
+        where: { eventId },
+        select: { id: true, clubId: true },
+      });
+      const athleteIds = athletes.map((item) => item.id);
+      const clubIds = [...new Set(athletes.map((item) => item.clubId))];
+
+      const matches = await tx.match.findMany({
+        where: { eventId },
+        select: { id: true },
+      });
+      const matchIds = matches.map((item) => item.id);
+
+      const categories = await tx.category.findMany({
+        where: { eventId },
+        select: { id: true },
+      });
+      const categoryIds = categories.map((item) => item.id);
+
+      const deletedMatchParticipants =
+        matchIds.length === 0
+          ? { count: 0 }
+          : await tx.matchParticipant.deleteMany({
+              where: { matchId: { in: matchIds } },
+            });
+
+      const deletedAthleteCategories =
+        athleteIds.length === 0 || categoryIds.length === 0
+          ? { count: 0 }
+          : await tx.athleteCategory.deleteMany({
+              where: {
+                OR: [{ athleteId: { in: athleteIds } }, { categoryId: { in: categoryIds } }],
+              },
+            });
+
+      const deletedAliases =
+        athleteIds.length === 0
+          ? { count: 0 }
+          : await tx.athleteAlias.deleteMany({
+              where: { athleteId: { in: athleteIds } },
+            });
+
+      const deletedConflicts = await tx.athleteMatchConflict.deleteMany({
+        where: { eventId },
+      });
+
+      const deletedMatches = await tx.match.deleteMany({
+        where: { eventId },
+      });
+
+      const deletedAthletes = await tx.athlete.deleteMany({
+        where: { eventId },
+      });
+
+      const deletedCategories = await tx.category.deleteMany({
+        where: { eventId },
+      });
+
+      const deletedRawCaptures = await tx.rawCapture.deleteMany({
+        where: { eventId },
+      });
+
+      let orphanClubs = 0;
+      if (clubIds.length > 0) {
+        const deletedClubs = await tx.club.deleteMany({
+          where: {
+            id: { in: clubIds },
+            athletes: { none: {} },
+          },
+        });
+        orphanClubs = deletedClubs.count;
+      }
+
+      return {
+        matchParticipants: deletedMatchParticipants.count,
+        athleteCategories: deletedAthleteCategories.count,
+        athleteAliases: deletedAliases.count,
+        conflicts: deletedConflicts.count,
+        matches: deletedMatches.count,
+        athletes: deletedAthletes.count,
+        categories: deletedCategories.count,
+        rawCaptures: deletedRawCaptures.count,
+        orphanClubs,
+      };
     });
   }
 }

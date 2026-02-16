@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildEventScrapePolicy,
   computeEventSituation,
+  shouldRunEventAutoScrape,
 } from "@cbtm/shared";
 
 function dt(value: string): Date {
@@ -35,7 +36,7 @@ test("computeEventSituation cobre janela pre, inscricoes, pre-evento, andamento 
   assert.equal(computeEventSituation(input, dt("2026-03-23T12:00:00.000Z")), "POS_EVENTO");
 });
 
-test("buildEventScrapePolicy respeita grace period e modo manual force", () => {
+test("buildEventScrapePolicy desliga auto apos pos-evento e respeita modo manual force", () => {
   const input = {
     inicioInscricoes: dt("2026-03-01T00:00:00.000Z"),
     fimInscricoes: dt("2026-03-10T23:59:59.000Z"),
@@ -43,21 +44,13 @@ test("buildEventScrapePolicy respeita grace period e modo manual force", () => {
     fimRealizacao: dt("2026-03-22T19:00:00.000Z"),
   };
 
-  const inGrace = buildEventScrapePolicy(input, {
-    now: dt("2026-03-23T12:00:00.000Z"),
-    postEventGraceHours: 72,
-  });
-  assert.equal(inGrace.autoSchedule, true);
-  assert.equal(inGrace.captureResultados, true);
-  assert.equal(inGrace.fetchEliminatoria, true);
-
-  const outGrace = buildEventScrapePolicy(input, {
+  const postEvent = buildEventScrapePolicy(input, {
     now: dt("2026-03-30T12:00:00.000Z"),
-    postEventGraceHours: 48,
   });
-  assert.equal(outGrace.autoSchedule, false);
-  assert.equal(outGrace.captureResultados, false);
-  assert.equal(outGrace.fetchEliminatoria, false);
+  assert.equal(postEvent.autoSchedule, false);
+  assert.equal(postEvent.captureResultados, false);
+  assert.equal(postEvent.fetchEliminatoria, false);
+  assert.equal(postEvent.recommendedIntervalMs, null);
 
   const manual = buildEventScrapePolicy(
     {
@@ -75,4 +68,59 @@ test("buildEventScrapePolicy respeita grace period e modo manual force", () => {
   assert.equal(manual.captureInscricoes, true);
   assert.equal(manual.captureResultados, true);
   assert.equal(manual.fetchEliminatoria, true);
+  assert.equal(manual.recommendedIntervalMs, 0);
+});
+
+test("buildEventScrapePolicy segue ciclo de vida para blocos de captura", () => {
+  const input = {
+    inicioInscricoes: dt("2026-03-01T00:00:00.000Z"),
+    fimInscricoes: dt("2026-03-10T23:59:59.000Z"),
+    inicioRealizacao: dt("2026-03-20T08:00:00.000Z"),
+    fimRealizacao: dt("2026-03-22T19:00:00.000Z"),
+  };
+
+  const open = buildEventScrapePolicy(input, { now: dt("2026-03-05T12:00:00.000Z") });
+  assert.equal(open.captureInscricoes, true);
+  assert.equal(open.captureGrupos, false);
+  assert.equal(open.captureResultados, false);
+  assert.equal(open.fetchEliminatoria, false);
+  assert.equal(open.recommendedIntervalMs, 5 * 60 * 60 * 1000);
+
+  const preEvent = buildEventScrapePolicy(input, { now: dt("2026-03-15T12:00:00.000Z") });
+  assert.equal(preEvent.captureInscricoes, false);
+  assert.equal(preEvent.captureGrupos, true);
+  assert.equal(preEvent.captureResultados, false);
+  assert.equal(preEvent.fetchEliminatoria, false);
+  assert.equal(preEvent.recommendedIntervalMs, 3 * 60 * 60 * 1000);
+
+  const inProgress = buildEventScrapePolicy(input, { now: dt("2026-03-21T12:00:00.000Z") });
+  assert.equal(inProgress.captureInscricoes, false);
+  assert.equal(inProgress.captureGrupos, false);
+  assert.equal(inProgress.captureResultados, true);
+  assert.equal(inProgress.fetchEliminatoria, true);
+  assert.equal(inProgress.recommendedIntervalMs, 30 * 60 * 1000);
+});
+
+test("shouldRunEventAutoScrape aplica intervalo recomendado", () => {
+  const policy = {
+    autoSchedule: true,
+    captureInscricoes: true,
+    captureGrupos: false,
+    captureResultados: false,
+    fetchEliminatoria: false,
+    recommendedIntervalMs: 60 * 60 * 1000,
+    reason: "inscricoes-abertas",
+  } as const;
+
+  const now = dt("2026-03-05T12:00:00.000Z");
+  const dueWithoutLast = shouldRunEventAutoScrape(null, policy, now);
+  assert.equal(dueWithoutLast.due, true);
+
+  const tooSoon = shouldRunEventAutoScrape(dt("2026-03-05T11:30:00.000Z"), policy, now);
+  assert.equal(tooSoon.due, false);
+  assert.equal(tooSoon.waitMs, 30 * 60 * 1000);
+
+  const due = shouldRunEventAutoScrape(dt("2026-03-05T10:00:00.000Z"), policy, now);
+  assert.equal(due.due, true);
+  assert.equal(due.waitMs, 0);
 });

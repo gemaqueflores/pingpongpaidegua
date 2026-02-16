@@ -1,4 +1,4 @@
-import { buildEventScrapePolicy } from "@cbtm/shared";
+import { buildEventScrapePolicy, shouldRunEventAutoScrape } from "@cbtm/shared";
 import { Queue, Worker } from "bullmq";
 import { config } from "./config";
 import { log } from "./logger";
@@ -65,6 +65,7 @@ async function bootstrap(): Promise<void> {
           select: {
             id: true,
             concluido: true,
+            lastScrapeAt: true,
             inicioInscricoes: true,
             fimInscricoes: true,
             inicioRealizacao: true,
@@ -76,25 +77,32 @@ async function bootstrap(): Promise<void> {
 
         let eligibleEvents = 0;
         let concludedBlocked = 0;
+        let skippedByInterval = 0;
         for (const event of events) {
           if (event.concluido) {
             concludedBlocked += 1;
             continue;
           }
           const policy = buildEventScrapePolicy(event, {
-            postEventGraceHours: config.postEventGraceHours,
           });
           if (!policy.autoSchedule) {
             continue;
           }
 
+          const autoDecision = shouldRunEventAutoScrape(event.lastScrapeAt, policy);
+          if (!autoDecision.due) {
+            skippedByInterval += 1;
+            continue;
+          }
+
           eligibleEvents += 1;
-          const scheduledBucket = Math.floor(Date.now() / config.refreshMs);
+          const intervalBucket = Math.max(policy.recommendedIntervalMs ?? config.refreshMs, 1);
+          const scheduledBucket = Math.floor(Date.now() / intervalBucket);
           await queue.add(
             "scrape-event",
             {
               eventId: event.id,
-              reason: `scheduled-${refreshLabel}`,
+              reason: `scheduled-auto-${policy.reason}`,
             },
             {
               jobId: `event-${event.id}-scheduled-${scheduledBucket}`,
@@ -106,6 +114,7 @@ async function bootstrap(): Promise<void> {
           totalEvents: events.length,
           eligibleEvents,
           concludedBlocked,
+          skippedByInterval,
         });
         return;
       }

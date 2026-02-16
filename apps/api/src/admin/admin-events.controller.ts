@@ -17,6 +17,7 @@ import { CreateAdminEventDto } from "./dto/create-admin-event.dto";
 import { UpdateAdminEventDto } from "./dto/update-admin-event.dto";
 import { ResolveAthleteConflictDto } from "./dto/resolve-athlete-conflict.dto";
 import { RawCaptureCleanupDto } from "./dto/raw-capture-cleanup.dto";
+import { ScrapeNowDto } from "./dto/scrape-now.dto";
 
 @Controller("admin/events")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -50,8 +51,8 @@ export class AdminEventsController {
   }
 
   @Post(":id/scrape-now")
-  async scrapeNow(@Param("id", ParseIntPipe) id: number) {
-    return this.service.scrapeNow(id);
+  async scrapeNow(@Param("id", ParseIntPipe) id: number, @Body() body: ScrapeNowDto) {
+    return this.service.scrapeNow(id, body.stage);
   }
 
   @Get(":id/scrape-runs")

@@ -408,7 +408,7 @@ export class UserService {
       await this.ensureCategoryOfEvent(eventId, categoryId);
     }
 
-    return this.prisma.club.findMany({
+    const clubs = await this.prisma.club.findMany({
       where: {
         name: {
           contains: search || undefined,
@@ -428,8 +428,46 @@ export class UserService {
           },
         },
       },
+      select: {
+        id: true,
+        name: true,
+      },
       orderBy: [{ name: "asc" }],
     });
+
+    if (clubs.length === 0) {
+      return [];
+    }
+
+    const clubIds = clubs.map((club) => club.id);
+    const athletesByClub = await this.prisma.athlete.groupBy({
+      by: ["clubId"],
+      where: {
+        eventId,
+        createdFromWarning: false,
+        clubId: { in: clubIds },
+        categories: categoryId
+          ? {
+              some: {
+                categoryId,
+              },
+            }
+          : undefined,
+      },
+      _count: {
+        _all: true,
+      },
+    });
+
+    const athleteCountByClub = new Map<number, number>();
+    for (const row of athletesByClub) {
+      athleteCountByClub.set(row.clubId, row._count._all);
+    }
+
+    return clubs.map((club) => ({
+      ...club,
+      athleteCount: athleteCountByClub.get(club.id) ?? 0,
+    }));
   }
 
   async listCategories(eventId: number) {

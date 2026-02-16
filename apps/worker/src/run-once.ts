@@ -1,4 +1,4 @@
-import { buildEventScrapePolicy } from "@cbtm/shared";
+import { buildEventScrapePolicy, shouldRunEventAutoScrape } from "@cbtm/shared";
 import { config } from "./config";
 import { log } from "./logger";
 import { ScrapeProcessor } from "./pipeline/scrape.processor";
@@ -29,6 +29,7 @@ async function run(): Promise<void> {
     select: {
       id: true,
       concluido: true,
+      lastScrapeAt: true,
       inicioInscricoes: true,
       fimInscricoes: true,
       inicioRealizacao: true,
@@ -40,19 +41,29 @@ async function run(): Promise<void> {
   });
 
   let eligible = 0;
+  let skippedByInterval = 0;
   let processed = 0;
   let failed = 0;
+  const isForcedSelection = forcedEventIds.length > 0;
 
   for (const event of events) {
     const policy = buildEventScrapePolicy(event, {
-      postEventGraceHours: config.postEventGraceHours,
     });
     if (!policy.autoSchedule) {
       continue;
     }
+
+    if (!isForcedSelection) {
+      const autoDecision = shouldRunEventAutoScrape(event.lastScrapeAt, policy);
+      if (!autoDecision.due) {
+        skippedByInterval += 1;
+        continue;
+      }
+    }
+
     eligible += 1;
     try {
-      await processor.processEventJob(event.id, "scheduled-2h");
+      await processor.processEventJob(event.id, `scheduled-auto-${policy.reason}`);
       processed += 1;
     } catch (error) {
       failed += 1;
@@ -66,6 +77,7 @@ async function run(): Promise<void> {
   log("info", "Run-once concluido", {
     totalEvents: events.length,
     eligibleEvents: eligible,
+    skippedByInterval,
     processed,
     failed,
   });
@@ -78,4 +90,3 @@ run().catch(async (error) => {
   await prisma.$disconnect();
   process.exit(1);
 });
-

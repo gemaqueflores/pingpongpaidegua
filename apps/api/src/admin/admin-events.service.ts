@@ -269,10 +269,10 @@ export class AdminEventsService {
     });
   }
 
-  async scrapeNow(id: number) {
+  async scrapeNow(id: number, stage?: 1 | 2 | 3) {
     await this.ensureEvent(id);
 
-    return this.queue.enqueueScrapeNow(id);
+    return this.queue.enqueueScrapeNow(id, stage);
   }
 
   async listScrapeRuns(eventId: number) {

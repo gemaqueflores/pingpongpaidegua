@@ -72,17 +72,13 @@ jobs:
               exit 1
             fi
 
-            $COMPOSE_BIN up -d postgres redis worker
+            $COMPOSE_BIN up -d postgres redis
             $COMPOSE_BIN ps
 
-            RUN_ONCE_CMD="node apps/worker/dist/run-once.js"
-            if ! $COMPOSE_BIN exec -T worker test -f apps/worker/dist/run-once.js; then
-              RUN_ONCE_CMD="npm run scrape:once"
-            fi
-
-            echo "Comando de run-once: $RUN_ONCE_CMD"
-            echo "Diagnostico rapido do worker:"
-            $COMPOSE_BIN exec -T worker sh -lc "node -v && pwd && ls -la apps/worker/dist | sed -n '1,80p'" || true
+            RUN_ONCE_CMD="npm run scrape:once"
+            echo "Comando de run-once: $RUN_ONCE_CMD (one-shot container)"
+            echo "Diagnostico rapido do worker (one-shot):"
+            $COMPOSE_BIN run --rm worker sh -lc "node -v && pwd && ls -la apps/worker/dist | sed -n '1,80p'" || true
 
             echo "Checkpoint: preparando execucao do run-once"
             RUN_ONCE_EXIT=0
@@ -90,10 +86,10 @@ jobs:
             set +e
             if [ -n "$SCRAPE_IDS" ]; then
               echo "SCRAPE_EVENT_IDS=$SCRAPE_IDS"
-              $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD"
+              $COMPOSE_BIN run --rm -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD"
               RUN_ONCE_EXIT=$?
             else
-              $COMPOSE_BIN exec -T worker sh -lc "$RUN_ONCE_CMD"
+              $COMPOSE_BIN run --rm worker sh -lc "$RUN_ONCE_CMD"
               RUN_ONCE_EXIT=$?
             fi
 
@@ -101,10 +97,10 @@ jobs:
               echo "Primeira tentativa do run-once falhou (exit=$RUN_ONCE_EXIT). Tentando novamente em 15s..."
               sleep 15
               if [ -n "$SCRAPE_IDS" ]; then
-                $COMPOSE_BIN exec -T -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD"
+                $COMPOSE_BIN run --rm -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD"
                 RUN_ONCE_EXIT=$?
               else
-                $COMPOSE_BIN exec -T worker sh -lc "$RUN_ONCE_CMD"
+                $COMPOSE_BIN run --rm worker sh -lc "$RUN_ONCE_CMD"
                 RUN_ONCE_EXIT=$?
               fi
             fi
