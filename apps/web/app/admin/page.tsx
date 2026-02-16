@@ -42,6 +42,8 @@ type ScrapeProgressState = {
   runId?: number;
 };
 
+type ScrapeStage = 1 | 2 | 3;
+
 type ScrapeRunRow = {
   id: number;
   startedAt: string;
@@ -209,6 +211,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [savingEvent, setSavingEvent] = useState(false);
   const [busyScrapeEventId, setBusyScrapeEventId] = useState<number | null>(null);
+  const [busyScrapeStage, setBusyScrapeStage] = useState<ScrapeStage | null>(null);
   const [notice, setNotice] = useState<NoticeState>(null);
   const [scrapeProgressByEvent, setScrapeProgressByEvent] = useState<Record<number, ScrapeProgressState>>({});
 
@@ -506,11 +509,25 @@ export default function AdminPage() {
     }
   }
 
-  async function scrapeNow(event: EventRow) {
+  function scrapeStageLabel(stage?: ScrapeStage): string {
+    if (stage === 1) {
+      return "Etapa 1 (limpeza)";
+    }
+    if (stage === 2) {
+      return "Etapa 2 (categorias e atletas)";
+    }
+    if (stage === 3) {
+      return "Etapa 3 (resultados e eliminatorias)";
+    }
+    return "Completo";
+  }
+
+  async function scrapeNow(event: EventRow, stage?: ScrapeStage) {
     setNotice(null);
     setBusyScrapeEventId(event.id);
+    setBusyScrapeStage(stage ?? null);
     try {
-      const queued = await apiScrapeNow(event.id);
+      const queued = await apiScrapeNow(event.id, stage);
       const queuedStatus =
         queued && typeof queued === "object"
           ? `${queued.status ?? "queued"}${queued.jobId ? ` (job ${queued.jobId})` : ""}`
@@ -518,7 +535,7 @@ export default function AdminPage() {
 
       setNotice({
         type: "success",
-        text: `Atualizacao solicitada para '${event.nome}': ${queuedStatus}.`,
+        text: `Atualizacao solicitada para '${event.nome}' [${scrapeStageLabel(stage)}]: ${queuedStatus}.`,
       });
       const queuedAt = new Date().toISOString();
       void trackScrapeProgress(event.id, queuedAt);
@@ -534,6 +551,7 @@ export default function AdminPage() {
       });
     } finally {
       setBusyScrapeEventId(null);
+      setBusyScrapeStage(null);
     }
   }
 
@@ -833,9 +851,48 @@ export default function AdminPage() {
                 <td className="row admin-table-actions" style={{ flexWrap: "wrap" }}>
                   <button className="admin-btn-secondary" onClick={() => loadEventDetails(event.id)}>Detalhes</button>
                   <button className="admin-btn-secondary" onClick={() => startEditEvent(event)}>Editar</button>
-                  <button className="admin-btn-primary" onClick={() => scrapeNow(event)} disabled={busyScrapeEventId === event.id}>
-                    {busyScrapeEventId === event.id ? "Enfileirando..." : "Atualizar agora"}
-                  </button>
+                  <div className="row admin-table-actions" style={{ flexWrap: "wrap", gap: 8 }}>
+                    <button
+                      className="admin-btn-primary"
+                      onClick={() => scrapeNow(event)}
+                      disabled={busyScrapeEventId === event.id}
+                      title="Executa raspagem completa"
+                    >
+                      {busyScrapeEventId === event.id && busyScrapeStage === null
+                        ? "Enfileirando..."
+                        : "Raspagem completa"}
+                    </button>
+                    <button
+                      className="admin-btn-secondary"
+                      onClick={() => scrapeNow(event, 1)}
+                      disabled={busyScrapeEventId === event.id}
+                      title="Etapa 1: limpa dados do evento para recarga"
+                    >
+                      {busyScrapeEventId === event.id && busyScrapeStage === 1
+                        ? "Enfileirando..."
+                        : "Etapa 1: limpar"}
+                    </button>
+                    <button
+                      className="admin-btn-secondary"
+                      onClick={() => scrapeNow(event, 2)}
+                      disabled={busyScrapeEventId === event.id}
+                      title="Etapa 2: categorias e atletas (inscricoes)"
+                    >
+                      {busyScrapeEventId === event.id && busyScrapeStage === 2
+                        ? "Enfileirando..."
+                        : "Etapa 2: inscricoes"}
+                    </button>
+                    <button
+                      className="admin-btn-secondary"
+                      onClick={() => scrapeNow(event, 3)}
+                      disabled={busyScrapeEventId === event.id}
+                      title="Etapa 3: resultados e eliminatorias"
+                    >
+                      {busyScrapeEventId === event.id && busyScrapeStage === 3
+                        ? "Enfileirando..."
+                        : "Etapa 3: resultados"}
+                    </button>
+                  </div>
                   <button className="secondary admin-btn-secondary" onClick={() => toggleConcluido(event)}>
                     {event.concluido ? "Reabrir" : "Concluir"}
                   </button>

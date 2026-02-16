@@ -5,6 +5,7 @@ import { designTokens } from "../../lib/designTokens";
 type CardVariant = "event" | "athlete" | "group" | "match" | "stat" | "default";
 
 type CardProps = {
+  id?: string;
   children?: ReactNode;
   header?: ReactNode;
   body?: ReactNode;
@@ -14,6 +15,7 @@ type CardProps = {
 };
 
 export function Card({
+  id,
   children,
   header,
   body,
@@ -23,6 +25,7 @@ export function Card({
 }: CardProps) {
   return (
     <section
+      id={id}
       className={`card arena-card ui-card ui-card-${variant} ${className}`.trim()}
       style={{
         backgroundColor: designTokens.colors.cardBg,

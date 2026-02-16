@@ -536,6 +536,10 @@ a {
   align-items: center;
 }
 
+.career-hero-stats-scroll {
+  width: 100%;
+}
+
 .match-card-grid {
   display: grid;
   gap: 10px;
@@ -685,10 +689,116 @@ a {
   color: var(--text-main);
 }
 
+.app-user-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.app-user-header-row {
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.app-menu-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+  background: rgba(5, 26, 64, 0.9);
+  border: 1px solid var(--line-glow);
+  color: var(--text-main);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.app-brand-link {
+  color: var(--text-main);
+  font-family: var(--token-font-title, "Montserrat", sans-serif);
+  font-size: 1.12rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.app-user-header-cta {
+  margin-left: auto;
+}
+
+.app-cta-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(117, 161, 255, 0.54);
+  background: linear-gradient(180deg, #2d6eff 0%, #194ecf 100%);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+
+.app-cta-button-secondary {
+  background: linear-gradient(180deg, #ffb347 0%, #f18716 100%);
+  border-color: rgba(255, 213, 140, 0.75);
+  color: #081a3b;
+}
+
+.app-side-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(82vw, 320px);
+  z-index: 40;
+  background: rgba(2, 14, 38, 0.98);
+  border-right: 1px solid var(--line-glow);
+  padding: 84px 14px 18px;
+  transform: translateX(-105%);
+  transition: transform 220ms ease;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+}
+
+.app-side-menu.open {
+  transform: translateX(0);
+}
+
+.app-side-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.app-side-nav a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(117, 161, 255, 0.4);
+  padding: 0 12px;
+  color: var(--text-main);
+  background: rgba(10, 33, 81, 0.88);
+}
+
+.app-side-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+}
+
 .user-theme .container {
   position: relative;
   max-width: 100%;
   overflow-x: hidden;
+}
+
+.user-theme .user-page > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .user-theme .grid,
@@ -757,6 +867,8 @@ a {
 .user-theme .arena-card li,
 .user-theme .arena-card a {
   color: var(--text-main);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .user-theme .arena-card p,
@@ -764,6 +876,8 @@ a {
 .user-theme .arena-card td,
 .user-theme .arena-card th {
   font-size: 0.98rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .user-theme input,
@@ -1091,19 +1205,8 @@ a {
 }
 
 @media (max-width: 960px) {
-  .user-theme .product-header.user .container.row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .user-theme .product-header.user nav.row {
-    width: 100%;
-    justify-content: flex-start;
-    overflow-x: auto;
-    white-space: nowrap;
-    flex-wrap: nowrap;
-    padding-bottom: 4px;
+  .app-user-header-cta {
+    display: none;
   }
 
   .user-theme .medal-lane {
@@ -1163,6 +1266,10 @@ a {
 
   .user-theme .hero-subtitle {
     line-height: 1.25;
+  }
+
+  .app-brand-link {
+    font-size: 1rem;
   }
 
   .user-theme .row {
@@ -1236,6 +1343,11 @@ a {
   .user-theme .arena-card {
     padding: 12px;
     border-radius: 14px;
+  }
+
+  .app-side-menu {
+    width: min(90vw, 300px);
+    padding-top: 76px;
   }
 
   .sim-category-tabs {
@@ -1376,6 +1488,8 @@ a {
   justify-content: space-between;
   align-items: flex-start;
   gap: 14px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .athlete-summary-head h2 {
@@ -1389,6 +1503,7 @@ a {
 .career-medal-matrix-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 .career-medal-table {
@@ -1491,11 +1606,11 @@ a {
     flex: 0 0 auto;
   }
 
-  .user-theme .share-actions-row {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    padding-bottom: 2px;
-    -webkit-overflow-scrolling: touch;
+.user-theme .share-actions-row {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
   }
 
   .user-theme .share-actions-row .share-app-button {
@@ -1548,12 +1663,58 @@ a {
 }
 
 @media (max-width: 560px) {
+  .career-hero-stats-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .career-hero-stats {
+    flex-wrap: nowrap;
+    width: max-content;
+    min-width: max-content;
+  }
+
+  .career-hero-stats .stat-block {
+    min-width: 142px;
+  }
+
   .home-event-filters .balloon-group {
     width: 100%;
   }
 
+  .user-theme .row {
+    min-width: 0;
+  }
+
+  .user-theme .row > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .user-theme .arena-card,
+  .user-theme .event-card,
+  .user-theme .athlete-list-card,
+  .user-theme .match-card,
+  .user-theme .sim-group-card,
+  .user-theme .career-event-card {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .user-theme .event-metrics {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    gap: 8px;
+    padding-bottom: 2px;
+  }
+
+  .user-theme .event-metrics > * {
+    flex: 0 0 auto;
   }
 
   .user-theme .hero-header {

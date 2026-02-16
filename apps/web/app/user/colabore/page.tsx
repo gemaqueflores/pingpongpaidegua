@@ -55,26 +55,10 @@ function buildPixPayload(pixKey: string, merchantName: string, merchantCity: str
   return `${data}${crc16(data)}`;
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-}
-
 export default function ColaborePage() {
-  const [amount, setAmount] = useState("20");
   const [showFallback, setShowFallback] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-
-  const numericAmount = useMemo(() => {
-    const normalized = Number(String(amount).replace(",", "."));
-    if (!Number.isFinite(normalized) || normalized <= 0) {
-      return 0;
-    }
-    return normalized;
-  }, [amount]);
 
   const pixKey = process.env.NEXT_PUBLIC_PIX_KEY || PIX_KEY_DEFAULT;
   const merchantName = process.env.NEXT_PUBLIC_PIX_MERCHANT_NAME || PIX_MERCHANT_NAME_DEFAULT;
@@ -100,34 +84,19 @@ export default function ColaborePage() {
   return (
     <main className="container grid user-page">
       <Hero
-        title="Colabore com o projeto"
+        title="Apoie o projeto"
         subtitle="Contribua com PIX para manter o sistema no ar"
       />
 
       <Card className="grid donate-card">
         <p className="arena-muted">
-          Sua colaboração ajuda a manter a infraestrutura, scraping e recursos de compartilhamento.
-        </p>
-        <label className="grid" htmlFor="pix-value">
-          <span>Valor da colaboração (R$)</span>
-          <input
-            id="pix-value"
-            type="number"
-            min="1"
-            step="0.01"
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-          />
-        </label>
-
-        <p>
-          Valor informado: <strong>{numericAmount > 0 ? formatCurrency(numericAmount) : "-"}</strong>
+          Seu apoio ajuda a manter a infraestrutura, scraping e recursos de compartilhamento.
         </p>
 
         <div className="pix-qr-wrapper">
           <img
             src={qrCodeUrl}
-            alt="QRCode PIX para colaboração"
+            alt="QRCode PIX para apoio"
             className="pix-qr-image"
             loading="lazy"
             decoding="async"
@@ -148,13 +117,13 @@ export default function ColaborePage() {
 
         {showFallback ? (
           <p className="warn">
-            QRCode PIX indisponível. Adicione a imagem no diretório
+            QRCode PIX indisponivel. Adicione a imagem no diretorio
             <code>apps/web/public</code> ou configure <code>NEXT_PUBLIC_PIX_QR_CODE_URL</code>.
           </p>
         ) : null}
 
         <p className="arena-muted">
-          Após escanear o QRCode no app do banco, informe o valor desejado ({numericAmount > 0 ? formatCurrency(numericAmount) : "editável"}) antes de confirmar o pagamento.
+          Apos escanear o QRCode no app do banco, informe o valor diretamente no aplicativo bancario antes de confirmar o pagamento.
         </p>
 
         <div className="row">
@@ -165,5 +134,4 @@ export default function ColaborePage() {
     </main>
   );
 }
-
 

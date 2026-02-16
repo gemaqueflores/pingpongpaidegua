@@ -122,10 +122,11 @@ export async function apiMarkCompleted(id: number) {
   return handleResponse(response);
 }
 
-export async function apiScrapeNow(id: number) {
+export async function apiScrapeNow(id: number, stage?: 1 | 2 | 3) {
   const response = await fetch(`${API_BASE}/admin/events/${id}/scrape-now`, {
     method: "POST",
     headers: getHeaders(),
+    body: stage ? JSON.stringify({ stage }) : undefined,
   });
 
   return handleResponse(response);

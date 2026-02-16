@@ -8,6 +8,7 @@ import { Card } from "../components/ui/Card";
 import { EventCard } from "../components/ui/EventCard";
 import { Skeleton } from "../components/ui/Skeleton";
 import { Badge } from "../components/ui/Badge";
+import { UserHeader } from "../components/user/UserHeader";
 
 type EventRow = UserEventRow;
 type EventTypeFilter = "ALL" | "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN";
@@ -162,6 +163,7 @@ export default function HomePage() {
 
   return (
     <div className="user-theme home-theme">
+      <UserHeader />
       <main className="container grid user-page">
         <Hero
           title="Plataforma de Tenis de Mesa Brasil"
@@ -179,9 +181,9 @@ export default function HomePage() {
                 type="button"
                 className="secondary"
                 onClick={() => router.push("/user/colabore")}
-                aria-label="Colaborar com o projeto"
+                aria-label="Apoiar o projeto"
               >
-                Colabore com o projeto
+                Apoie o projeto
               </button>
             </>
           }
@@ -214,7 +216,7 @@ export default function HomePage() {
           </Card>
         ) : null}
 
-        <Card className="grid" variant="event">
+        <Card id="eventos-em-destaque" className="grid" variant="event">
           <div className="row" style={{ justifyContent: "space-between" }}>
             <h2>Eventos em destaque</h2>
             <Badge tone="default">Ordenado por situacao e data</Badge>
@@ -259,7 +261,6 @@ export default function HomePage() {
               {filteredEvents.map((event) => (
                 <EventCard
                   key={event.id}
-                  eventId={event.id}
                   cbtmEventId={event.cbtmEventId}
                   name={event.nome}
                   statusLabel={eventStatusLabel(event.userStatus)}
@@ -281,7 +282,7 @@ export default function HomePage() {
           ) : null}
         </Card>
 
-        <Card className="grid" variant="athlete">
+        <Card id="atletas-da-base" className="grid" variant="athlete">
             <div className="row home-athletes-header" style={{ justifyContent: "space-between" }}>
               <h2>Atletas da base</h2>
             <div className="balloon-group letter-tab-strip letter-tab-sticky" role="group" aria-label="Filtro por letra">
@@ -326,7 +327,6 @@ export default function HomePage() {
                   </div>
                   <div className="row" style={{ justifyContent: "space-between" }}>
                     <Badge tone="default">Eventos: {String(athlete.totalEvents)}</Badge>
-                    {athlete.totalAthleteRecords > 0 ? <Badge tone="open">Ativo</Badge> : null}
                     <button onClick={() => router.push(`/user/career/${encodeURIComponent(athlete.athleteKey)}`)}>
                       Carreira
                     </button>

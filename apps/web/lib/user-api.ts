@@ -35,6 +35,12 @@ export interface UserEventRow {
   groupSimulationEligible: boolean;
 }
 
+export interface UserClubRow {
+  id: number;
+  name: string;
+  athleteCount: number;
+}
+
 export interface GroupSimulationCategory {
   categoryId: number;
   categoryName: string;
@@ -134,7 +140,7 @@ export async function apiGetClubs(eventId: number, search = "", categoryId?: num
     headers: getHeaders(),
   });
 
-  return handleResponse(response);
+  return handleResponse(response) as Promise<UserClubRow[]>;
 }
 
 export async function apiGetCategories(eventId: number) {

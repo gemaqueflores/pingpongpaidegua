@@ -22,7 +22,6 @@ test("Hero snapshot", () => {
 test("EventCard snapshot", () => {
   const html = renderToStaticMarkup(
     <EventCard
-      eventId={1}
       cbtmEventId={5368}
       name="1TMB26"
       statusLabel="Inscricoes abertas"

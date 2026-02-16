@@ -3,7 +3,6 @@ import { Badge } from "./Badge";
 import { designTokens } from "../../lib/designTokens";
 
 type EventCardProps = {
-  eventId: number;
   cbtmEventId: number;
   name: string;
   statusLabel: string;
@@ -19,7 +18,6 @@ type EventCardProps = {
 
 export function EventCard(props: EventCardProps) {
   const {
-    eventId,
     cbtmEventId,
     name,
     statusLabel,
@@ -41,7 +39,7 @@ export function EventCard(props: EventCardProps) {
     >
       <div className="event-card-head">
         <div>
-          <p className="event-id">Evento CBTM #{cbtmEventId} | ID interno {eventId}</p>
+          <p className="event-id">Evento CBTM #{cbtmEventId}</p>
           <h3>{name}</h3>
         </div>
         <Badge tone={statusTone}>{statusLabel}</Badge>

@@ -1,10 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   apiGetAthletes,
-  apiGetCategories,
   apiGetClubAthletes,
   apiGetClubs,
   apiGetEvents,
@@ -16,16 +15,12 @@ import { Badge } from "../../../../components/ui/Badge";
 import { Skeleton } from "../../../../components/ui/Skeleton";
 
 type EventRow = UserEventRow;
-type EventTab = "insights" | "grupos" | "eliminatorias" | "clubes" | "atletas" | "estatisticas";
+type EventTab = "grupos" | "clubes" | "atletas";
 
 type ClubRow = {
   id: number;
   name: string;
-};
-
-type CategoryRow = {
-  id: number;
-  name: string;
+  athleteCount: number;
 };
 
 type AthleteRow = {
@@ -49,6 +44,11 @@ function formatDate(value: string | null): string {
   return new Date(value).toLocaleDateString("pt-BR");
 }
 
+function formatDateTime(value: string | null): string {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("pt-BR");
+}
+
 function inferEventType(name: string): "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN" {
   const normalized = name
     .normalize("NFD")
@@ -60,12 +60,40 @@ function inferEventType(name: string): "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OP
   return "ESTADUAL";
 }
 
+function resolveEventStatusLabel(event: EventRow | null): string {
+  if (!event) {
+    return "-";
+  }
+
+  if (event.concluido || event.situacaoComputada === "POS_EVENTO") {
+    return "Encerrado";
+  }
+
+  if (event.situacaoComputada === "EM_ANDAMENTO") {
+    return "Em Realização";
+  }
+
+  if (event.situacaoComputada === "POS_INSCRICOES_PRE_EVENTO") {
+    return event.groupsDefined ? "Grupos Divulgados" : "Formação de Grupos";
+  }
+
+  if (event.situacaoComputada === "INSCRICOES_ABERTAS" || event.situacaoComputada === "PRE_INSCRICOES") {
+    return "Inscrições Abertas";
+  }
+
+  if (event.situacaoComputada === "DRAFT") {
+    return "Formação de Grupos";
+  }
+
+  return "-";
+}
+
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
   const eventId = Number(params.id);
 
   const [event, setEvent] = useState<EventRow | null>(null);
-  const [activeTab, setActiveTab] = useState<EventTab>("insights");
+  const [activeTab, setActiveTab] = useState<EventTab>("grupos");
 
   const [clubs, setClubs] = useState<ClubRow[]>([]);
   const [clubsLoading, setClubsLoading] = useState(false);
@@ -76,7 +104,6 @@ export default function EventDetailPage() {
 
   const [athleteSearch, setAthleteSearch] = useState("");
   const [athletes, setAthletes] = useState<AthleteRow[]>([]);
-  const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [loadingEvent, setLoadingEvent] = useState(true);
 
   useEffect(() => {
@@ -101,7 +128,6 @@ export default function EventDetailPage() {
     void apiGetClubs(eventId)
       .then((rows) => setClubs(rows as ClubRow[]))
       .finally(() => setClubsLoading(false));
-    void apiGetCategories(eventId).then((rows) => setCategories(rows as CategoryRow[]));
   }, [eventId]);
 
   async function toggleClub(clubId: number) {
@@ -137,19 +163,13 @@ export default function EventDetailPage() {
       ? "OPEN"
       : inferEventType(event.nome)
     : null;
-  const phaseLabel = event?.groupsDefined
-    ? "Grupos oficiais definidos"
-    : event?.groupSimulationEligible
-      ? "Pré-grupo / simulação"
-      : "Pós-evento";
+
+  const statusLabel = resolveEventStatusLabel(event);
 
   const tabs: Array<{ id: EventTab; label: string }> = [
-    { id: "insights", label: "Insights" },
     { id: "grupos", label: "Grupos" },
-    { id: "eliminatorias", label: "Eliminatórias" },
     { id: "clubes", label: "Clubes" },
     { id: "atletas", label: "Atletas" },
-    { id: "estatisticas", label: "Estatísticas" },
   ];
 
   return (
@@ -178,6 +198,7 @@ export default function EventDetailPage() {
                   {eventType === "BRASILEIRAO" ? "Brasileirão" : eventType}
                 </Badge>
               ) : null}
+              <Badge tone="default">Último atualização: {formatDateTime(event?.lastScrapeAt ?? null)}</Badge>
             </div>
           </div>
           <p>
@@ -187,7 +208,7 @@ export default function EventDetailPage() {
             <span>Inscritos: <strong>{String(event?.totalInscritos ?? 0)}</strong></span>
             <span>Categorias: <strong>{String(event?.totalCategorias ?? 0)}</strong></span>
             <span>Técnicos: <strong>{String(event?.totalTecnicos ?? 0)}</strong></span>
-            <span>Fase atual: <strong>{phaseLabel}</strong></span>
+            <span>Status: <strong>{statusLabel}</strong></span>
           </div>
           <div className="balloon-group letter-tab-strip" role="tablist" aria-label="Seções do evento">
             {tabs.map((tab) => (
@@ -206,45 +227,22 @@ export default function EventDetailPage() {
         </Card>
       )}
 
-      {activeTab === "insights" ? (
-        <Card className="grid">
-          <h2>Insights</h2>
-          <div className="event-metrics">
-            <Badge tone="default">Último scrape: {event?.lastScrapeAt ? formatDate(event.lastScrapeAt) : "-"}</Badge>
-            <Badge tone="default">Situação computada: {event?.situacaoComputada ?? "-"}</Badge>
-            <Badge tone={event?.groupSimulationEligible ? "open" : "closed"}>
-              {event?.groupSimulationEligible ? "Simulação habilitada" : "Simulação indisponível"}
-            </Badge>
-          </div>
-          <p className="arena-muted">
-            Use as tabs para navegar entre grupos, atletas, clubes e estatísticas com menos scroll vertical.
-          </p>
-        </Card>
-      ) : null}
-
       {activeTab === "grupos" ? (
         <Card className="grid">
           <h2>Grupos</h2>
-          {event?.groupsDefined ? <p>Grupos oficiais definidos para este evento.</p> : null}
-          {!event?.groupsDefined && event?.groupSimulationEligible ? (
-            <div className="row">
-              <button onClick={() => (window.location.href = `/user/events/${eventId}/group-simulator`)}>
-                Simulador de Grupos
-              </button>
-            </div>
-          ) : null}
+          {event?.groupsDefined ? <p>Grupos oficiais já divulgados para este evento.</p> : null}
+          <div className="row">
+            <button
+              onClick={() => (window.location.href = `/user/events/${eventId}/group-simulator`)}
+              disabled={Boolean(event?.groupsDefined) || !Boolean(event?.groupSimulationEligible)}
+              title={event?.groupsDefined ? "Simulação indisponível: grupos oficiais já publicados." : undefined}
+            >
+              {event?.groupsDefined ? "Simulação bloqueada (grupos publicados)" : "Simular Grupos"}
+            </button>
+          </div>
           {!event?.groupsDefined && !event?.groupSimulationEligible ? (
-            <p className="arena-muted">Simulador indisponível para a situação atual do evento.</p>
+            <p className="arena-muted">Simulador indisponível para o momento atual do evento.</p>
           ) : null}
-        </Card>
-      ) : null}
-
-      {activeTab === "eliminatorias" ? (
-        <Card className="grid">
-          <h2>Eliminatórias</h2>
-          <p className="arena-muted">
-            A visualização oficial da chave eliminatória é carregada por categoria na página de atleta e no simulador.
-          </p>
         </Card>
       ) : null}
 
@@ -273,7 +271,7 @@ export default function EventDetailPage() {
                 <article key={club.id} className="athlete-list-card">
                   <div className="row" style={{ justifyContent: "space-between" }}>
                     <h3 style={{ margin: 0 }}>{club.name}</h3>
-                    <Badge tone="default">{athletesInClub.length} atletas</Badge>
+                    <Badge tone="default">{club.athleteCount} atletas</Badge>
                   </div>
                   <div className="row">
                     <button onClick={() => toggleClub(club.id)}>
@@ -342,26 +340,7 @@ export default function EventDetailPage() {
           </table>
         </Card>
       ) : null}
-
-      {activeTab === "estatisticas" ? (
-        <Card className="grid">
-          <h2>Estatísticas</h2>
-          <p>
-            Categorias disponíveis: <strong>{categories.length}</strong>
-          </p>
-          {categories.length > 0 ? (
-            <div className="event-metrics">
-              {categories.slice(0, 16).map((category) => (
-                <Badge key={category.id} tone="default">
-                  {category.name}
-                </Badge>
-              ))}
-            </div>
-          ) : (
-            <p className="arena-muted">Sem categorias para exibir.</p>
-          )}
-        </Card>
-      ) : null}
     </main>
   );
 }
+

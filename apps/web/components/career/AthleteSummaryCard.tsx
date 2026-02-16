@@ -87,13 +87,15 @@ export function AthleteSummaryCard({
         />
       </div>
 
-      <div className="career-hero-stats">
-        <StatBlock label="Aproveitamento" value={kpis.ratio} hint={`${kpis.pointsDetail} pontos`} />
-        <StatBlock label="Vitórias" value={String(kpis.wins)} tone="win" />
-        <StatBlock label="Derrotas" value={String(kpis.losses)} tone="loss" />
-        <StatBlock label="Últimos 5" value={kpis.recent || "-"} />
-        <StatBlock label="Eventos" value={String(kpis.totalEvents)} />
-        <StatBlock label="Jogos" value={String(kpis.totalMatches)} />
+      <div className="career-hero-stats-scroll">
+        <div className="career-hero-stats">
+          <StatBlock label="Aproveitamento" value={kpis.ratio} hint={`${kpis.pointsDetail} pontos`} />
+          <StatBlock label="Vitórias" value={String(kpis.wins)} tone="win" />
+          <StatBlock label="Derrotas" value={String(kpis.losses)} tone="loss" />
+          <StatBlock label="Últimos 5" value={kpis.recent || "-"} />
+          <StatBlock label="Eventos" value={String(kpis.totalEvents)} />
+          <StatBlock label="Jogos" value={String(kpis.totalMatches)} />
+        </div>
       </div>
 
       <MedalMatrixTable matrix={medalMatrix} />
