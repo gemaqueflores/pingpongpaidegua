@@ -31,6 +31,13 @@ export function EventCard(props: EventCardProps) {
     onSimulate,
   } = props;
 
+  const groupStateLabel = groupsDefined
+    ? "Grupos definidos"
+    : groupSimulationEligible
+      ? "Grupos pendentes"
+      : "Sem simulação";
+  const groupStateDisabled = !groupsDefined;
+
   return (
     <article
       className="event-card"
@@ -55,9 +62,9 @@ export function EventCard(props: EventCardProps) {
           type="button"
           className="secondary"
           onClick={onSimulate}
-          disabled={groupsDefined || !groupSimulationEligible}
+          disabled={groupStateDisabled}
         >
-          {groupsDefined ? "Grupos definidos" : "Simular Grupos"}
+          {groupStateLabel}
         </button>
       </div>
     </article>

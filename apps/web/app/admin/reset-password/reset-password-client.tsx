@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -23,11 +23,11 @@ export function AdminResetPasswordClient() {
       return;
     }
     if (password.length < 8) {
-      setError("A senha deve ter no minimo 8 caracteres.");
+      setError("A senha deve ter no mínimo 8 caracteres.");
       return;
     }
     if (password !== confirmPassword) {
-      setError("A confirmacao da senha nao confere.");
+      setError("A confirmação da senha não confere.");
       return;
     }
 
@@ -86,3 +86,4 @@ export function AdminResetPasswordClient() {
     </main>
   );
 }
+

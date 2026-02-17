@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -103,6 +103,7 @@ export function UserHeader() {
               <button
                 key={item.id}
                 type="button"
+                aria-current={item.id === activeItemId ? "page" : undefined}
                 className={`app-side-nav-link ${item.id === activeItemId ? "active" : ""} ${item.id === "home" ? "home-tone" : ""} ${item.id === "reporte" || item.id === "apoie" ? "secondary-tone" : ""}`}
                 onClick={() => handleNavClick(item)}
               >
@@ -124,3 +125,5 @@ export function UserHeader() {
     </>
   );
 }
+
+

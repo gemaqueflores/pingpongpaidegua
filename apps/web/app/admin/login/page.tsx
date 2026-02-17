@@ -95,7 +95,7 @@ export default function AdminLoginPage() {
         {forgotMode ? (
           <form className="grid" style={{ marginTop: 12 }} onSubmit={onForgotPassword}>
             <p style={{ margin: 0, color: "#576965" }}>
-              O link de reset sera enviado para o e-mail configurado.
+              O link de reset será enviado para o e-mail configurado.
             </p>
             <button className="admin-btn-primary" type="submit" disabled={forgotLoading}>
               {forgotLoading ? "Solicitando..." : "Enviar link de reset"}

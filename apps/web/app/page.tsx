@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -26,9 +26,9 @@ function formatDate(value: string | null): string {
 }
 
 function eventStatusLabel(status: EventRow["userStatus"]): string {
-  if (status === "INSCRICOES_ABERTAS") return "Inscricoes abertas";
-  if (status === "INSCRICOES_ENCERRADAS") return "Inscricoes encerradas";
-  return "Concluido";
+  if (status === "INSCRICOES_ABERTAS") return "Inscrições abertas";
+  if (status === "INSCRICOES_ENCERRADAS") return "Inscrições encerradas";
+  return "Concluído";
 }
 
 function eventStatusTone(status: EventRow["userStatus"]): "open" | "closed" | "done" {
@@ -126,8 +126,9 @@ export default function HomePage() {
       <UserHeader />
       <main className="container grid user-page">
         <Hero
-          title="Plataforma de Tenis de Mesa Brasil"
+          title="Plataforma de Tênis de Mesa Brasil"
           subtitle="PingPong Paid'egua"
+          className="home-page-hero"
           actions={
             <>
               <button
@@ -188,11 +189,13 @@ export default function HomePage() {
               <article className="athlete-list-card compact-summary-card">
                 <h3>Atletas</h3>
                 <p className="compact-summary-total">{athleteTotal}</p>
+                <p className="compact-summary-meta">Atletas cadastrados</p>
                 <button onClick={() => router.push("/atletas")}>Ver Atletas</button>
               </article>
               <article className="athlete-list-card compact-summary-card">
-                <h3>Clubes</h3>
+                <h3>Eficiência</h3>
                 <p className="compact-summary-total">{globalEfficiency?.ranking.length ?? 0}</p>
+                <p className="compact-summary-meta">Clubes participantes</p>
                 <button onClick={() => router.push("/eficiencia")}>Ver Eficiência</button>
               </article>
             </div>
@@ -278,9 +281,11 @@ export default function HomePage() {
         </Card>
 
         <footer className="arena-footer">
-          <p>PingPong Paid'egua © {new Date().getFullYear()} - Plataforma de Tenis de Mesa Brasil</p>
+          <p>PingPong Paid'egua © {new Date().getFullYear()} - Plataforma de Tênis de Mesa Brasil</p>
         </footer>
       </main>
     </div>
   );
 }
+
+

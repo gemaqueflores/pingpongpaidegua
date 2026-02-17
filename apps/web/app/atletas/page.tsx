@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiGetAthletesDirectory } from "../../lib/user-api";
-import { Hero } from "../../components/ui/Hero";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { Skeleton } from "../../components/ui/Skeleton";
@@ -45,18 +45,26 @@ export default function AthletesHubPage() {
   return (
     <UserShell>
       <main className="container grid user-page">
-        <Hero title="Atletas" subtitle="Atletas participantes dos eventos salvos" />
+        <PageHeader
+          title="Atletas"
+          subtitle="Atletas participantes dos eventos salvos"
+          compact
+          className="atletas-page-header"
+        />
 
         <Card className="grid" variant="athlete">
-          <input
-            className="home-athletes-search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar atleta por nome"
-            aria-label="Buscar atleta por nome"
-            autoCapitalize="none"
-            autoCorrect="off"
-          />
+          <div className="search-input-wrap atletas-search-sticky">
+            <span className="search-input-icon" aria-hidden="true">🔎</span>
+            <input
+              className="home-athletes-search search-input-with-icon"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar atleta por nome"
+              aria-label="Buscar atleta por nome"
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </div>
 
           {loading ? (
             <div className="grid">
@@ -69,12 +77,14 @@ export default function AthletesHubPage() {
               {paged.map((athlete) => (
                 <article key={athlete.athleteKey} className="athlete-list-card">
                   <div>
-                    <h3>{athlete.nameDisplay}</h3>
+                    <h3 className="athlete-name-clamp">{athlete.nameDisplay}</h3>
                   </div>
                   <div className="row" style={{ justifyContent: "space-between" }}>
-                    <Badge tone="default">Eventos: {String(athlete.totalEvents)}</Badge>
-                    <button onClick={() => router.push(`/career/${encodeURIComponent(athlete.athleteKey)}`)}>
-                      Carreira
+                    <Badge tone="default" aria-label={`${athlete.totalEvents} eventos`}>
+                      Eventos: {String(athlete.totalEvents)}
+                    </Badge>
+                    <button type="button" onClick={() => router.push(`/career/${encodeURIComponent(athlete.athleteKey)}`)}>
+                      Ver carreira
                     </button>
                   </div>
                 </article>

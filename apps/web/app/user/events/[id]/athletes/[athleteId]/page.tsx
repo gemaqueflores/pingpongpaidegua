@@ -292,7 +292,7 @@ export default function AthleteSummaryPage() {
                     <tr>
                       <th>Categoria</th>
                       <th>Aproveitamento</th>
-                      <th>Classificacao</th>
+                      <th>Classificação</th>
                     </tr>
                   </thead>
                   <tbody>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -172,11 +172,11 @@ function summarizeWarnings(warnings: string[]): WarningSummary[] {
 function situationLabel(situation: EventSituation | undefined): string {
   switch (situation) {
     case "PRE_INSCRICOES":
-      return "Pre-inscricoes";
+      return "Pré-inscrições";
     case "INSCRICOES_ABERTAS":
-      return "Inscricoes abertas";
+      return "Inscrições abertas";
     case "POS_INSCRICOES_PRE_EVENTO":
-      return "Pos-inscricoes";
+      return "Pós-inscrições";
     case "EM_ANDAMENTO":
       return "Em andamento";
     case "POS_EVENTO":
@@ -385,7 +385,7 @@ export default function AdminPage() {
     } catch (error) {
       setNotice({
         type: "error",
-        text: error instanceof Error ? error.message : "Falha ao carregar configuracao de eficiencia.",
+        text: error instanceof Error ? error.message : "Falha ao carregar configuração de eficiência.",
       });
     }
   }
@@ -405,7 +405,7 @@ export default function AdminPage() {
     ) {
       setNotice({
         type: "error",
-        text: "Pesos invalidos: use inteiros maiores ou iguais a zero.",
+        text: "Pesos inválidos: use inteiros maiores ou iguais a zero.",
       });
       return;
     }
@@ -420,12 +420,12 @@ export default function AdminPage() {
       setEfficiencyConfig(saved);
       setNotice({
         type: "success",
-        text: "Configuracao de eficiencia atualizada com sucesso.",
+        text: "Configuração de eficiência atualizada com sucesso.",
       });
     } catch (error) {
       setNotice({
         type: "error",
-        text: error instanceof Error ? error.message : "Falha ao salvar configuracao de eficiencia.",
+        text: error instanceof Error ? error.message : "Falha ao salvar configuração de eficiência.",
       });
     } finally {
       setEfficiencySaving(false);
@@ -439,7 +439,7 @@ export default function AdminPage() {
     if (!Number.isInteger(parsedCbtmEventId) || parsedCbtmEventId < 1) {
       setNotice({
         type: "error",
-        text: "Informe um ID CBTM valido.",
+        text: "Informe um ID CBTM válido.",
       });
       return;
     }
@@ -466,22 +466,22 @@ export default function AdminPage() {
     if (hasAnyDateInput) {
       const invalidFields: string[] = [];
       if (inicioInscricoes.trim() && !normalizedInicioInscricoes) {
-        invalidFields.push("inicio inscricoes");
+        invalidFields.push("início inscrições");
       }
       if (fimInscricoes.trim() && !normalizedFimInscricoes) {
-        invalidFields.push("fim inscricoes");
+        invalidFields.push("fim inscrições");
       }
       if (inicioRealizacao.trim() && !normalizedInicioRealizacao) {
-        invalidFields.push("inicio realizacao");
+        invalidFields.push("início realização");
       }
       if (fimRealizacao.trim() && !normalizedFimRealizacao) {
-        invalidFields.push("fim realizacao");
+        invalidFields.push("fim realização");
       }
 
       if (invalidFields.length > 0) {
         setNotice({
           type: "error",
-          text: `Datas invalidas (${invalidFields.join(", ")}). Use o formato dd/mm/yyyy.`,
+          text: `Datas inválidas (${invalidFields.join(", ")}). Use o formato dd/mm/yyyy.`,
         });
         return;
       }
@@ -490,22 +490,22 @@ export default function AdminPage() {
     if (!concluidoForm) {
       const missingFields: string[] = [];
       if (!normalizedInicioInscricoes) {
-        missingFields.push("inicio inscricoes");
+        missingFields.push("início inscrições");
       }
       if (!normalizedFimInscricoes) {
-        missingFields.push("fim inscricoes");
+        missingFields.push("fim inscrições");
       }
       if (!normalizedInicioRealizacao) {
-        missingFields.push("inicio realizacao");
+        missingFields.push("início realização");
       }
       if (!normalizedFimRealizacao) {
-        missingFields.push("fim realizacao");
+        missingFields.push("fim realização");
       }
 
       if (missingFields.length > 0) {
         setNotice({
           type: "error",
-          text: `Para evento nao concluido, preencha: ${missingFields.join(", ")} (dd/mm/yyyy).`,
+          text: `Para evento não concluído, preencha: ${missingFields.join(", ")} (dd/mm/yyyy).`,
         });
         return;
       }
@@ -533,7 +533,7 @@ export default function AdminPage() {
         text: editingEventId
           ? `Evento '${saved.nome}' atualizado.`
           : concluidoForm
-            ? `Evento criado como concluido. Scrape completo solicitado para '${saved.nome}'.`
+            ? `Evento criado como concluído. Scrape completo solicitado para '${saved.nome}'.`
             : `Evento criado com sucesso. Scrape solicitado para '${saved.nome}'.`,
       });
 
@@ -554,7 +554,7 @@ export default function AdminPage() {
     }
   }
 
-  async function toggleConcluido(event: EventRow) {
+  async function toggleConcluído(event: EventRow) {
     setNotice(null);
     try {
       if (event.concluido) {
@@ -564,7 +564,7 @@ export default function AdminPage() {
       }
       setNotice({
         type: "success",
-        text: `Evento '${event.nome}' atualizado (${event.concluido ? "reaberto" : "concluido"}).`,
+        text: `Evento '${event.nome}' atualizado (${event.concluido ? "reaberto" : "concluído"}).`,
       });
       await refreshEvents({ refreshSelectedDetails: selectedEventId === event.id });
     } catch (error) {
@@ -583,7 +583,7 @@ export default function AdminPage() {
       return "Etapa 2 (categorias e atletas)";
     }
     if (stage === 3) {
-      return "Etapa 3 (resultados e eliminatorias)";
+      return "Etapa 3 (resultados e eliminatórias)";
     }
     return "Completo";
   }
@@ -601,7 +601,7 @@ export default function AdminPage() {
 
       setNotice({
         type: "success",
-        text: `Atualizacao solicitada para '${event.nome}' [${scrapeStageLabel(stage)}]: ${queuedStatus}.`,
+        text: `Atualização solicitada para '${event.nome}' [${scrapeStageLabel(stage)}]: ${queuedStatus}.`,
       });
       const queuedAt = new Date().toISOString();
       void trackScrapeProgress(event.id, queuedAt);
@@ -613,7 +613,7 @@ export default function AdminPage() {
     } catch (error) {
       setNotice({
         type: "error",
-        text: error instanceof Error ? error.message : "Falha ao enfileirar atualizacao.",
+        text: error instanceof Error ? error.message : "Falha ao enfileirar atualização.",
       });
     } finally {
       setBusyScrapeEventId(null);
@@ -745,7 +745,7 @@ export default function AdminPage() {
       ) : null}
 
       <section className="card grid admin-card">
-        <h2>Configuracao de Eficiencia</h2>
+        <h2>Configuração de Eficiência</h2>
         <div className="row admin-form-row" style={{ flexWrap: "wrap" }}>
           <label className="admin-field" style={{ display: "grid" }}>
             <span>Peso Ouro</span>
@@ -800,7 +800,7 @@ export default function AdminPage() {
           <input className="admin-input" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome do evento" />
           <input className="admin-input admin-input-id" value={cbtmEventId} onChange={(e) => setCbtmEventId(e.target.value)} placeholder="ID CBTM" />
           <select className="admin-input admin-input-level" value={nivel} onChange={(e) => setNivel((e.target.value as EventLevel) || "")}>
-            <option value="">Nivel (opcional)</option>
+            <option value="">Nível (opcional)</option>
             {EVENT_LEVELS.map((item) => (
               <option key={item} value={item}>
                 {item}
@@ -813,13 +813,13 @@ export default function AdminPage() {
               checked={concluidoForm}
               onChange={(event) => setConcluidoForm(event.target.checked)}
             />
-            <span>Evento concluido</span>
+            <span>Evento concluído</span>
           </label>
         </div>
 
         <div className="row admin-form-row" style={{ flexWrap: "wrap" }}>
           <label className="admin-field" style={{ display: "grid" }}>
-            <span>Inicio inscricoes</span>
+            <span>Início inscrições</span>
             <input
               className="admin-input"
               type="text"
@@ -831,7 +831,7 @@ export default function AdminPage() {
             />
           </label>
           <label className="admin-field" style={{ display: "grid" }}>
-            <span>Fim inscricoes</span>
+            <span>Fim inscrições</span>
             <input
               className="admin-input"
               type="text"
@@ -843,7 +843,7 @@ export default function AdminPage() {
             />
           </label>
           <label className="admin-field" style={{ display: "grid" }}>
-            <span>Inicio realizacao</span>
+            <span>Início realização</span>
             <input
               className="admin-input"
               type="text"
@@ -855,7 +855,7 @@ export default function AdminPage() {
             />
           </label>
           <label className="admin-field" style={{ display: "grid" }}>
-            <span>Fim realizacao</span>
+            <span>Fim realização</span>
             <input
               className="admin-input"
               type="text"
@@ -869,9 +869,9 @@ export default function AdminPage() {
         </div>
 
         {concluidoForm ? (
-          <p style={{ margin: 0 }}>Evento concluido: datas sao opcionais e o scrape sera forcado completo.</p>
+          <p style={{ margin: 0 }}>Evento concluído: datas são opcionais e o scrape será forçado completo.</p>
         ) : (
-          <p style={{ margin: 0 }}>Evento nao concluido: preencha todas as datas no formato dd/mm/yyyy.</p>
+          <p style={{ margin: 0 }}>Evento não concluído: preencha todas as datas no formato dd/mm/yyyy.</p>
         )}
 
         <div className="row admin-action-row">
@@ -879,12 +879,12 @@ export default function AdminPage() {
             {savingEvent
               ? "Salvando..."
               : editingEventId
-                ? "Salvar alteracoes"
+                ? "Salvar alterações"
                 : "Criar e iniciar scrape"}
           </button>
           {editingEventId ? (
             <button className="secondary admin-btn-secondary" onClick={resetEventForm}>
-              Cancelar edicao
+              Cancelar edição
             </button>
           ) : null}
         </div>
@@ -901,14 +901,14 @@ export default function AdminPage() {
               <th>Evento CBTM</th>
               <th>Nome</th>
               <th>Nivel</th>
-              <th>Inscricoes</th>
-              <th>Realizacao</th>
-              <th>Situacao</th>
+              <th>Inscrições</th>
+              <th>Realização</th>
+              <th>Situação</th>
               <th>Status</th>
               <th>Ultimo scrape</th>
               <th>Contagens</th>
               <th>Andamento</th>
-              <th>Acoes</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -931,7 +931,7 @@ export default function AdminPage() {
                   ) : null}
                 </td>
                 <td>
-                  <span className="pill">{event.concluido ? "Concluido" : "Ativo"}</span>
+                  <span className="pill">{event.concluido ? "Concluído" : "Ativo"}</span>
                 </td>
                 <td>{event.lastScrapeAt ? formatDateTimeDisplay(event.lastScrapeAt) : "-"}</td>
                 <td>
@@ -991,24 +991,24 @@ export default function AdminPage() {
                       className="admin-btn-secondary"
                       onClick={() => scrapeNow(event, 2)}
                       disabled={busyScrapeEventId === event.id}
-                      title="Etapa 2: categorias e atletas (inscricoes)"
+                      title="Etapa 2: categorias e atletas (inscrições)"
                     >
                       {busyScrapeEventId === event.id && busyScrapeStage === 2
                         ? "Enfileirando..."
-                        : "Etapa 2: inscricoes"}
+                        : "Etapa 2: inscrições"}
                     </button>
                     <button
                       className="admin-btn-secondary"
                       onClick={() => scrapeNow(event, 3)}
                       disabled={busyScrapeEventId === event.id}
-                      title="Etapa 3: resultados e eliminatorias"
+                      title="Etapa 3: resultados e eliminatórias"
                     >
                       {busyScrapeEventId === event.id && busyScrapeStage === 3
                         ? "Enfileirando..."
                         : "Etapa 3: resultados"}
                     </button>
                   </div>
-                  <button className="secondary admin-btn-secondary" onClick={() => toggleConcluido(event)}>
+                  <button className="secondary admin-btn-secondary" onClick={() => toggleConcluído(event)}>
                     {event.concluido ? "Reabrir" : "Concluir"}
                   </button>
                   <button className="secondary admin-btn-secondary" onClick={() => deleteEvent(event)}>
@@ -1026,7 +1026,7 @@ export default function AdminPage() {
         <h2>Scrape runs {selectedEvent ? `- ${selectedEvent.nome}` : ""}</h2>
         {selectedEvent ? (
           <p style={{ marginTop: 0 }}>
-            Warnings sao alertas nao fatais gerados durante captura/parser/upsert. Eles indicam
+            Warnings são alertas não fatais gerados durante captura/parser/upsert. Eles indicam
             inconsistencias ou quedas de qualidade sem interromper o scrape.
           </p>
         ) : (
@@ -1070,7 +1070,7 @@ export default function AdminPage() {
           <div style={{ marginTop: 16 }}>
             <h3 style={{ marginBottom: 8 }}>Warnings do run #{selectedRun.id}</h3>
             {selectedRunWarnings.length === 0 ? (
-              <p style={{ margin: 0 }}>Sem warnings nesse run.</p>
+              <p style={{ margin: 0 }}>Sem warnings neste run.</p>
             ) : (
               <>
                 <p style={{ margin: "0 0 8px 0" }}>
@@ -1177,3 +1177,6 @@ export default function AdminPage() {
     </main>
   );
 }
+
+
+

@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiGetEvents, type UserEventRow } from "../../lib/user-api";
 import { Card } from "../../components/ui/Card";
-import { Hero } from "../../components/ui/Hero";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { EventCard } from "../../components/ui/EventCard";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { UserShell } from "../../components/user/UserShell";
@@ -17,9 +17,9 @@ function formatDate(value: string | null): string {
 }
 
 function eventStatusLabel(status: EventRow["userStatus"]): string {
-  if (status === "INSCRICOES_ABERTAS") return "Inscricoes abertas";
-  if (status === "INSCRICOES_ENCERRADAS") return "Inscricoes encerradas";
-  return "Concluido";
+  if (status === "INSCRICOES_ABERTAS") return "Inscrições abertas";
+  if (status === "INSCRICOES_ENCERRADAS") return "Inscrições encerradas";
+  return "Concluído";
 }
 
 function eventStatusTone(status: EventRow["userStatus"]): "open" | "closed" | "done" {
@@ -58,7 +58,7 @@ export default function EventsHubPage() {
   return (
     <UserShell>
       <main className="container grid user-page">
-        <Hero title="Eventos" subtitle="Calendário e acompanhamento" />
+        <PageHeader title="Eventos" subtitle="Calendário e acompanhamento" compact className="events-page-header" />
 
         <Card className="grid" variant="event">
           {loading ? (
@@ -68,7 +68,7 @@ export default function EventsHubPage() {
               <Skeleton className="event-skeleton" height="146px" />
             </div>
           ) : (
-            <div className="event-card-grid">
+            <div className="event-card-grid events-page-grid">
               {sortedEvents.map((event) => (
                 <EventCard
                   key={event.id}
@@ -92,3 +92,4 @@ export default function EventsHubPage() {
     </UserShell>
   );
 }
+
