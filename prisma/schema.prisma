@@ -73,8 +73,26 @@ model Event {
   athleteMatchConflicts AthleteMatchConflict[]
   syncState     EventSyncState?
   syncRuns      EventSyncRun[]
+  mergeAsPrimary EventMerge[] @relation("MergePrimaryEvent")
+  mergeAsSecondary EventMerge[] @relation("MergeSecondaryEvent")
 
   @@map("events")
+}
+
+model EventMerge {
+  id               Int      @id @default(autoincrement())
+  primaryEventId   Int      @map("primary_event_id")
+  secondaryEventId Int      @unique @map("secondary_event_id")
+  categorySuffix   String   @default(" -X") @map("category_suffix")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  primaryEvent   Event @relation("MergePrimaryEvent", fields: [primaryEventId], references: [id], onDelete: Cascade)
+  secondaryEvent Event @relation("MergeSecondaryEvent", fields: [secondaryEventId], references: [id], onDelete: Cascade)
+
+  @@unique([primaryEventId, secondaryEventId])
+  @@index([primaryEventId])
+  @@map("event_merges")
 }
 
 model Club {

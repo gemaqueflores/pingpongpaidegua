@@ -4,6 +4,7 @@ import { QueueService } from "../common/queue.service";
 import { computeEventSituation, getEventSituationTransition, normalizeText } from "@cbtm/shared";
 import { CreateAdminEventDto } from "./dto/create-admin-event.dto";
 import { UpdateAdminEventDto } from "./dto/update-admin-event.dto";
+import { CreateEventMergeDto } from "./dto/create-event-merge.dto";
 import { RawCaptureRetentionService } from "./raw-capture-retention.service";
 
 type DateBoundary = "start" | "end";
@@ -121,6 +122,96 @@ export class AdminEventsService {
         pesoBronze: input.pesoBronze,
       },
     });
+  }
+
+  async listEventMerges() {
+    return this.prisma.eventMerge.findMany({
+      orderBy: [{ primaryEventId: "asc" }, { secondaryEventId: "asc" }],
+      include: {
+        primaryEvent: {
+          select: {
+            id: true,
+            cbtmEventId: true,
+            nome: true,
+          },
+        },
+        secondaryEvent: {
+          select: {
+            id: true,
+            cbtmEventId: true,
+            nome: true,
+          },
+        },
+      },
+    });
+  }
+
+  async createEventMerge(input: CreateEventMergeDto) {
+    if (input.primaryEventId === input.secondaryEventId) {
+      throw new BadRequestException("Evento principal e especial devem ser diferentes.");
+    }
+
+    const [primary, secondary] = await Promise.all([
+      this.prisma.event.findUnique({ where: { id: input.primaryEventId }, select: { id: true } }),
+      this.prisma.event.findUnique({ where: { id: input.secondaryEventId }, select: { id: true } }),
+    ]);
+
+    if (!primary) {
+      throw new NotFoundException("Evento principal nao encontrado.");
+    }
+    if (!secondary) {
+      throw new NotFoundException("Evento especial nao encontrado.");
+    }
+
+    const suffix = String(input.categorySuffix ?? " -X").trim() || " -X";
+
+    const linkAsSecondary = await this.prisma.eventMerge.findFirst({
+      where: {
+        primaryEventId: input.secondaryEventId,
+      },
+      select: { id: true },
+    });
+    if (linkAsSecondary) {
+      throw new BadRequestException("Evento especial nao pode ser principal de outro vinculo.");
+    }
+
+    return this.prisma.eventMerge.upsert({
+      where: {
+        secondaryEventId: input.secondaryEventId,
+      },
+      create: {
+        primaryEventId: input.primaryEventId,
+        secondaryEventId: input.secondaryEventId,
+        categorySuffix: suffix,
+      },
+      update: {
+        primaryEventId: input.primaryEventId,
+        categorySuffix: suffix,
+      },
+      include: {
+        primaryEvent: {
+          select: {
+            id: true,
+            cbtmEventId: true,
+            nome: true,
+          },
+        },
+        secondaryEvent: {
+          select: {
+            id: true,
+            cbtmEventId: true,
+            nome: true,
+          },
+        },
+      },
+    });
+  }
+
+  async deleteEventMerge(mergeId: number) {
+    await this.prisma.eventMerge.delete({
+      where: { id: mergeId },
+    });
+    return { success: true };
   }
 
   async updateEvent(id: number, dto: UpdateAdminEventDto) {

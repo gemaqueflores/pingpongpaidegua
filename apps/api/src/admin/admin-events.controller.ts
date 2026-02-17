@@ -19,6 +19,7 @@ import { ResolveAthleteConflictDto } from "./dto/resolve-athlete-conflict.dto";
 import { RawCaptureCleanupDto } from "./dto/raw-capture-cleanup.dto";
 import { ScrapeNowDto } from "./dto/scrape-now.dto";
 import { UpdateEfficiencyConfigDto } from "./dto/update-efficiency-config.dto";
+import { CreateEventMergeDto } from "./dto/create-event-merge.dto";
 
 @Controller("admin/events")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -39,6 +40,21 @@ export class AdminEventsController {
   @Put("efficiency-config")
   async updateEfficiencyConfig(@Body() body: UpdateEfficiencyConfigDto) {
     return this.service.updateEfficiencyConfig(body);
+  }
+
+  @Get("merges")
+  async listEventMerges() {
+    return this.service.listEventMerges();
+  }
+
+  @Post("merges")
+  async createEventMerge(@Body() body: CreateEventMergeDto) {
+    return this.service.createEventMerge(body);
+  }
+
+  @Delete("merges/:mergeId")
+  async deleteEventMerge(@Param("mergeId", ParseIntPipe) mergeId: number) {
+    return this.service.deleteEventMerge(mergeId);
   }
 
   @Post()
