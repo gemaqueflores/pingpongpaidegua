@@ -102,6 +102,7 @@ export default function HomePage() {
   const [visibleAthletes, setVisibleAthletes] = useState(PAGE_SIZE);
   const [eventTypeFilter, setEventTypeFilter] = useState<EventTypeFilter>("ALL");
   const [eventStatusFilter, setEventStatusFilter] = useState<EventStatusFilter>("ALL");
+  const [mobileEventFiltersOpen, setMobileEventFiltersOpen] = useState(false);
   const [athleteSearch, setAthleteSearch] = useState("");
   const letterButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
@@ -221,7 +222,7 @@ export default function HomePage() {
               <strong>{highlightedEvent.nome}</strong> •{" "}
               {`${formatDate(highlightedEvent.dataInicio)} até ${formatDate(highlightedEvent.dataFim)}`}
             </p>
-            <div className="row">
+            <div className="row next-event-actions">
               <button type="button" onClick={() => router.push(`/events/${highlightedEvent.id}`)}>
                 Ver Evento
               </button>
@@ -243,32 +244,44 @@ export default function HomePage() {
             <Badge tone="default">Ordenado por situacao e data</Badge>
           </div>
           <div className="row home-event-filters">
-          <div className="row">
-            <div className="balloon-group" role="group" aria-label="Filtro por tipo">
-              {(["ALL", "ESTADUAL", "COPA", "BRASILEIRAO", "OPEN"] as EventTypeFilter[]).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  className={`balloon-button ${eventTypeFilter === type ? "active" : ""}`}
-                  onClick={() => setEventTypeFilter(type)}
-                >
-                  {type === "ALL" ? "Todos os tipos" : type === "BRASILEIRAO" ? "Brasileirão" : type}
-                </button>
-              ))}
+            <button
+              type="button"
+              className="events-filter-trigger"
+              onClick={() => setMobileEventFiltersOpen((current) => !current)}
+              aria-expanded={mobileEventFiltersOpen}
+              aria-controls="event-filters-panel"
+            >
+              Filtrar eventos
+            </button>
+            <div
+              id="event-filters-panel"
+              className={`home-event-filters-panel ${mobileEventFiltersOpen ? "open" : ""}`}
+            >
+              <div className="balloon-group" role="group" aria-label="Filtro por tipo">
+                {(["ALL", "ESTADUAL", "COPA", "BRASILEIRAO", "OPEN"] as EventTypeFilter[]).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    className={`balloon-button ${eventTypeFilter === type ? "active" : ""}`}
+                    onClick={() => setEventTypeFilter(type)}
+                  >
+                    {type === "ALL" ? "Todos os tipos" : type === "BRASILEIRAO" ? "Brasileirão" : type}
+                  </button>
+                ))}
+              </div>
+              <div className="balloon-group" role="group" aria-label="Filtro por status">
+                {(["ALL", "OPEN", "DONE"] as EventStatusFilter[]).map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    className={`balloon-button ${eventStatusFilter === status ? "active" : ""}`}
+                    onClick={() => setEventStatusFilter(status)}
+                  >
+                    {status === "ALL" ? "Todos os status" : status === "OPEN" ? "Em aberto" : "Concluídos"}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="balloon-group" role="group" aria-label="Filtro por status">
-              {(["ALL", "OPEN", "DONE"] as EventStatusFilter[]).map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  className={`balloon-button ${eventStatusFilter === status ? "active" : ""}`}
-                  onClick={() => setEventStatusFilter(status)}
-                >
-                  {status === "ALL" ? "Todos os status" : status === "OPEN" ? "Em aberto" : "Concluídos"}
-                </button>
-              ))}
-            </div>
-          </div>
           </div>
 
           {loadingEvents ? (
@@ -308,6 +321,7 @@ export default function HomePage() {
             <h2>Clubes</h2>
             <Badge tone="default">Todos os eventos da base</Badge>
           </div>
+          <p className="home-club-medal-legend">🥇 Ouro • 🥈 Prata • 🥉 Bronze • (Total)</p>
 
           {loadingClubs ? (
             <div className="athlete-list-grid">
@@ -326,7 +340,7 @@ export default function HomePage() {
                     <Badge tone="default">
                       {formatClubMedalBadge(club.ouro, club.prata, club.bronze)}
                     </Badge>
-                    <button onClick={() => router.push(`/eficiencia/${club.clubId}`)}>Eficiência</button>
+                    <button className="club-efficiency-button" onClick={() => router.push(`/eficiencia/${club.clubId}`)}>Eficiência</button>
                   </div>
                 </article>
               ))}
@@ -379,7 +393,7 @@ export default function HomePage() {
                 <article key={athlete.athleteKey} className="athlete-list-card">
                   <div>
                     <h3>{athlete.nameDisplay}</h3>
-                    <p className="arena-muted">Nome reduzido: {athlete.nameReduced || "-"}</p>
+                    <p className="arena-muted">{athlete.nameReduced || "-"}</p>
                   </div>
                   <div className="row" style={{ justifyContent: "space-between" }}>
                     <Badge tone="default">Eventos: {String(athlete.totalEvents)}</Badge>

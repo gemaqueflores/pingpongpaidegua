@@ -39,7 +39,7 @@ export function EventCard(props: EventCardProps) {
     >
       <div className="event-card-head">
         <div>
-          <p className="event-id">Evento CBTM #{cbtmEventId}</p>
+          <p className="event-id">CBTM #{cbtmEventId}</p>
           <h3>{name}</h3>
         </div>
         <Badge tone={statusTone}>{statusLabel}</Badge>
