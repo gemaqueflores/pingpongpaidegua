@@ -1,15 +1,14 @@
 ﻿import React from "react";
-import { ShareActions } from "../share/ShareActions";
-import { createShareImageBlob } from "../../lib/share-image";
 import { Card } from "../ui/Card";
-import { StatBlock } from "../ui/StatBlock";
+import { PerformanceBar } from "../ui/PerformanceBar";
 import type { MedalMatrix } from "./MedalMatrixTable";
-import { MedalMatrixTable } from "./MedalMatrixTable";
 
 type AthleteSummaryCardProps = {
   athleteName: string;
   athleteReducedName: string;
   federationText?: string;
+  clubName?: string;
+  nextEventName?: string | null;
   kpis: {
     ratio: string;
     pointsDetail: string;
@@ -20,87 +19,103 @@ type AthleteSummaryCardProps = {
     totalMatches: number;
   };
   medalMatrix: MedalMatrix;
-  share: {
-    athleteKey: string;
-    stateCode?: string | null;
-    visibleColumns: Array<{ key: "estadual" | "copa" | "brasileirao" | "open" | "total"; label: string }>;
-  };
 };
 
 export function AthleteSummaryCard({
   athleteName,
   athleteReducedName,
   federationText,
+  clubName,
+  nextEventName,
   kpis,
   medalMatrix,
-  share,
 }: AthleteSummaryCardProps) {
+  const ratioNumeric = Number.parseFloat(kpis.ratio.replace("%", "").replace(",", "."));
+  const ratioPercent = Number.isFinite(ratioNumeric) ? ratioNumeric : null;
+
+  const totalMatchesSafe = Math.max(kpis.totalMatches, 1);
+  const winsPercent = Math.max(0, Math.min(100, (kpis.wins / totalMatchesSafe) * 100));
+  const lossesPercent = Math.max(0, Math.min(100, (kpis.losses / totalMatchesSafe) * 100));
+
+  const medalBars = [
+    { label: "Ouro", value: medalMatrix.ouro.total, className: "gold" },
+    { label: "Prata", value: medalMatrix.prata.total, className: "silver" },
+    { label: "Bronze", value: medalMatrix.bronze.total, className: "bronze" },
+  ] as const;
+  const maxMedal = Math.max(...medalBars.map((item) => item.value), 1);
+
   return (
     <Card className="grid athlete-summary-card" variant="athlete">
-      <div className="athlete-summary-head">
-        <div>
-          <h2>{athleteName}</h2>
-          {federationText ? <p className="arena-muted">UF/Região: <strong>{federationText}</strong></p> : null}
-          <p className="arena-muted">Nome reduzido: <strong>{athleteReducedName || "-"}</strong></p>
+      <div>
+        <h2>{athleteName}</h2>
+        <p className="arena-muted" style={{ margin: "2px 0" }}>
+          <strong>{athleteReducedName || "-"}</strong>
+        </p>
+        <p className="arena-muted" style={{ margin: "2px 0" }}>
+          <strong>{clubName ?? "-"}</strong>
+        </p>
+        {federationText ? (
+          <p className="arena-muted" style={{ margin: "2px 0" }}>
+            <strong>{federationText}</strong>
+          </p>
+        ) : null}
+      </div>
+
+      <div className="career-summary-bars">
+        <div className="career-summary-bar-block">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <strong>Aproveitamento da carreira</strong>
+            <strong>{kpis.ratio}</strong>
+          </div>
+          <PerformanceBar percent={ratioPercent} />
+          <p className="arena-muted" style={{ margin: 0 }}>{kpis.pointsDetail} pontos</p>
         </div>
-        <div className="athlete-summary-share">
-          <ShareActions
-            inline
-            iconOnly
-            shareText={`Confira a carreira de ${athleteReducedName || athleteName}`}
-            fileName={`carreira-${share.athleteKey}.png`}
-            buildImage={() =>
-              createShareImageBlob({
-                title: athleteName,
-                subtitle: "Tênis de Mesa / Table Tennis",
-                subtitleSecondary: "Carreira",
-                lines: [],
-                metrics: [
-                  { label: "UF", value: share.stateCode ?? "-" },
-                  { label: "Pontos disputados", value: kpis.pointsDetail.split("/")[1] ?? "0" },
-                  { label: "Pontos conquistados", value: kpis.pointsDetail.split("/")[0] ?? "0" },
-                  { label: "Eficiência", value: kpis.ratio },
-                ],
-                medalTable: {
-                  title: "",
-                  columns: share.visibleColumns.map((column) => ({ key: column.key, label: column.label })),
-                  rows: [
-                    {
-                      medalType: "ouro",
-                      label: "Ouro",
-                      values: share.visibleColumns.map((column) => medalMatrix.ouro[column.key]),
-                    },
-                    {
-                      medalType: "prata",
-                      label: "Prata",
-                      values: share.visibleColumns.map((column) => medalMatrix.prata[column.key]),
-                    },
-                    {
-                      medalType: "bronze",
-                      label: "Bronze",
-                      values: share.visibleColumns.map((column) => medalMatrix.bronze[column.key]),
-                    },
-                  ],
-                },
-                footer: "Fonte: PingPong Paid'egua",
-              })
-            }
-          />
+
+        <div className="career-summary-bar-block">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <strong>Vitórias / Derrotas</strong>
+            <strong>{kpis.wins}/{kpis.losses}</strong>
+          </div>
+          <div className="career-wl-track" aria-label="Proporção de vitórias e derrotas">
+            <div className="career-wl-fill-win" style={{ width: `${winsPercent}%` }} />
+            <div className="career-wl-fill-loss" style={{ width: `${lossesPercent}%` }} />
+          </div>
+          <p className="arena-muted" style={{ margin: 0 }}>Total de confrontos: {kpis.totalMatches}</p>
         </div>
       </div>
 
-      <div className="career-hero-stats-scroll">
-        <div className="career-hero-stats">
-          <StatBlock label="Aproveitamento" value={kpis.ratio} hint={`${kpis.pointsDetail} pontos`} />
-          <StatBlock label="Vitórias" value={String(kpis.wins)} tone="win" />
-          <StatBlock label="Derrotas" value={String(kpis.losses)} tone="loss" />
-          <StatBlock label="Últimos 5" value={kpis.recent || "-"} />
-          <StatBlock label="Eventos" value={String(kpis.totalEvents)} />
-          <StatBlock label="Jogos" value={String(kpis.totalMatches)} />
-        </div>
+      <div className="career-kpi-pair">
+        <article className="career-kpi-card">
+          <small>Últimos 5</small>
+          <strong>{kpis.recent || "-"}</strong>
+          <span className="arena-muted">V = vitória | D = derrota</span>
+        </article>
+        <article className="career-kpi-card">
+          <small>Total de competições</small>
+          <strong>{kpis.totalEvents}</strong>
+        </article>
       </div>
 
-      <MedalMatrixTable matrix={medalMatrix} />
+      <div className="career-medal-bars">
+        {medalBars.map((item) => {
+          const widthPercent = Math.round((item.value / maxMedal) * 100);
+          return (
+            <div key={item.label} className="career-medal-bar-row">
+              <span className="career-medal-bar-label">{item.label}</span>
+              <div className="career-medal-bar-track">
+                <div className={`career-medal-bar-fill ${item.className}`} style={{ width: `${Math.max(widthPercent, item.value > 0 ? 6 : 0)}%` }} />
+              </div>
+              <strong>{item.value}</strong>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="row" style={{ justifyContent: "flex-start" }}>
+        <span className="ui-badge ui-badge-default">Próximo evento: {nextEventName ?? "-"}</span>
+      </div>
     </Card>
   );
 }
+
+

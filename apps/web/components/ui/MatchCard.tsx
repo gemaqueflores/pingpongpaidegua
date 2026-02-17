@@ -15,15 +15,9 @@ type MatchCardProps = {
 };
 
 function toneLabel(tone: MatchTone): string {
-  if (tone === "win") return "Vitoria";
+  if (tone === "win") return "Vitória";
   if (tone === "lose") return "Derrota";
-  return "Indefinido";
-}
-
-function toneIcon(tone: MatchTone): string {
-  if (tone === "win") return "W";
-  if (tone === "lose") return "L";
-  return "-";
+  return "Sem resultado";
 }
 
 export function MatchCard({
@@ -43,15 +37,15 @@ export function MatchCard({
     >
       <div className="match-card-head">
         <span className={`match-chip match-chip-${tone}`}>
-          {toneIcon(tone)} {toneLabel(tone)}
+          {toneLabel(tone)}
         </span>
         <strong>{categoryName}</strong>
       </div>
-      <p className="match-card-meta">{phase} | {round}</p>
+      <p className="match-card-meta">{round && round !== "-" ? `${phase} | ${round}` : phase}</p>
       <p className="match-card-meta">{datetime}</p>
       <p className="match-card-vs">{confrontation}</p>
+      <p className="match-card-result">Resultado: {finalLine}</p>
       <p className="match-card-sets">Sets: {setsLine}</p>
-      <p className="match-card-final">Final: {finalLine}</p>
     </article>
   );
 }

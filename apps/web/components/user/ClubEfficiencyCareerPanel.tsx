@@ -26,27 +26,69 @@ export function ClubEfficiencyCareerPanel(props: {
   onToggleEvent: (eventId: number) => void;
 }) {
   const { data, expandedEvents, onToggleEvent } = props;
+  const medalBars = [
+    { medal: "🥇", label: "Ouro", value: data.summary.medalhasTotais.ouro, className: "gold" },
+    { medal: "🥈", label: "Prata", value: data.summary.medalhasTotais.prata, className: "silver" },
+    { medal: "🥉", label: "Bronze", value: data.summary.medalhasTotais.bronze, className: "bronze" },
+  ] as const;
+  const maxMedalValue = Math.max(...medalBars.map((item) => item.value), 1);
 
   return (
     <>
-      <Card className="grid" variant="stat">
+      <Card className="grid club-efficiency-section" variant="stat">
+        <div className="club-hero-stats-grid" aria-label="Resumo estatístico do clube">
+          <div className="club-hero-stat">
+            <span className="club-hero-stat-label">Eventos computados</span>
+            <strong className="club-hero-stat-value">{formatNumber(data.summary.nEventos)}</strong>
+          </div>
+          <div className="club-hero-stat">
+            <span className="club-hero-stat-label">Total de medalhas</span>
+            <strong className="club-hero-stat-value">{formatNumber(data.summary.medalhasTotais.total)}</strong>
+          </div>
+          <div className="club-hero-stat">
+            <span className="club-hero-stat-label">Atletas no último evento</span>
+            <strong className="club-hero-stat-value">{formatNumber(data.summary.nAtletasUltimoEvento)}</strong>
+          </div>
+          <div className="club-hero-stat">
+            <span className="club-hero-stat-label">Atletas no próximo evento</span>
+            <strong className="club-hero-stat-value">{formatNumber(data.summary.nAtletasProximoEvento)}</strong>
+          </div>
+        </div>
+
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-          <Badge tone="default">Eventos computados: {formatNumber(data.summary.nEventos)}</Badge>
           <Badge tone={data.summary.ultimoEventoNome ? "done" : "default"}>
             Último evento: {data.summary.ultimoEventoNome ?? "-"}
           </Badge>
-          <Badge tone="default">Atletas no último evento: {formatNumber(data.summary.nAtletasUltimoEvento)}</Badge>
           <Badge tone={data.summary.proximoEventoNome ? "open" : "default"}>
             Próximo evento: {data.summary.proximoEventoNome ?? "-"}
           </Badge>
-          <Badge tone="default">Atletas no próximo evento: {formatNumber(data.summary.nAtletasProximoEvento)}</Badge>
           <Badge tone="default">
             {`🥇${formatNumber(data.summary.medalhasTotais.ouro)} 🥈${formatNumber(data.summary.medalhasTotais.prata)} 🥉${formatNumber(data.summary.medalhasTotais.bronze)} (${formatNumber(data.summary.medalhasTotais.total)})`}
           </Badge>
         </div>
+
+        <div className="club-medal-bars" aria-label="Distribuição de medalhas">
+          {medalBars.map((item) => {
+            const widthPercent = Math.round((item.value / maxMedalValue) * 100);
+            return (
+              <div key={item.label} className="club-medal-bar-row">
+                <span className="club-medal-bar-label">
+                  {item.medal} {item.label}
+                </span>
+                <div className="club-medal-bar-track" role="presentation">
+                  <div
+                    className={`club-medal-bar-fill ${item.className}`}
+                    style={{ width: `${Math.max(widthPercent, item.value > 0 ? 8 : 0)}%` }}
+                  />
+                </div>
+                <strong className="club-medal-bar-value">{formatNumber(item.value)}</strong>
+              </div>
+            );
+          })}
+        </div>
       </Card>
 
-      <Card className="grid" variant="event">
+      <Card className="grid club-efficiency-section club-efficiency-section-strong" variant="event">
         <h2 style={{ margin: 0 }}>Histórico por evento</h2>
         <div className="global-mobile-scroll">
           <table className="data-table">
@@ -111,7 +153,7 @@ export function ClubEfficiencyCareerPanel(props: {
         </div>
       </Card>
 
-      <Card className="grid" variant="event">
+      <Card className="grid club-efficiency-section club-efficiency-section-strong" variant="event">
         <h2 style={{ margin: 0 }}>Contribuição por atleta</h2>
         <div className="global-mobile-scroll">
           <table className="data-table">

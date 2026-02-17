@@ -2,9 +2,9 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { apiGetAthleteCareer } from "../../../../lib/user-api";
-import { HeroTitle } from "../../../../components/ui/HeroTitle";
+import { PageHeader } from "../../../../components/ui/PageHeader";
 import { Card } from "../../../../components/ui/Card";
 import { Badge } from "../../../../components/ui/Badge";
 import { MatchCard } from "../../../../components/ui/MatchCard";
@@ -98,12 +98,30 @@ type CareerResponse = {
 
 function formatDate(value: string | null): string {
   if (!value) return "-";
-  return new Date(value).toLocaleDateString("pt-BR");
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "America/Belem",
+  }).format(new Date(value));
 }
 
 function formatDatetime(value: string | null): string {
   if (!value) return "-";
-  return new Date(value).toLocaleString("pt-BR");
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "America/Belem",
+  }).formatToParts(new Date(value));
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "00";
+
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}`;
 }
 
 function formatRatio(ratio: number | null): string {
@@ -217,6 +235,35 @@ function resolveMatchTone(match: CareerMatch): MatchTone {
   return "neutral";
 }
 
+function formatMatchStage(match: CareerMatch): { phase: string; round: string } {
+  const phaseRaw = (match.phase ?? "").trim();
+  const roundRaw = (match.round ?? "").trim();
+  const normalized = `${phaseRaw} ${roundRaw}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+
+  if (normalized.includes("RESULTADOS") || normalized.includes("GRUPO") || normalized.includes("UNICA")) {
+    if (normalized.includes("UNICA")) {
+      return { phase: "Grupo Único", round: "" };
+    }
+
+    const groupFromRound = roundRaw.match(/GRUPO\s*\d+/i)?.[0];
+    if (groupFromRound) {
+      return { phase: groupFromRound.replace(/\s+/g, " ").trim(), round: "" };
+    }
+
+    const groupFromPhase = phaseRaw.match(/GRUPO\s*\d+/i)?.[0];
+    if (groupFromPhase) {
+      return { phase: groupFromPhase.replace(/\s+/g, " ").trim(), round: "" };
+    }
+
+    return { phase: roundRaw || "Grupo", round: "" };
+  }
+
+  return { phase: phaseRaw || "-", round: roundRaw || "-" };
+}
+
 function getClassificationRowClass(position: number | null | undefined): string {
   if (position === 1) return "classification-row-ouro";
   if (position === 2) return "classification-row-prata";
@@ -285,10 +332,18 @@ function computeMedalsByCompetition(events: CareerEvent[], fallback?: CareerResp
 }
 
 export default function AthleteCareerPage() {
+  const router = useRouter();
   const params = useParams<{ athleteKey: string }>();
   const athleteKey = decodeURIComponent(params.athleteKey);
   const [payload, setPayload] = useState<CareerResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [draftDateFrom, setDraftDateFrom] = useState<string>(() => {
+    const now = new Date();
+    const lastYear = new Date(now);
+    lastYear.setFullYear(now.getFullYear() - 1);
+    return toDateInputValue(lastYear);
+  });
+  const [draftDateTo, setDraftDateTo] = useState<string>(() => toDateInputValue(new Date()));
   const [dateFrom, setDateFrom] = useState<string>(() => {
     const now = new Date();
     const lastYear = new Date(now);
@@ -296,12 +351,16 @@ export default function AthleteCareerPage() {
     return toDateInputValue(lastYear);
   });
   const [dateTo, setDateTo] = useState<string>(() => toDateInputValue(new Date()));
+  const [dateRangeError, setDateRangeError] = useState<string | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState<string>("last-year");
   const [visibleEvents, setVisibleEvents] = useState(8);
+  const [expandedEvents, setExpandedEvents] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     setPayload(null);
     setError(null);
     setVisibleEvents(8);
+    setExpandedEvents({});
     void apiGetAthleteCareer(athleteKey)
       .then((data) => setPayload(data as CareerResponse))
       .catch(() => {
@@ -320,7 +379,7 @@ export default function AthleteCareerPage() {
     const tones = matches.map((match) => resolveMatchTone(match));
     const wins = tones.filter((tone) => tone === "win").length;
     const losses = tones.filter((tone) => tone === "lose").length;
-    const recent = tones.slice(0, 5).map((tone) => (tone === "win" ? "W" : tone === "lose" ? "L" : "-"));
+    const recent = tones.slice(0, 5).map((tone) => (tone === "win" ? "V" : tone === "lose" ? "D" : "-"));
 
     return { wins, losses, recent };
   }, [payload]);
@@ -346,6 +405,16 @@ export default function AthleteCareerPage() {
   }, [dateFrom, dateTo, sortedEvents]);
 
   const visibleFilteredEvents = useMemo(() => filteredEvents.slice(0, visibleEvents), [filteredEvents, visibleEvents]);
+  const yearsAvailable = useMemo(() => {
+    const years = new Set<number>();
+    for (const event of sortedEvents) {
+      const ts = getEventLatestMatchTimestamp(event);
+      if (ts > 0) {
+        years.add(new Date(ts).getFullYear());
+      }
+    }
+    return Array.from(years).sort((a, b) => b - a);
+  }, [sortedEvents]);
 
   const medalMatrix = useMemo(() => {
     if (!payload) return emptyMatrix();
@@ -353,22 +422,90 @@ export default function AthleteCareerPage() {
   }, [payload]);
 
   const federationText = payload ? formatAthleteFederation(payload.athlete) : null;
+  const nextEventName = useMemo(() => {
+    if (!payload) return null;
+    const now = Date.now();
+    const upcoming = payload.events
+      .filter((event) => !event.concluido)
+      .filter((event) => toTimestamp(event.dataInicio) >= now)
+      .sort((left, right) => toTimestamp(left.dataInicio) - toTimestamp(right.dataInicio));
+    return upcoming[0]?.nome ?? null;
+  }, [payload]);
 
-  const shareColumns: Array<{ key: "estadual" | "copa" | "brasileirao" | "open" | "total"; label: string }> = [
-    { key: "open", label: "Open" },
-    { key: "estadual", label: "Estadual" },
-    { key: "copa", label: "Copa" },
-    { key: "brasileirao", label: "Brasileirão" },
-    { key: "total", label: "Total" },
-  ];
+  function applyDateFilter() {
+    if (draftDateFrom && draftDateTo && new Date(`${draftDateFrom}T00:00:00`).getTime() > new Date(`${draftDateTo}T23:59:59`).getTime()) {
+      setDateRangeError("Até não pode ser menor que De.");
+      return;
+    }
+    setDateRangeError(null);
+    setDateFrom(draftDateFrom);
+    setDateTo(draftDateTo);
+    setVisibleEvents(8);
+  }
+
+  function applyPreset(preset: string) {
+    if (preset === "all") {
+      setSelectedPreset("all");
+      setDraftDateFrom("");
+      setDraftDateTo("");
+      setDateFrom("");
+      setDateTo("");
+      setDateRangeError(null);
+      setVisibleEvents(8);
+      return;
+    }
+
+    if (preset === "last-year") {
+      const now = new Date();
+      const lastYear = new Date(now);
+      lastYear.setFullYear(now.getFullYear() - 1);
+      const nextFrom = toDateInputValue(lastYear);
+      const nextTo = toDateInputValue(now);
+      setSelectedPreset("last-year");
+      setDraftDateFrom(nextFrom);
+      setDraftDateTo(nextTo);
+      setDateFrom(nextFrom);
+      setDateTo(nextTo);
+      setDateRangeError(null);
+      setVisibleEvents(8);
+      return;
+    }
+
+    const year = Number(preset);
+    if (Number.isFinite(year)) {
+      const nextFrom = `${String(year)}-01-01`;
+      const nextTo = `${String(year)}-12-31`;
+      setSelectedPreset(String(year));
+      setDraftDateFrom(nextFrom);
+      setDraftDateTo(nextTo);
+      setDateFrom(nextFrom);
+      setDateTo(nextTo);
+      setDateRangeError(null);
+      setVisibleEvents(8);
+    }
+  }
 
   return (
     <main className="container grid user-page">
-      <HeroTitle
+      <PageHeader
         title="Carreira"
         subtitle="Tênis de Mesa / Table Tennis"
+        compact
+        className="career-page-header"
         actions={
-          <Link className="event-athlete-details-button" href="/">Voltar para home</Link>
+          <button
+            type="button"
+            className="event-back-button"
+            onClick={() => {
+              if (window.history.length > 1) {
+                router.back();
+              } else {
+                router.push("/atletas");
+              }
+            }}
+          >
+            ← Voltar
+          </button>
         }
       />
 
@@ -386,8 +523,8 @@ export default function AthleteCareerPage() {
           <h2>Carreira</h2>
           <p>{error}</p>
           <div className="row">
-            <button type="button" onClick={() => (window.location.href = "/")}>
-              Voltar para home
+            <button type="button" className="event-back-button" onClick={() => router.push("/atletas")}>
+              ← Voltar
             </button>
           </div>
         </Card>
@@ -400,40 +537,96 @@ export default function AthleteCareerPage() {
               <h2 style={{ marginBottom: 0 }}>Período da carreira</h2>
               <Badge tone="default">Padrão: último 1 ano</Badge>
             </div>
-            <div className="admin-form-row">
+            <div className="balloon-group letter-tab-strip" role="group" aria-label="Presets de período">
+              <button
+                type="button"
+                className={`balloon-button ${selectedPreset === "last-year" ? "active" : ""}`}
+                onClick={() => applyPreset("last-year")}
+              >
+                Último 1 ano
+              </button>
+              {yearsAvailable.map((year) => (
+                <button
+                  key={year}
+                  type="button"
+                  className={`balloon-button ${selectedPreset === String(year) ? "active" : ""}`}
+                  onClick={() => applyPreset(String(year))}
+                >
+                  {year}
+                </button>
+              ))}
+              <button
+                type="button"
+                className={`balloon-button ${selectedPreset === "all" ? "active" : ""}`}
+                onClick={() => applyPreset("all")}
+              >
+                Tudo
+              </button>
+            </div>
+            <div className="admin-form-row career-filter-bar">
               <label className="admin-field">
                 <span>De</span>
-                <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="admin-input" />
+                <input
+                  type="date"
+                  value={draftDateFrom}
+                  onChange={(event) => {
+                    setDraftDateFrom(event.target.value);
+                    setSelectedPreset("custom");
+                  }}
+                  className="admin-input"
+                />
               </label>
               <label className="admin-field">
                 <span>Até</span>
-                <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="admin-input" />
+                <input
+                  type="date"
+                  value={draftDateTo}
+                  onChange={(event) => {
+                    setDraftDateTo(event.target.value);
+                    setSelectedPreset("custom");
+                  }}
+                  className="admin-input"
+                />
               </label>
+              <div className="admin-action-row">
+                <button type="button" onClick={applyDateFilter}>Aplicar</button>
+                <button type="button" className="secondary" onClick={() => applyPreset("last-year")}>Limpar</button>
+              </div>
+            </div>
+            {dateRangeError ? <p className="warn" style={{ margin: 0 }}>{dateRangeError}</p> : null}
+          </Card>
+
+          <Card className="grid" variant="stat">
+            <div className="balloon-group letter-tab-strip" role="navigation" aria-label="Seções da carreira">
+              <a className="balloon-button" href="#resumo" aria-label="Ir para resumo da carreira">
+                Ir para Resumo e Medalhas
+              </a>
+              <a className="balloon-button" href="#eventos" aria-label="Ir para eventos disputados">
+                Ir para Eventos
+              </a>
             </div>
           </Card>
 
-          <AthleteSummaryCard
-            athleteName={payload.athlete.nameDisplay}
-            athleteReducedName={payload.athlete.nameReduced}
-            federationText={federationText ?? undefined}
-            kpis={{
-              ratio: formatRatio(payload.totals.performance.ratio),
-              pointsDetail: `${payload.totals.performance.pointsWon}/${payload.totals.performance.pointsPlayed}`,
-              wins: summaryStats?.wins ?? 0,
-              losses: summaryStats?.losses ?? 0,
-              recent: summaryStats?.recent.join(" ") || "-",
-              totalEvents: payload.totals.events,
-              totalMatches: payload.totals.matches,
-            }}
-            medalMatrix={medalMatrix}
-            share={{
-              athleteKey: payload.athlete.athleteKey,
-              stateCode: payload.athlete.stateCode,
-              visibleColumns: shareColumns,
-            }}
-          />
+          <section id="resumo">
+            <AthleteSummaryCard
+              athleteName={payload.athlete.nameDisplay}
+              athleteReducedName={payload.athlete.nameReduced}
+              federationText={federationText ?? undefined}
+              nextEventName={nextEventName}
+              kpis={{
+                ratio: formatRatio(payload.totals.performance.ratio),
+                pointsDetail: `${payload.totals.performance.pointsWon}/${payload.totals.performance.pointsPlayed}`,
+                wins: summaryStats?.wins ?? 0,
+                losses: summaryStats?.losses ?? 0,
+                recent: summaryStats?.recent.join(" ") || "-",
+                totalEvents: payload.totals.events,
+                totalMatches: payload.totals.matches,
+              }}
+              medalMatrix={medalMatrix}
+            />
+          </section>
 
-          <Card className="grid">
+          <Card className="grid" id="eventos">
             <h2>Eventos disputados</h2>
             {filteredEvents.length === 0 ? <p>Nenhum evento encontrado para o período selecionado.</p> : null}
 
@@ -463,6 +656,7 @@ export default function AthleteCareerPage() {
                     <div className="row">
                       <Badge tone="default">{event.nivel ?? "Evento"}</Badge>
                       <Badge tone={event.concluido ? "done" : "open"}>{event.concluido ? "Concluído" : "Em andamento"}</Badge>
+                      <Badge tone="default">{formatRatio(event.performance.ratio)}</Badge>
                     </div>
                   </div>
 
@@ -496,26 +690,40 @@ export default function AthleteCareerPage() {
                     </table>
                   </div>
 
-                  <details className="career-event-matches" open={eventIndex === 0}>
+                  <details
+                    className="career-event-matches"
+                    open={eventIndex === 0}
+                    onToggle={(evt) => {
+                      const target = evt.currentTarget;
+                      setExpandedEvents((prev) => ({ ...prev, [event.id]: target.open }));
+                    }}
+                  >
                     <summary>Jogos do evento ({sortedMatches.length})</summary>
-                    <div className="match-card-grid">
-                      {sortedMatches.map((match) => {
-                        const tone = resolveMatchTone(match);
-                        return (
-                          <MatchCard
-                            key={match.matchKey}
-                            categoryName={match.category.name}
-                            phase={match.phase}
-                            round={match.round ?? "-"}
-                            datetime={formatDatetime(match.matchDatetime)}
-                            confrontation={`${toReducedName(match.players[0]?.name)} x ${toReducedName(match.players[1]?.name)}`}
-                            setsLine={formatSets(match)}
-                            finalLine={formatFinalSets(match)}
-                            tone={tone}
-                          />
-                        );
-                      })}
-                    </div>
+                    {expandedEvents[event.id] || eventIndex === 0 ? (
+                      sortedMatches.length > 0 ? (
+                        <div className="match-card-grid">
+                          {sortedMatches.map((match) => {
+                            const tone = resolveMatchTone(match);
+                            const stage = formatMatchStage(match);
+                            return (
+                              <MatchCard
+                                key={match.matchKey}
+                                categoryName={match.category.name}
+                                phase={stage.phase}
+                                round={stage.round}
+                                datetime={formatDatetime(match.matchDatetime)}
+                                confrontation={`${toReducedName(match.players[0]?.name)} x ${toReducedName(match.players[1]?.name)}`}
+                                setsLine={formatSets(match)}
+                                finalLine={formatFinalSets(match)}
+                                tone={tone}
+                              />
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="arena-muted">Evento ainda não realizado.</p>
+                      )
+                    ) : null}
                   </details>
                 </div>
               );

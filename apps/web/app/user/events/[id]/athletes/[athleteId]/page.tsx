@@ -7,6 +7,7 @@ import { HeroTitle } from "../../../../../../components/ui/HeroTitle";
 import { Card } from "../../../../../../components/ui/Card";
 import { MatchCard } from "../../../../../../components/ui/MatchCard";
 import { Skeleton } from "../../../../../../components/ui/Skeleton";
+import { PerformanceBar } from "../../../../../../components/ui/PerformanceBar";
 
 type GroupMode = "category" | "schedule";
 
@@ -92,14 +93,32 @@ function formatDayLabel(value: string | null): string {
   if (!value) {
     return "Sem data definida";
   }
-  return new Date(value).toLocaleDateString("pt-BR");
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "America/Belem",
+  }).format(new Date(value));
 }
 
 function formatDatetime(value: string | null): string {
   if (!value) {
     return "-";
   }
-  return new Date(value).toLocaleString("pt-BR");
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "America/Belem",
+  }).formatToParts(new Date(value));
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "00";
+
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}`;
 }
 
 function formatScoreSets(match: SummaryMatch): string | null {
@@ -176,6 +195,37 @@ function resolveMatchTone(match: SummaryMatch): MatchTone {
   return "neutral";
 }
 
+function summarizeSetStats(match: SummaryMatch): { won: number; played: number } {
+  if (match.athleteIndex !== 0 && match.athleteIndex !== 1) return { won: 0, played: 0 };
+
+  if (match.scoreFinal) {
+    const athleteWon = match.athleteIndex === 0 ? match.scoreFinal.setsA : match.scoreFinal.setsB;
+    const opponentWon = match.athleteIndex === 0 ? match.scoreFinal.setsB : match.scoreFinal.setsA;
+    return { won: athleteWon, played: athleteWon + opponentWon };
+  }
+
+  if (match.setsResult) {
+    const athleteWon = match.athleteIndex === 0 ? match.setsResult.p1Sets : match.setsResult.p2Sets;
+    const opponentWon = match.athleteIndex === 0 ? match.setsResult.p2Sets : match.setsResult.p1Sets;
+    return { won: athleteWon, played: athleteWon + opponentWon };
+  }
+
+  const sourceSets =
+    match.scoreSets.length > 0
+      ? match.scoreSets.map((set) => ({ a: set.a, b: set.b }))
+      : match.sets.map((set) => ({ a: set.p1, b: set.p2 }));
+
+  if (sourceSets.length === 0) return { won: 0, played: 0 };
+
+  let won = 0;
+  for (const set of sourceSets) {
+    const athletePoints = match.athleteIndex === 0 ? set.a : set.b;
+    const opponentPoints = match.athleteIndex === 0 ? set.b : set.a;
+    if (athletePoints > opponentPoints) won += 1;
+  }
+  return { won, played: sourceSets.length };
+}
+
 export default function AthleteSummaryPage() {
   const params = useParams<{ id: string; athleteId: string }>();
   const eventId = Number(params.id);
@@ -245,14 +295,48 @@ export default function AthleteSummaryPage() {
       .map((entry) => entry[1]);
   }, [summary, groupMode]);
 
+  const athleteStats = useMemo(() => {
+    if (!summary) {
+      return {
+        totalVitorias: 0,
+        totalConfrontos: 0,
+        setsGanhos: 0,
+        setsDisputados: 0,
+        pontosGanhos: 0,
+        pontosDisputados: 0,
+      };
+    }
+
+    let totalVitorias = 0;
+    let setsGanhos = 0;
+    let setsDisputados = 0;
+
+    for (const match of summary.matches) {
+      const tone = resolveMatchTone(match);
+      if (tone === "win") totalVitorias += 1;
+      const sets = summarizeSetStats(match);
+      setsGanhos += sets.won;
+      setsDisputados += sets.played;
+    }
+
+    return {
+      totalVitorias,
+      totalConfrontos: summary.matches.length,
+      setsGanhos,
+      setsDisputados,
+      pontosGanhos: summary.performance.pointsWon,
+      pontosDisputados: summary.performance.pointsPlayed,
+    };
+  }, [summary]);
+
   return (
     <main className="container grid user-page">
       <HeroTitle
         title="Resumo do Atleta"
         subtitle="Tênis de Mesa / Table Tennis"
         actions={
-          <button type="button" onClick={() => (window.location.href = `/events/${eventId}`)}>
-            Voltar para evento
+          <button type="button" className="event-back-button" onClick={() => (window.location.href = `/events/${eventId}`)}>
+            ← Voltar
           </button>
         }
       />
@@ -284,6 +368,15 @@ export default function AthleteSummaryPage() {
               Aproveitamento por pontos: <strong>{formatRatio(summary.performance.ratio)}</strong> (
               {summary.performance.pointsWon}/{summary.performance.pointsPlayed})
             </p>
+            <PerformanceBar percent={summary.performance.ratio === null ? null : summary.performance.ratio * 100} />
+            <div className="event-athlete-stats-grid">
+              <span><small>Vitórias</small><strong>{athleteStats.totalVitorias}</strong></span>
+              <span><small>Confrontos</small><strong>{athleteStats.totalConfrontos}</strong></span>
+              <span><small>Sets ganhos</small><strong>{athleteStats.setsGanhos}</strong></span>
+              <span><small>Sets disputados</small><strong>{athleteStats.setsDisputados}</strong></span>
+              <span><small>Pontos ganhos</small><strong>{athleteStats.pontosGanhos}</strong></span>
+              <span><small>Pontos disputados</small><strong>{athleteStats.pontosDisputados}</strong></span>
+            </div>
             <div>
               <strong>Aproveitamento por categoria</strong>
               {summary.performanceByCategory && summary.performanceByCategory.length > 0 ? (
@@ -312,7 +405,9 @@ export default function AthleteSummaryPage() {
               )}
             </div>
             <div>
-              <a href={`/career/${encodeURIComponent(summary.athlete.athleteKey)}`}>Abrir carreira</a>
+              <a className="event-athlete-secondary-link" href={`/career/${encodeURIComponent(summary.athlete.athleteKey)}`}>
+                Abrir carreira
+              </a>
             </div>
           </Card>
 

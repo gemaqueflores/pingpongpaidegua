@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -43,7 +43,11 @@ export default function EficienciaClubeCanonicalPage() {
         <Hero
           title={(data?.club.name ?? "Eficiência").toUpperCase()}
           subtitle="Eficiência"
-          actions={<button onClick={() => router.push("/")}>Voltar para home</button>}
+          actions={
+            <button type="button" className="event-back-button" onClick={() => router.push("/eficiencia")}>
+              ← Voltar
+            </button>
+          }
         />
 
         {loading ? (
@@ -76,3 +80,4 @@ export default function EficienciaClubeCanonicalPage() {
     </UserShell>
   );
 }
+

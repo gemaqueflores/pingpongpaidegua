@@ -41,7 +41,11 @@ export default function ClubEfficiencyCareerPage() {
       <Hero
         title={(data?.club.name ?? "Eficiência").toUpperCase()}
         subtitle="Eficiência"
-        actions={<button onClick={() => router.push("/")}>Voltar para home</button>}
+        actions={
+          <button type="button" className="event-back-button" onClick={() => router.push("/eficiencia")}>
+            ← Voltar
+          </button>
+        }
       />
 
       {loading ? (

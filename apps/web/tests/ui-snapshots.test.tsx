@@ -91,6 +91,7 @@ test("AthleteSummaryCard snapshot", () => {
       athleteName="ATLETA EXEMPLO"
       athleteReducedName="ATLETA EXEMPLO"
       federationText="PA (Pará) - Norte"
+      nextEventName="1TMB26"
       kpis={{
         ratio: "61.22%",
         pointsDetail: "412/673",
@@ -105,22 +106,11 @@ test("AthleteSummaryCard snapshot", () => {
         prata: { estadual: 1, copa: 1, brasileirao: 0, open: 0, total: 2 },
         bronze: { estadual: 3, copa: 1, brasileirao: 1, open: 2, total: 7 },
       }}
-      share={{
-        athleteKey: "ATLETA-EXEMPLO",
-        stateCode: "PA",
-        visibleColumns: [
-          { key: "open", label: "Open" },
-          { key: "estadual", label: "Estadual" },
-          { key: "copa", label: "Copa" },
-          { key: "brasileirao", label: "Brasileirão" },
-          { key: "total", label: "Total" },
-        ],
-      }}
     />,
   );
   assert.match(html, /athlete-summary-card/);
   assert.match(html, /Aproveitamento/);
-  assert.match(html, /Medalhas/);
+  assert.match(html, /Próximo evento/);
 });
 
 test("Template export contract", async () => {
@@ -195,7 +185,7 @@ test("ClubEfficiencyCareerPanel snapshot", () => {
     />,
   );
 
-  assert.match(html, /Resumo rápido de eficiência/);
+  assert.match(html, /Eventos computados/);
   assert.match(html, /Próximo evento/);
   assert.match(html, /Histórico por evento/);
   assert.match(html, /Contribuição por atleta/);

@@ -81,7 +81,9 @@ export default function ReportarProblemaPage() {
             <button type="submit" disabled={sending}>
               {sending ? "Enviando..." : "Enviar problema"}
             </button>
-            <button type="button" className="secondary" onClick={() => (window.location.href = "/")}>Voltar</button>
+            <button type="button" className="event-back-button" onClick={() => (window.location.href = "/")}>
+              ← Voltar
+            </button>
           </div>
 
           {message ? <p className="support-success">{message}</p> : null}

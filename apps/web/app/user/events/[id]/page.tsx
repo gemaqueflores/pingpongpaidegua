@@ -17,6 +17,7 @@ import { Hero } from "../../../../components/ui/Hero";
 import { Card } from "../../../../components/ui/Card";
 import { Badge } from "../../../../components/ui/Badge";
 import { Skeleton } from "../../../../components/ui/Skeleton";
+import { EventStatusTimeline } from "../../../../components/ui/EventStatusTimeline";
 
 type EventRow = UserEventRow;
 type EventTab = "grupos" | "clubes" | "atletas" | "eficiencia";
@@ -36,6 +37,8 @@ type AthleteRow = {
   region?: string | null;
   club?: { name: string } | null;
 };
+const ATHLETES_PAGE_SIZE = 30;
+type EventPhase = "INSCRICOES_ABERTAS" | "INSCRICOES_ENCERRADAS" | "EM_DISPUTA" | "CONCLUIDO";
 
 function formatAthleteFederation(athlete: AthleteRow): string {
   if (!athlete.stateCode || !athlete.region) {
@@ -46,12 +49,30 @@ function formatAthleteFederation(athlete: AthleteRow): string {
 
 function formatDate(value: string | null): string {
   if (!value) return "-";
-  return new Date(value).toLocaleDateString("pt-BR");
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "America/Belem",
+  }).format(new Date(value));
 }
 
 function formatDateTime(value: string | null): string {
   if (!value) return "-";
-  return new Date(value).toLocaleString("pt-BR");
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "America/Belem",
+  }).formatToParts(new Date(value));
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "00";
+
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}`;
 }
 
 function inferEventType(name: string): "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN" {
@@ -104,6 +125,23 @@ function resolveEventBanner(event: EventRow | null): { message: string; tone: "i
   return null;
 }
 
+function resolveEventPhase(event: EventRow | null): EventPhase {
+  if (!event) return "INSCRICOES_ABERTAS";
+  if (event.concluido || event.situacaoComputada === "POS_EVENTO") return "CONCLUIDO";
+  if (event.situacaoComputada === "EM_ANDAMENTO") return "EM_DISPUTA";
+  if (event.situacaoComputada === "INSCRICOES_ABERTAS" || event.situacaoComputada === "PRE_INSCRICOES") {
+    return "INSCRICOES_ABERTAS";
+  }
+  return "INSCRICOES_ENCERRADAS";
+}
+
+function resolvePhaseHelpText(phase: EventPhase): string {
+  if (phase === "INSCRICOES_ABERTAS") return "As inscrições estão abertas. O simulador usa a base mais recente de inscritos.";
+  if (phase === "INSCRICOES_ENCERRADAS") return "Inscrições finalizadas. Use o simulador para projetar grupos antes da divulgação oficial.";
+  if (phase === "EM_DISPUTA") return "Evento em disputa. Resultados podem mudar ao longo do dia.";
+  return "Evento concluído. Ranking oficial consolidado.";
+}
+
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
   const eventId = Number(params.id);
@@ -121,6 +159,7 @@ export default function EventDetailPage() {
 
   const [athleteSearch, setAthleteSearch] = useState("");
   const [athletes, setAthletes] = useState<AthleteRow[]>([]);
+  const [athletesVisible, setAthletesVisible] = useState(ATHLETES_PAGE_SIZE);
   const [athletesLoading, setAthletesLoading] = useState(false);
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [efficiencyData, setEfficiencyData] = useState<EventEfficiencyResponse | null>(null);
@@ -166,6 +205,10 @@ export default function EventDetailPage() {
     }, 250);
     return () => clearTimeout(timeout);
   }, [eventId, athleteSearch]);
+
+  useEffect(() => {
+    setAthletesVisible(ATHLETES_PAGE_SIZE);
+  }, [athleteSearch]);
 
   useEffect(() => {
     setClubsLoading(true);
@@ -256,6 +299,17 @@ export default function EventDetailPage() {
     { id: "eficiencia", label: "Eficiência do evento" },
   ];
   const eventBanner = resolveEventBanner(event);
+  const hasConcludedPodium = Boolean(event?.concluido);
+  const eventPhase = resolveEventPhase(event);
+  const phaseHelpText = resolvePhaseHelpText(eventPhase);
+  const sortedAthletes = useMemo(() => {
+    return [...athletes].sort((left, right) =>
+      (left.nameDisplay ?? left.name ?? "").localeCompare(right.nameDisplay ?? right.name ?? "", "pt-BR", {
+        sensitivity: "base",
+      }),
+    );
+  }, [athletes]);
+  const visibleAthletes = useMemo(() => sortedAthletes.slice(0, athletesVisible), [sortedAthletes, athletesVisible]);
 
   const rankedEfficiencyRows = useMemo(() => {
     const rows = [...(efficiencyData?.ranking ?? [])];
@@ -295,6 +349,12 @@ export default function EventDetailPage() {
     return "";
   }
 
+  function podiumLabel(index: number): string {
+    if (index === 0) return "🥇 1º lugar";
+    if (index === 1) return "🥈 2º lugar";
+    return "🥉 3º lugar";
+  }
+
   return (
     <main className="container grid user-page">
       <Hero
@@ -316,8 +376,8 @@ export default function EventDetailPage() {
           <h2>Evento não encontrado</h2>
           <p>Não foi possível localizar os dados deste evento na base.</p>
           <div className="row">
-            <Link className="event-athlete-details-button" href="/events">
-              Voltar para eventos
+            <Link className="event-back-button" href="/events">
+              ← Voltar
             </Link>
           </div>
         </Card>
@@ -349,7 +409,7 @@ export default function EventDetailPage() {
             <span><small>Status</small><strong>{statusLabel}</strong></span>
           </div>
           <div className="event-tabs-shell">
-            <div className="balloon-group letter-tab-strip" role="tablist" aria-label="Seções do evento">
+            <div className="balloon-group letter-tab-strip letter-tab-sticky" role="tablist" aria-label="Seções do evento">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -364,9 +424,11 @@ export default function EventDetailPage() {
               ))}
             </div>
           </div>
+          <EventStatusTimeline phase={eventPhase} />
           {eventBanner ? (
             <div className={`event-state-banner event-state-banner-${eventBanner.tone}`} role="status" aria-live="polite">
-              {eventBanner.message}
+              {eventBanner.tone === "success" ? <span className="event-state-banner-icon">✅</span> : null}
+              <span>{eventBanner.message}</span>
             </div>
           ) : null}
         </Card>
@@ -375,6 +437,7 @@ export default function EventDetailPage() {
       {activeTab === "grupos" ? (
         <Card className="grid event-tab-panel">
           <h2>Grupos</h2>
+          <p className="arena-muted" style={{ marginTop: 0 }}>{phaseHelpText}</p>
           {event?.groupsDefined ? <p>Grupos oficiais já divulgados para este evento.</p> : null}
           <div className="row">
             <Link
@@ -395,6 +458,9 @@ export default function EventDetailPage() {
                   : "Simular Grupos"}
             </Link>
           </div>
+          {!event?.concluido ? (
+            <p className="arena-muted">A simulação considera o cenário atual de atletas confirmados e pré-inscritos.</p>
+          ) : null}
           {!event?.groupsDefined && !event?.groupSimulationEligible ? (
             <p className="arena-muted">Simulador indisponível para o momento atual do evento.</p>
           ) : null}
@@ -472,15 +538,22 @@ export default function EventDetailPage() {
 
       {activeTab === "atletas" ? (
         <Card className="grid event-tab-panel">
-          <h2>Atletas do evento</h2>
-          <input
-            className="home-athletes-search"
-            value={athleteSearch}
-            onChange={(event) => setAthleteSearch(event.target.value)}
-            placeholder="Buscar atleta"
-            autoCapitalize="none"
-            autoCorrect="off"
-          />
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <h2>Atletas do evento</h2>
+            <Badge tone="default">Filtrados: {sortedAthletes.length}</Badge>
+          </div>
+          <div className="search-input-wrap atletas-search-sticky">
+            <span className="search-input-icon" aria-hidden="true">🔎</span>
+            <input
+              className="home-athletes-search search-input-with-icon"
+              value={athleteSearch}
+              onChange={(event) => setAthleteSearch(event.target.value)}
+              placeholder="Buscar atleta por nome"
+              aria-label="Buscar atleta por nome"
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </div>
           {athletesLoading ? (
             <div className="grid">
               <Skeleton height="52px" />
@@ -500,7 +573,7 @@ export default function EventDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {athletes.map((athlete) => (
+                    {visibleAthletes.map((athlete) => (
                       <tr key={athlete.id}>
                         <td>{athlete.nameDisplay ?? athlete.name}</td>
                         <td>{athlete.club?.name ?? "-"}</td>
@@ -515,7 +588,7 @@ export default function EventDetailPage() {
               </div>
 
               <div className="event-athletes-mobile-list">
-                {athletes.map((athlete) => (
+                {visibleAthletes.map((athlete) => (
                   <article key={athlete.id} className="athlete-list-card">
                     <h3>{athlete.nameDisplay ?? athlete.name}</h3>
                     <p className="arena-muted" style={{ margin: 0 }}>{athlete.club?.name ?? "-"}</p>
@@ -528,6 +601,13 @@ export default function EventDetailPage() {
                   </article>
                 ))}
               </div>
+              {sortedAthletes.length > athletesVisible ? (
+                <div className="row" style={{ justifyContent: "center" }}>
+                  <button type="button" onClick={() => setAthletesVisible((current) => current + ATHLETES_PAGE_SIZE)}>
+                    Carregar mais atletas
+                  </button>
+                </div>
+              ) : null}
             </>
           )}
         </Card>
@@ -574,6 +654,26 @@ export default function EventDetailPage() {
             </div>
           ) : null}
 
+          {!efficiencyLoading && rankedEfficiencyRows.length > 0 && hasConcludedPodium ? (
+            <section className="event-efficiency-podium" aria-label="Pódio da eficiência do evento">
+              <h3 style={{ margin: 0 }}>Pódio da eficiência</h3>
+              <div className="event-efficiency-podium-grid">
+                {rankedEfficiencyRows.slice(0, 3).map((row, index) => (
+                  <article key={row.clubId} className={`event-efficiency-podium-card ${podiumClass(index)}`}>
+                    <span className="event-efficiency-podium-label">{podiumLabel(index)}</span>
+                    <strong className="event-efficiency-podium-club">
+                      <Link href={`/eficiencia/${row.clubId}`}>{row.clubName}</Link>
+                    </strong>
+                    <span className="event-efficiency-podium-total">Total: {valueForMode(row, "total")}</span>
+                    <span className="arena-muted">
+                      🥇 {valueForMode(row, "ouro")} • 🥈 {valueForMode(row, "prata")} • 🥉 {valueForMode(row, "bronze")}
+                    </span>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           {!efficiencyLoading && rankedEfficiencyRows.length > 0 ? (
             <div className="global-mobile-scroll event-efficiency-desktop">
               <table className="data-table">
@@ -611,7 +711,9 @@ export default function EventDetailPage() {
 
           {!efficiencyLoading && rankedEfficiencyRows.length > 0 ? (
             <div className="event-efficiency-mobile-list">
-              {rankedEfficiencyRows.map((row, index) => (
+              {(hasConcludedPodium ? rankedEfficiencyRows.slice(3) : rankedEfficiencyRows).map((row, listIndex) => {
+                const index = hasConcludedPodium ? listIndex + 3 : listIndex;
+                return (
                 <article key={row.clubId} className={`athlete-list-card ${podiumClass(index)}`}>
                   <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
                     <strong>#{index + 1} {row.clubName}</strong>
@@ -621,7 +723,7 @@ export default function EventDetailPage() {
                     Atletas {row.athleteCount} | 🥇 {valueForMode(row, "ouro")} | 🥈 {valueForMode(row, "prata")} | 🥉 {valueForMode(row, "bronze")}
                   </p>
                 </article>
-              ))}
+              )})}
             </div>
           ) : null}
         </Card>

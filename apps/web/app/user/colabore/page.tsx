@@ -127,7 +127,9 @@ export default function ColaborePage() {
         </p>
 
         <div className="row">
-          <button type="button" onClick={() => (window.location.href = "/")}>Voltar para home</button>
+          <button type="button" className="event-back-button" onClick={() => (window.location.href = "/")}>
+            ← Voltar
+          </button>
         </div>
         {toast ? <div className="ui-toast">{toast}</div> : null}
       </Card>
