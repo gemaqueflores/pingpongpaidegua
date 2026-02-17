@@ -511,6 +511,18 @@ a {
   contain-intrinsic-size: 170px;
 }
 
+.compact-summary-card {
+  align-content: space-between;
+  min-height: 120px;
+}
+
+.compact-summary-total {
+  margin: 2px 0 0;
+  font-size: clamp(1.6rem, 5vw, 2rem);
+  font-weight: 800;
+  color: var(--text-strong);
+}
+
 .event-card h3 {
   margin: 2px 0 0;
 }
