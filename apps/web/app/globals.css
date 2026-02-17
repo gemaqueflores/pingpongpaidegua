@@ -64,6 +64,12 @@ a {
   background: #f3f8ff;
 }
 
+.product-header.admin a,
+.product-header.admin strong,
+.product-header.admin .app-brand-link {
+  color: #1f335f;
+}
+
 .product-header.user {
   background: #f8fbf9;
 }
@@ -1845,13 +1851,20 @@ a {
 }
 
 .admin-form-row {
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: end;
   gap: 10px;
+  width: 100%;
+}
+
+.admin-form-row > * {
+  min-width: 0;
 }
 
 .admin-field {
-  min-width: 200px;
-  flex: 1 1 220px;
+  min-width: 0;
+  width: 100%;
   gap: 4px;
 }
 
@@ -1865,11 +1878,13 @@ a {
 }
 
 .admin-input-id {
-  max-width: 160px;
+  max-width: none;
+  width: 100%;
 }
 
 .admin-input-level {
-  max-width: 190px;
+  max-width: none;
+  width: 100%;
 }
 
 .admin-checkbox-row {
@@ -1877,6 +1892,7 @@ a {
   border: 1px solid var(--line);
   border-radius: 10px;
   min-height: 42px;
+  width: 100%;
 }
 
 .admin-action-row {
@@ -1950,7 +1966,7 @@ a {
   }
 
   .admin-form-row {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     align-items: stretch;
   }
 

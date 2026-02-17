@@ -280,9 +280,16 @@ export default function AthleteCareerPage() {
   const params = useParams<{ athleteKey: string }>();
   const athleteKey = decodeURIComponent(params.athleteKey);
   const [payload, setPayload] = useState<CareerResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void apiGetAthleteCareer(athleteKey).then((data) => setPayload(data as CareerResponse));
+    setPayload(null);
+    setError(null);
+    void apiGetAthleteCareer(athleteKey)
+      .then((data) => setPayload(data as CareerResponse))
+      .catch(() => {
+        setError("Carreira não encontrada para o atleta informado.");
+      });
   }, [athleteKey]);
 
   const summaryStats = useMemo(() => {
@@ -337,14 +344,28 @@ export default function AthleteCareerPage() {
         }
       />
 
-      {!payload ? (
+      {!payload && !error ? (
         <Card className="grid">
           <Skeleton height="24px" width="260px" />
           <Skeleton height="20px" />
           <Skeleton height="20px" />
           <Skeleton height="20px" />
         </Card>
-      ) : (
+      ) : null}
+
+      {error ? (
+        <Card className="grid">
+          <h2>Carreira</h2>
+          <p>{error}</p>
+          <div className="row">
+            <button type="button" onClick={() => (window.location.href = "/")}>
+              Voltar para home
+            </button>
+          </div>
+        </Card>
+      ) : null}
+
+      {payload && !error ? (
         <>
           <AthleteSummaryCard
             athleteName={payload.athlete.nameDisplay}
@@ -456,7 +477,7 @@ export default function AthleteCareerPage() {
             })}
           </Card>
         </>
-      )}
+      ) : null}
     </main>
   );
 }

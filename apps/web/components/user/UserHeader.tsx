@@ -6,7 +6,7 @@ const MENU_ITEMS = [
   { href: "/", label: "Home" },
   { href: "/#eventos-em-destaque", label: "Eventos" },
   { href: "/#atletas-da-base", label: "Carreira" },
-  { href: "/eficiencia", label: "Eficiência" },
+  { href: "/#clubes-eficiencia", label: "Eficiência" },
   { href: "/reportar-problema", label: "Reporte" },
   { href: "/colabore", label: "Apoie" },
 ];
