@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { apiGetAthleteCareer } from "../../../../lib/user-api";
 import { HeroTitle } from "../../../../components/ui/HeroTitle";
 import { Card } from "../../../../components/ui/Card";
@@ -151,6 +152,13 @@ function toTimestamp(value: string | null): number {
   return Number.isFinite(ts) ? ts : 0;
 }
 
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function resolveMatchHierarchyScore(match: CareerMatch): number {
   const phase = `${match.phase ?? ""} ${match.round ?? ""}`
     .normalize("NFD")
@@ -281,10 +289,19 @@ export default function AthleteCareerPage() {
   const athleteKey = decodeURIComponent(params.athleteKey);
   const [payload, setPayload] = useState<CareerResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState<string>(() => {
+    const now = new Date();
+    const lastYear = new Date(now);
+    lastYear.setFullYear(now.getFullYear() - 1);
+    return toDateInputValue(lastYear);
+  });
+  const [dateTo, setDateTo] = useState<string>(() => toDateInputValue(new Date()));
+  const [visibleEvents, setVisibleEvents] = useState(8);
 
   useEffect(() => {
     setPayload(null);
     setError(null);
+    setVisibleEvents(8);
     void apiGetAthleteCareer(athleteKey)
       .then((data) => setPayload(data as CareerResponse))
       .catch(() => {
@@ -319,6 +336,17 @@ export default function AthleteCareerPage() {
     });
   }, [payload]);
 
+  const filteredEvents = useMemo(() => {
+    const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : Number.NEGATIVE_INFINITY;
+    const toTs = dateTo ? new Date(`${dateTo}T23:59:59`).getTime() : Number.POSITIVE_INFINITY;
+    return sortedEvents.filter((event) => {
+      const eventTs = getEventLatestMatchTimestamp(event);
+      return eventTs >= fromTs && eventTs <= toTs;
+    });
+  }, [dateFrom, dateTo, sortedEvents]);
+
+  const visibleFilteredEvents = useMemo(() => filteredEvents.slice(0, visibleEvents), [filteredEvents, visibleEvents]);
+
   const medalMatrix = useMemo(() => {
     if (!payload) return emptyMatrix();
     return computeMedalsByCompetition(payload.events, payload.medalTable);
@@ -340,7 +368,7 @@ export default function AthleteCareerPage() {
         title="Carreira"
         subtitle="Tênis de Mesa / Table Tennis"
         actions={
-          <button type="button" onClick={() => (window.location.href = "/")}>Voltar para home</button>
+          <Link className="event-athlete-details-button" href="/">Voltar para home</Link>
         }
       />
 
@@ -367,6 +395,23 @@ export default function AthleteCareerPage() {
 
       {payload && !error ? (
         <>
+          <Card className="grid" variant="stat">
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+              <h2 style={{ marginBottom: 0 }}>Período da carreira</h2>
+              <Badge tone="default">Padrão: último 1 ano</Badge>
+            </div>
+            <div className="admin-form-row">
+              <label className="admin-field">
+                <span>De</span>
+                <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="admin-input" />
+              </label>
+              <label className="admin-field">
+                <span>Até</span>
+                <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="admin-input" />
+              </label>
+            </div>
+          </Card>
+
           <AthleteSummaryCard
             athleteName={payload.athlete.nameDisplay}
             athleteReducedName={payload.athlete.nameReduced}
@@ -390,9 +435,9 @@ export default function AthleteCareerPage() {
 
           <Card className="grid">
             <h2>Eventos disputados</h2>
-            {sortedEvents.length === 0 ? <p>Nenhum evento encontrado.</p> : null}
+            {filteredEvents.length === 0 ? <p>Nenhum evento encontrado para o período selecionado.</p> : null}
 
-            {sortedEvents.map((event, eventIndex) => {
+            {visibleFilteredEvents.map((event, eventIndex) => {
               const sortedCategoryPerformance = [...(event.performanceByCategory ?? [])].sort((left, right) => {
                 const leftPosition = left.classification?.position ?? Number.MAX_SAFE_INTEGER;
                 const rightPosition = right.classification?.position ?? Number.MAX_SAFE_INTEGER;
@@ -475,6 +520,13 @@ export default function AthleteCareerPage() {
                 </div>
               );
             })}
+            {filteredEvents.length > visibleEvents ? (
+              <div className="row" style={{ justifyContent: "center" }}>
+                <button type="button" onClick={() => setVisibleEvents((prev) => prev + 8)}>
+                  Carregar mais eventos
+                </button>
+              </div>
+            ) : null}
           </Card>
         </>
       ) : null}

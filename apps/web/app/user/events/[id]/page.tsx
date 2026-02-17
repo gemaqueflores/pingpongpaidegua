@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   apiGetAthletes,
@@ -92,6 +93,17 @@ function resolveEventStatusLabel(event: EventRow | null): string {
   return "-";
 }
 
+function resolveEventBanner(event: EventRow | null): { message: string; tone: "info" | "success" } | null {
+  if (!event) return null;
+  if (event.concluido || event.situacaoComputada === "POS_EVENTO") {
+    return { message: "Resultado oficial consolidado", tone: "success" };
+  }
+  if (event.situacaoComputada === "EM_ANDAMENTO") {
+    return { message: "Evento em andamento — dados parciais", tone: "info" };
+  }
+  return null;
+}
+
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
   const eventId = Number(params.id);
@@ -122,6 +134,17 @@ export default function EventDetailPage() {
       })
       .finally(() => setLoadingEvent(false));
   }, [eventId]);
+
+  useEffect(() => {
+    if (!event) return;
+    if (event.concluido || event.situacaoComputada === "EM_ANDAMENTO" || event.situacaoComputada === "POS_EVENTO") {
+      setActiveTab("eficiencia");
+      return;
+    }
+    if (event.groupSimulationEligible) {
+      setActiveTab("grupos");
+    }
+  }, [event]);
 
   useEffect(() => {
     if (activeTab !== "eficiencia" || efficiencyData) {
@@ -230,8 +253,9 @@ export default function EventDetailPage() {
     { id: "grupos", label: "Grupos" },
     { id: "clubes", label: "Clubes" },
     { id: "atletas", label: "Atletas" },
-    { id: "eficiencia", label: "Eficiência" },
+    { id: "eficiencia", label: "Eficiência do evento" },
   ];
+  const eventBanner = resolveEventBanner(event);
 
   const rankedEfficiencyRows = useMemo(() => {
     const rows = [...(efficiencyData?.ranking ?? [])];
@@ -278,7 +302,7 @@ export default function EventDetailPage() {
         subtitle="Tênis de Mesa / Table Tennis"
         className="event-page-hero"
         actions={
-          <button className="event-back-button" onClick={() => (window.location.href = "/")}>← Voltar</button>
+          <Link className="event-back-button" href="/">← Voltar</Link>
         }
       />
 
@@ -286,6 +310,16 @@ export default function EventDetailPage() {
         <Card className="grid">
           <Skeleton height="24px" />
           <Skeleton height="20px" />
+        </Card>
+      ) : !event ? (
+        <Card className="grid">
+          <h2>Evento não encontrado</h2>
+          <p>Não foi possível localizar os dados deste evento na base.</p>
+          <div className="row">
+            <Link className="event-athlete-details-button" href="/events">
+              Voltar para eventos
+            </Link>
+          </div>
         </Card>
       ) : (
         <Card className={`grid event-summary-card ${event?.concluido ? "event-summary-concluded" : ""}`} variant="event">
@@ -330,6 +364,11 @@ export default function EventDetailPage() {
               ))}
             </div>
           </div>
+          {eventBanner ? (
+            <div className={`event-state-banner event-state-banner-${eventBanner.tone}`} role="status" aria-live="polite">
+              {eventBanner.message}
+            </div>
+          ) : null}
         </Card>
       )}
 
@@ -338,9 +377,15 @@ export default function EventDetailPage() {
           <h2>Grupos</h2>
           {event?.groupsDefined ? <p>Grupos oficiais já divulgados para este evento.</p> : null}
           <div className="row">
-            <button
-              onClick={() => (window.location.href = `/events/${eventId}/group-simulator`)}
-              disabled={Boolean(event?.concluido) || Boolean(event?.groupsDefined) || !Boolean(event?.groupSimulationEligible)}
+            <Link
+              className={`event-athlete-details-button ${Boolean(event?.concluido) || Boolean(event?.groupsDefined) || !Boolean(event?.groupSimulationEligible) ? "is-disabled" : ""}`}
+              href={`/events/${eventId}/group-simulator`}
+              aria-disabled={Boolean(event?.concluido) || Boolean(event?.groupsDefined) || !Boolean(event?.groupSimulationEligible)}
+              onClick={(evt) => {
+                if (Boolean(event?.concluido) || Boolean(event?.groupsDefined) || !Boolean(event?.groupSimulationEligible)) {
+                  evt.preventDefault();
+                }
+              }}
               title={event?.groupsDefined ? "Simulação indisponível: grupos oficiais já publicados." : undefined}
             >
               {event?.concluido
@@ -348,7 +393,7 @@ export default function EventDetailPage() {
                 : event?.groupsDefined
                   ? "Simulação bloqueada (grupos publicados)"
                   : "Simular Grupos"}
-            </button>
+            </Link>
           </div>
           {!event?.groupsDefined && !event?.groupSimulationEligible ? (
             <p className="arena-muted">Simulador indisponível para o momento atual do evento.</p>
@@ -409,9 +454,9 @@ export default function EventDetailPage() {
                         <ul>
                           {athletesInClub.map((athlete) => (
                             <li key={athlete.id}>
-                              <a href={`/events/${eventId}/athletes/${athlete.id}`}>
+                              <Link href={`/events/${eventId}/athletes/${athlete.id}`}>
                                 {athlete.nameDisplay ?? athlete.name}
-                              </a>
+                              </Link>
                             </li>
                           ))}
                         </ul>
@@ -461,7 +506,7 @@ export default function EventDetailPage() {
                         <td>{athlete.club?.name ?? "-"}</td>
                         <td>{formatAthleteFederation(athlete)}</td>
                         <td>
-                          <a href={`/events/${eventId}/athletes/${athlete.id}`}>Detalhes</a>
+                          <Link href={`/events/${eventId}/athletes/${athlete.id}`}>Detalhes</Link>
                         </td>
                       </tr>
                     ))}
@@ -477,9 +522,9 @@ export default function EventDetailPage() {
                     <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
                       <Badge tone="default">{athlete.stateCode ?? "-"}</Badge>
                     </div>
-                    <a className="event-athlete-details-button" href={`/events/${eventId}/athletes/${athlete.id}`}>
+                    <Link className="event-athlete-details-button" href={`/events/${eventId}/athletes/${athlete.id}`}>
                       Detalhes
-                    </a>
+                    </Link>
                   </article>
                 ))}
               </div>
@@ -523,7 +568,10 @@ export default function EventDetailPage() {
             </div>
           ) : null}
           {!efficiencyLoading && rankedEfficiencyRows.length === 0 ? (
-            <p>Nenhum clube com dados de eficiência para este evento.</p>
+            <div className="event-empty-state">
+              <h3>Nenhuma pontuação registrada</h3>
+              <p>A eficiência será calculada quando resultados forem publicados.</p>
+            </div>
           ) : null}
 
           {!efficiencyLoading && rankedEfficiencyRows.length > 0 ? (
@@ -545,7 +593,7 @@ export default function EventDetailPage() {
                     <tr key={row.clubId} className={podiumClass(index)}>
                       <td>{index + 1}</td>
                       <td>
-                        <a href={`/eficiencia/${row.clubId}`}>{row.clubName}</a>
+                        <Link href={`/eficiencia/${row.clubId}`}>{row.clubName}</Link>
                       </td>
                       <td>{row.athleteCount}</td>
                       <td>{valueForMode(row, "ouro")}</td>

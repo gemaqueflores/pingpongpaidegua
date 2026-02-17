@@ -10,8 +10,8 @@ type EventCardProps = {
   periodLabel: string;
   totalInscritos: number;
   totalCategorias: number;
-  groupSimulationEligible: boolean;
   groupsDefined: boolean;
+  isConcluded: boolean;
   onOpen: () => void;
   onSimulate: () => void;
 };
@@ -25,18 +25,16 @@ export function EventCard(props: EventCardProps) {
     periodLabel,
     totalInscritos,
     totalCategorias,
-    groupSimulationEligible,
     groupsDefined,
+    isConcluded,
     onOpen,
     onSimulate,
   } = props;
 
+  const groupStateDisabled = groupsDefined;
   const groupStateLabel = groupsDefined
-    ? "Grupos definidos"
-    : groupSimulationEligible
-      ? "Grupos pendentes"
-      : "Sem simulação";
-  const groupStateDisabled = !groupsDefined;
+      ? "Grupos definidos"
+      : "Simular Grupos";
 
   return (
     <article
@@ -56,16 +54,18 @@ export function EventCard(props: EventCardProps) {
         <span>Inscritos: <strong>{totalInscritos}</strong></span>
         <span>Categorias: <strong>{totalCategorias}</strong></span>
       </div>
-      <div className="event-actions">
+      <div className={`event-actions ${isConcluded ? "event-actions-single" : ""}`}>
         <button type="button" onClick={onOpen}>Ver Evento</button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={onSimulate}
-          disabled={groupStateDisabled}
-        >
-          {groupStateLabel}
-        </button>
+        {!isConcluded ? (
+          <button
+            type="button"
+            className="secondary"
+            onClick={onSimulate}
+            disabled={groupStateDisabled}
+          >
+            {groupStateLabel}
+          </button>
+        ) : null}
       </div>
     </article>
   );
