@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  apiGetAthletes,
   apiGetAthletesDirectory,
   apiGetGlobalEfficiency,
   apiGetEvents,
@@ -22,6 +23,12 @@ import { EmptyState } from "../components/ui/EmptyState";
 type EventRow = UserEventRow;
 type EventTypeFilter = "ALL" | "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN";
 type EventStatusFilter = "ALL" | "OPEN" | "DONE";
+type AthleteQuickOption = {
+  id: number;
+  nameDisplay?: string;
+  name?: string;
+  club?: { name: string } | null;
+};
 
 type EventDisplayStatus = "INSCRICOES_ABERTAS" | "INSCRICOES_ENCERRADAS" | "EM_DISPUTA" | "CONCLUIDO";
 
@@ -116,6 +123,11 @@ export default function HomePage() {
   const [eventTypeFilter, setEventTypeFilter] = useState<EventTypeFilter>("ALL");
   const [eventStatusFilter, setEventStatusFilter] = useState<EventStatusFilter>("ALL");
   const [mobileEventFiltersOpen, setMobileEventFiltersOpen] = useState(false);
+  const [quickAthleteQuery, setQuickAthleteQuery] = useState("");
+  const [quickAthleteLoading, setQuickAthleteLoading] = useState(false);
+  const [quickAthleteOptions, setQuickAthleteOptions] = useState<AthleteQuickOption[]>([]);
+  const [quickAthleteSelected, setQuickAthleteSelected] = useState<AthleteQuickOption | null>(null);
+  const [quickAthleteTouched, setQuickAthleteTouched] = useState(false);
 
   useEffect(() => {
     void apiGetEvents()
@@ -152,6 +164,52 @@ export default function HomePage() {
       return true;
     });
   }, [eventStatusFilter, eventTypeFilter, sortedEvents]);
+
+  useEffect(() => {
+    setQuickAthleteQuery("");
+    setQuickAthleteLoading(false);
+    setQuickAthleteOptions([]);
+    setQuickAthleteSelected(null);
+    setQuickAthleteTouched(false);
+  }, [highlightedEvent?.id]);
+
+  useEffect(() => {
+    if (!highlightedEvent) {
+      setQuickAthleteOptions([]);
+      setQuickAthleteLoading(false);
+      return;
+    }
+
+    const search = quickAthleteQuery.trim();
+    if (search.length < 2) {
+      setQuickAthleteOptions([]);
+      setQuickAthleteLoading(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setQuickAthleteLoading(true);
+      void apiGetAthletes(highlightedEvent.id, search)
+        .then((rows) => {
+          setQuickAthleteOptions((rows as AthleteQuickOption[]).slice(0, 8));
+        })
+        .catch(() => {
+          setQuickAthleteOptions([]);
+        })
+        .finally(() => setQuickAthleteLoading(false));
+    }, 220);
+
+    return () => clearTimeout(timeout);
+  }, [highlightedEvent, quickAthleteQuery]);
+
+  function athleteOptionLabel(athlete: AthleteQuickOption): string {
+    return athlete.nameDisplay ?? athlete.name ?? `Atleta #${athlete.id}`;
+  }
+
+  function openAthleteGames() {
+    if (!highlightedEvent || !quickAthleteSelected) return;
+    router.push(`/events/${highlightedEvent.id}/athletes/${quickAthleteSelected.id}`);
+  }
 
   return (
     <UserShell>
@@ -207,6 +265,64 @@ export default function HomePage() {
                   {highlightedEvent.groupsDefined ? "Grupos definidos" : "Simular Grupos"}
                 </button>
               ) : null}
+            </div>
+            <div className="next-event-athlete-quick">
+              <label htmlFor="next-event-athlete-input" className="next-event-athlete-label">
+                Acesso rápido do atleta
+              </label>
+              <div className="next-event-athlete-form">
+                <div className="next-event-athlete-search">
+                  <input
+                    id="next-event-athlete-input"
+                    value={quickAthleteQuery}
+                    onChange={(event) => {
+                      setQuickAthleteQuery(event.target.value);
+                      setQuickAthleteTouched(true);
+                      if (quickAthleteSelected && athleteOptionLabel(quickAthleteSelected) !== event.target.value) {
+                        setQuickAthleteSelected(null);
+                      }
+                    }}
+                    onFocus={() => setQuickAthleteTouched(true)}
+                    placeholder="Digite o nome do atleta"
+                    autoComplete="off"
+                  />
+                  {quickAthleteTouched && !quickAthleteSelected && quickAthleteQuery.trim().length >= 2 ? (
+                    <div className="next-event-athlete-suggestions">
+                      {quickAthleteLoading ? (
+                        <p className="next-event-athlete-feedback">Buscando atletas...</p>
+                      ) : quickAthleteOptions.length === 0 ? (
+                        <p className="next-event-athlete-feedback">Nenhum atleta encontrado.</p>
+                      ) : (
+                        <ul>
+                          {quickAthleteOptions.map((athlete) => (
+                            <li key={athlete.id}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setQuickAthleteSelected(athlete);
+                                  setQuickAthleteQuery(athleteOptionLabel(athlete));
+                                  setQuickAthleteOptions([]);
+                                }}
+                              >
+                                <span>{athleteOptionLabel(athlete)}</span>
+                                {athlete.club?.name ? <small>{athlete.club.name}</small> : null}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={openAthleteGames}
+                  disabled={!quickAthleteSelected}
+                >
+                  Ver meus jogos
+                </button>
+              </div>
             </div>
           </Card>
         ) : null}

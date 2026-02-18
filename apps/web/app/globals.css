@@ -2620,10 +2620,98 @@ a {
     width: 100%;
   }
 
-  .next-event-actions button,
-  .club-efficiency-button {
+.next-event-actions button,
+.club-efficiency-button {
+  width: 100%;
+}
+
+.next-event-athlete-quick {
+  display: grid;
+  gap: 8px;
+}
+
+.next-event-athlete-label {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.next-event-athlete-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.next-event-athlete-search {
+  position: relative;
+  min-width: 0;
+}
+
+.next-event-athlete-search input {
+  width: 100%;
+  min-height: 44px;
+}
+
+.next-event-athlete-suggestions {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 16;
+  border: 1px solid var(--line-glow);
+  border-radius: 10px;
+  background: rgba(4, 19, 51, 0.98);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.next-event-athlete-suggestions ul {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.next-event-athlete-suggestions li button {
+  width: 100%;
+  text-align: left;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: rgba(15, 40, 94, 0.82);
+  min-height: 40px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 2px;
+  box-shadow: none;
+}
+
+.next-event-athlete-suggestions li button:hover {
+  border-color: rgba(255, 195, 0, 0.55);
+}
+
+.next-event-athlete-suggestions li button small {
+  color: var(--text-muted);
+}
+
+.next-event-athlete-feedback {
+  margin: 0;
+  padding: 10px;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+@media (max-width: 640px) {
+  .next-event-athlete-form {
+    grid-template-columns: 1fr;
+  }
+
+  .next-event-athlete-form > button {
     width: 100%;
   }
+}
 }
 
 @media (max-width: 430px) {
