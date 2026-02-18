@@ -121,10 +121,20 @@ export class ScrapeProcessor {
       return;
     }
 
-    const eventSituation = computeEventSituation(event);
-    const baseScrapePolicy = buildEventScrapePolicy(event, {
-      isManualForce: forceScrape,
+    const eventContentFlags = await this.readEventContentFlags(eventId);
+    const eventSituation = computeEventSituation({
+      ...event,
+      ...eventContentFlags,
     });
+    const baseScrapePolicy = buildEventScrapePolicy(
+      {
+        ...event,
+        ...eventContentFlags,
+      },
+      {
+      isManualForce: forceScrape,
+      },
+    );
 
     const scrapePolicy =
       manualForceStage === "stage-2-inscricoes"
@@ -454,6 +464,36 @@ export class ScrapeProcessor {
     });
 
     return lock.count > 0;
+  }
+
+  private async readEventContentFlags(eventId: number): Promise<{
+    hasPublishedMatches: boolean;
+    hasPublishedResults: boolean;
+  }> {
+    const scheduledMatchPhases = ["GRUPOS", "RESULTADOS", "ELIMINATORIA"] as const;
+
+    const [scheduledMatch, playedMatch] = await Promise.all([
+      prisma.match.findFirst({
+        where: {
+          eventId,
+          phase: { in: [...scheduledMatchPhases] },
+        },
+        select: { id: true },
+      }),
+      prisma.match.findFirst({
+        where: {
+          eventId,
+          phase: { in: [...scheduledMatchPhases] },
+          OR: [{ winnerIndex: { not: null } }, { p1Sets: { not: null } }, { p2Sets: { not: null } }],
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    return {
+      hasPublishedMatches: Boolean(scheduledMatch),
+      hasPublishedResults: Boolean(playedMatch),
+    };
   }
 
   private async acquireEventLockWithRetry(eventId: number): Promise<boolean> {

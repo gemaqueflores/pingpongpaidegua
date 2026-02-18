@@ -36,6 +36,19 @@ test("computeEventSituation cobre janela pre, inscricoes, pre-evento, andamento 
   assert.equal(computeEventSituation(input, dt("2026-03-23T12:00:00.000Z")), "POS_EVENTO");
 });
 
+test("computeEventSituation identifica grades publicadas no pre-evento quando ha confrontos sem resultado", () => {
+  const input = {
+    inicioInscricoes: dt("2026-03-01T00:00:00.000Z"),
+    fimInscricoes: dt("2026-03-10T23:59:59.000Z"),
+    inicioRealizacao: dt("2026-03-20T08:00:00.000Z"),
+    fimRealizacao: dt("2026-03-22T19:00:00.000Z"),
+    hasPublishedMatches: true,
+    hasPublishedResults: false,
+  };
+
+  assert.equal(computeEventSituation(input, dt("2026-03-15T12:00:00.000Z")), "GRADES_PUBLICADAS_PRE_JOGO");
+});
+
 test("buildEventScrapePolicy desliga auto apos pos-evento e respeita modo manual force", () => {
   const input = {
     inicioInscricoes: dt("2026-03-01T00:00:00.000Z"),
@@ -89,8 +102,8 @@ test("buildEventScrapePolicy segue ciclo de vida para blocos de captura", () => 
   const preEvent = buildEventScrapePolicy(input, { now: dt("2026-03-15T12:00:00.000Z") });
   assert.equal(preEvent.captureInscricoes, false);
   assert.equal(preEvent.captureGrupos, true);
-  assert.equal(preEvent.captureResultados, false);
-  assert.equal(preEvent.fetchEliminatoria, false);
+  assert.equal(preEvent.captureResultados, true);
+  assert.equal(preEvent.fetchEliminatoria, true);
   assert.equal(preEvent.recommendedIntervalMs, 3 * 60 * 60 * 1000);
 
   const inProgress = buildEventScrapePolicy(input, { now: dt("2026-03-21T12:00:00.000Z") });
@@ -99,6 +112,20 @@ test("buildEventScrapePolicy segue ciclo de vida para blocos de captura", () => 
   assert.equal(inProgress.captureResultados, true);
   assert.equal(inProgress.fetchEliminatoria, true);
   assert.equal(inProgress.recommendedIntervalMs, 30 * 60 * 1000);
+
+  const publishedGrids = buildEventScrapePolicy(
+    {
+      ...input,
+      hasPublishedMatches: true,
+      hasPublishedResults: false,
+    },
+    { now: dt("2026-03-15T12:00:00.000Z") },
+  );
+  assert.equal(publishedGrids.captureInscricoes, false);
+  assert.equal(publishedGrids.captureGrupos, true);
+  assert.equal(publishedGrids.captureResultados, true);
+  assert.equal(publishedGrids.fetchEliminatoria, true);
+  assert.equal(publishedGrids.recommendedIntervalMs, 60 * 60 * 1000);
 });
 
 test("shouldRunEventAutoScrape aplica intervalo recomendado", () => {

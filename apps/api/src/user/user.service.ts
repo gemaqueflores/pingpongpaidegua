@@ -383,7 +383,14 @@ export class UserService {
 
     const allScopedEventIds = [...new Set([...scopeByEventId.values()].flatMap((scope) => scope.allEventIds))];
 
-    const [categoriesCountByEvent, inscritosCountByEvent, tecnicosByEvent, groupMatchesByEvent] = await Promise.all([
+    const [
+      categoriesCountByEvent,
+      inscritosCountByEvent,
+      tecnicosByEvent,
+      groupMatchesByEvent,
+      publishedMatchesByEvent,
+      publishedResultsByEvent,
+    ] = await Promise.all([
       this.prisma.category.groupBy({
         by: ["eventId"],
         where: {
@@ -431,6 +438,27 @@ export class UserService {
           _all: true,
         },
       }),
+      this.prisma.match.groupBy({
+        by: ["eventId"],
+        where: {
+          eventId: { in: allScopedEventIds },
+          phase: { in: ["GRUPOS", "RESULTADOS", "ELIMINATORIA"] },
+        },
+        _count: {
+          _all: true,
+        },
+      }),
+      this.prisma.match.groupBy({
+        by: ["eventId"],
+        where: {
+          eventId: { in: allScopedEventIds },
+          phase: { in: ["GRUPOS", "RESULTADOS", "ELIMINATORIA"] },
+          OR: [{ winnerIndex: { not: null } }, { p1Sets: { not: null } }, { p2Sets: { not: null } }],
+        },
+        _count: {
+          _all: true,
+        },
+      }),
     ]);
 
     const categoriasMap = new Map<number, number>();
@@ -453,6 +481,16 @@ export class UserService {
       groupsDefinedByEventMap.set(row.eventId, row._count._all > 0);
     }
 
+    const publishedMatchesByEventMap = new Map<number, boolean>();
+    for (const row of publishedMatchesByEvent) {
+      publishedMatchesByEventMap.set(row.eventId, row._count._all > 0);
+    }
+
+    const publishedResultsByEventMap = new Map<number, boolean>();
+    for (const row of publishedResultsByEvent) {
+      publishedResultsByEventMap.set(row.eventId, row._count._all > 0);
+    }
+
     const lastScrapeByEventId = new Map<number, Date>();
     for (const event of events) {
       if (event.lastScrapeAt) {
@@ -471,6 +509,8 @@ export class UserService {
       const totalInscritos = scope.allEventIds.reduce((sum, currentEventId) => sum + (inscritosMap.get(currentEventId) ?? 0), 0);
       const totalTecnicos = scope.allEventIds.reduce((sum, currentEventId) => sum + (tecnicosMap.get(currentEventId) ?? 0), 0);
       const groupsDefined = scope.allEventIds.some((currentEventId) => groupsDefinedByEventMap.get(currentEventId) ?? false);
+      const hasPublishedMatches = scope.allEventIds.some((currentEventId) => publishedMatchesByEventMap.get(currentEventId) ?? false);
+      const hasPublishedResults = scope.allEventIds.some((currentEventId) => publishedResultsByEventMap.get(currentEventId) ?? false);
       const mergedLastScrape = scope.allEventIds
         .map((currentEventId) => lastScrapeByEventId.get(currentEventId) ?? null)
         .filter((item): item is Date => Boolean(item))
@@ -486,6 +526,8 @@ export class UserService {
           fimRealizacao: event.fimRealizacao,
           dataInicio: event.dataInicio,
           dataFim: event.dataFim,
+          hasPublishedMatches,
+          hasPublishedResults,
         }),
         totalCategorias,
         totalInscritos,
@@ -1363,6 +1405,7 @@ export class UserService {
   ) {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
+    const publicationFlags = await this.readEventPublicationFlags(scope.allEventIds);
     const registrationScope: RegistrationScope = normalizeRegistrationScope(registrationScopeRaw ?? undefined);
     const eventSituation: EventSituation = computeEventSituation({
       inicioInscricoes: event.inicioInscricoes,
@@ -1371,6 +1414,8 @@ export class UserService {
       fimRealizacao: event.fimRealizacao,
       dataInicio: event.dataInicio,
       dataFim: event.dataFim,
+      hasPublishedMatches: publicationFlags.hasPublishedMatches,
+      hasPublishedResults: publicationFlags.hasPublishedResults,
     });
     const groupsDefined = await this.eventHasOfficialGroups(scope.allEventIds);
     const simulationEligible = canUseGroupSimulation({
@@ -3188,6 +3233,40 @@ export class UserService {
       phase: groupMatch.phase,
       round: groupMatch.round,
     });
+  }
+
+  private async readEventPublicationFlags(eventIds: number[]): Promise<{
+    hasPublishedMatches: boolean;
+    hasPublishedResults: boolean;
+  }> {
+    const scheduledPhases: Array<"GRUPOS" | "RESULTADOS" | "ELIMINATORIA"> = [
+      "GRUPOS",
+      "RESULTADOS",
+      "ELIMINATORIA",
+    ];
+
+    const [publishedMatch, publishedResult] = await Promise.all([
+      this.prisma.match.findFirst({
+        where: {
+          eventId: { in: eventIds },
+          phase: { in: scheduledPhases },
+        },
+        select: { id: true },
+      }),
+      this.prisma.match.findFirst({
+        where: {
+          eventId: { in: eventIds },
+          phase: { in: scheduledPhases },
+          OR: [{ winnerIndex: { not: null } }, { p1Sets: { not: null } }, { p2Sets: { not: null } }],
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    return {
+      hasPublishedMatches: Boolean(publishedMatch),
+      hasPublishedResults: Boolean(publishedResult),
+    };
   }
 
   private async getEfficiencyWeights() {

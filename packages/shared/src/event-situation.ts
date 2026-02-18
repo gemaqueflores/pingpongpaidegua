@@ -3,6 +3,7 @@ export type EventSituation =
   | "PRE_INSCRICOES"
   | "INSCRICOES_ABERTAS"
   | "POS_INSCRICOES_PRE_EVENTO"
+  | "GRADES_PUBLICADAS_PRE_JOGO"
   | "EM_ANDAMENTO"
   | "POS_EVENTO";
 
@@ -13,6 +14,8 @@ export interface EventSituationInput {
   fimRealizacao?: Date | string | null;
   dataInicio?: Date | string | null;
   dataFim?: Date | string | null;
+  hasPublishedMatches?: boolean | null;
+  hasPublishedResults?: boolean | null;
 }
 
 export interface EventTimelineResolved {
@@ -104,6 +107,9 @@ export function computeEventSituation(
     return "INSCRICOES_ABERTAS";
   }
   if (nowMs < inicioRealizacao.getTime()) {
+    if (Boolean(input.hasPublishedMatches) && !Boolean(input.hasPublishedResults)) {
+      return "GRADES_PUBLICADAS_PRE_JOGO";
+    }
     return "POS_INSCRICOES_PRE_EVENTO";
   }
   if (nowMs <= fimRealizacao.getTime()) {
@@ -125,6 +131,7 @@ export function getEventSituationTransition(
     case "INSCRICOES_ABERTAS":
       return timeline.fimInscricoes;
     case "POS_INSCRICOES_PRE_EVENTO":
+    case "GRADES_PUBLICADAS_PRE_JOGO":
       return timeline.inicioRealizacao;
     case "EM_ANDAMENTO":
       return timeline.fimRealizacao;
@@ -147,6 +154,7 @@ export function buildEventScrapePolicy(
     PRE_INSCRICOES: 5 * 60 * 60 * 1000,
     INSCRICOES_ABERTAS: 5 * 60 * 60 * 1000,
     POS_INSCRICOES_PRE_EVENTO: 3 * 60 * 60 * 1000,
+    GRADES_PUBLICADAS_PRE_JOGO: 60 * 60 * 1000,
     EM_ANDAMENTO: 30 * 60 * 1000,
     ...options.intervalBySituationMs,
   } satisfies Partial<Record<EventSituation, number>>;
@@ -200,11 +208,22 @@ export function buildEventScrapePolicy(
         autoSchedule: true,
         captureInscricoes: false,
         captureGrupos: true,
-        captureResultados: false,
-        fetchEliminatoria: false,
+        captureResultados: true,
+        fetchEliminatoria: true,
         recommendedIntervalMs:
           intervalBySituationMs.POS_INSCRICOES_PRE_EVENTO ?? 3 * 60 * 60 * 1000,
         reason: "pos-inscricoes-pre-evento",
+      };
+    case "GRADES_PUBLICADAS_PRE_JOGO":
+      return {
+        autoSchedule: true,
+        captureInscricoes: false,
+        captureGrupos: true,
+        captureResultados: true,
+        fetchEliminatoria: true,
+        recommendedIntervalMs:
+          intervalBySituationMs.GRADES_PUBLICADAS_PRE_JOGO ?? 60 * 60 * 1000,
+        reason: "grades-publicadas-pre-jogo",
       };
     case "EM_ANDAMENTO":
       return {

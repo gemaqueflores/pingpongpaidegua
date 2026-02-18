@@ -39,9 +39,45 @@ export class AdminEventsService {
       },
     });
 
+    const eventIds = events.map((event) => event.id);
+    const [publishedMatchesByEvent, publishedResultsByEvent] = eventIds.length
+      ? await Promise.all([
+          this.prisma.match.groupBy({
+            by: ["eventId"],
+            where: {
+              eventId: { in: eventIds },
+              phase: { in: ["GRUPOS", "RESULTADOS", "ELIMINATORIA"] },
+            },
+            _count: { _all: true },
+          }),
+          this.prisma.match.groupBy({
+            by: ["eventId"],
+            where: {
+              eventId: { in: eventIds },
+              phase: { in: ["GRUPOS", "RESULTADOS", "ELIMINATORIA"] },
+              OR: [{ winnerIndex: { not: null } }, { p1Sets: { not: null } }, { p2Sets: { not: null } }],
+            },
+            _count: { _all: true },
+          }),
+        ])
+      : [[], []];
+
+    const publishedMatchesMap = new Map<number, boolean>();
+    for (const row of publishedMatchesByEvent) {
+      publishedMatchesMap.set(row.eventId, row._count._all > 0);
+    }
+    const publishedResultsMap = new Map<number, boolean>();
+    for (const row of publishedResultsByEvent) {
+      publishedResultsMap.set(row.eventId, row._count._all > 0);
+    }
+
     return events.map((event) => ({
       ...event,
-      situacaoComputada: computeEventSituation(event),
+      situacaoComputada: computeEventSituation({
+        ...event,
+        hasPublishedMatches: publishedMatchesMap.get(event.id) ?? false,
+        hasPublishedResults: publishedResultsMap.get(event.id) ?? false,
+      }),
       proximaMudanca: getEventSituationTransition(event),
     }));
   }
