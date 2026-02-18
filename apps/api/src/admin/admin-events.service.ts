@@ -411,7 +411,7 @@ export class AdminEventsService {
     return this.prisma.scrapeRun.findMany({
       where: { eventId },
       orderBy: [{ startedAt: "desc" }],
-      take: 100,
+      take: 5,
     });
   }
 

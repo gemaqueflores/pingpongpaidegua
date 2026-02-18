@@ -57,6 +57,9 @@ function resolveManualForceStage(reason?: string): ManualForceStage {
 export class ScrapeProcessor {
   private readonly captureService = new CaptureService();
   private readonly upsertService = new UpsertService();
+  private static readonly MANUAL_FORCE_LOCK_RETRY_ATTEMPTS = 20;
+  private static readonly MANUAL_FORCE_LOCK_RETRY_DELAY_MS = 3000;
+  private static readonly SCRAPE_RUN_RETENTION_LIMIT = 5;
 
   private async withDbRetry<T>(operation: () => Promise<T>, step: string): Promise<T> {
     let lastError: unknown;
@@ -88,7 +91,10 @@ export class ScrapeProcessor {
       reason: reason ?? null,
     });
 
-    const lockAcquired = await this.acquireEventLock(eventId);
+    const forceScrape = String(reason ?? "").startsWith("scrape-now-force");
+    const lockAcquired = forceScrape
+      ? await this.acquireEventLockWithRetry(eventId)
+      : await this.acquireEventLock(eventId);
     if (!lockAcquired) {
       log("warn", "Scrape ignorado por lock ativo no evento", {
         eventId,
@@ -104,7 +110,6 @@ export class ScrapeProcessor {
       return;
     }
 
-    const forceScrape = String(reason ?? "").startsWith("scrape-now-force");
     const manualForceStage = forceScrape ? resolveManualForceStage(reason) : "full";
     if (event.concluido && !forceScrape) {
       log("info", "Evento concluido, scrape ignorado", {
@@ -208,6 +213,11 @@ export class ScrapeProcessor {
           "scrapeRun.update:stage1",
         );
 
+        await this.withDbRetry(
+          () => this.pruneOldScrapeRuns(eventId, ScrapeProcessor.SCRAPE_RUN_RETENTION_LIMIT),
+          "scrapeRun.prune:stage1",
+        );
+
         log("info", "Limpeza manual concluida", {
           eventId,
           scrapeRunId: scrapeRun.id,
@@ -233,6 +243,11 @@ export class ScrapeProcessor {
                 },
               }),
             "scrapeRun.update:stage1:error",
+          );
+
+          await this.withDbRetry(
+            () => this.pruneOldScrapeRuns(eventId, ScrapeProcessor.SCRAPE_RUN_RETENTION_LIMIT),
+            "scrapeRun.prune:stage1:error",
           );
         } catch (updateError) {
           log("error", "Falha ao persistir erro da limpeza manual", {
@@ -300,7 +315,10 @@ export class ScrapeProcessor {
         });
       }
 
-      const upsertResult = await this.upsertService.upsert(eventId, dataset);
+      const processRegistrations = manualForceStage !== "stage-3-resultados";
+      const upsertResult = await this.upsertService.upsert(eventId, dataset, {
+        processRegistrations,
+      });
       const combinedWarnings = [...upsertResult.warnings, ...capture.warnings];
       const status: ScrapeStatus = combinedWarnings.length > 0 ? "PARTIAL" : "SUCCESS";
 
@@ -346,6 +364,11 @@ export class ScrapeProcessor {
         "scrapeRun.update:success",
       );
 
+      await this.withDbRetry(
+        () => this.pruneOldScrapeRuns(eventId, ScrapeProcessor.SCRAPE_RUN_RETENTION_LIMIT),
+        "scrapeRun.prune:success",
+      );
+
       log("info", "Scrape concluido", {
         eventId,
         scrapeRunId: scrapeRun.id,
@@ -374,6 +397,11 @@ export class ScrapeProcessor {
               },
             }),
           "scrapeRun.update:error",
+        );
+
+        await this.withDbRetry(
+          () => this.pruneOldScrapeRuns(eventId, ScrapeProcessor.SCRAPE_RUN_RETENTION_LIMIT),
+          "scrapeRun.prune:error",
         );
       } catch (updateError) {
         log("error", "Falha ao persistir erro de scrapeRun", {
@@ -428,12 +456,79 @@ export class ScrapeProcessor {
     return lock.count > 0;
   }
 
+  private async acquireEventLockWithRetry(eventId: number): Promise<boolean> {
+    for (
+      let attempt = 1;
+      attempt <= ScrapeProcessor.MANUAL_FORCE_LOCK_RETRY_ATTEMPTS;
+      attempt += 1
+    ) {
+      const acquired = await this.acquireEventLock(eventId);
+      if (acquired) {
+        if (attempt > 1) {
+          log("info", "Lock de scrape adquirido apos espera", { eventId, attempt });
+        }
+        return true;
+      }
+
+      if (attempt < ScrapeProcessor.MANUAL_FORCE_LOCK_RETRY_ATTEMPTS) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, ScrapeProcessor.MANUAL_FORCE_LOCK_RETRY_DELAY_MS),
+        );
+      }
+    }
+
+    return false;
+  }
+
   private async releaseEventLock(eventId: number): Promise<void> {
     await prisma.event.updateMany({
       where: { id: eventId },
       data: {
         scrapeLockedAt: null,
       },
+    });
+  }
+
+  private async pruneOldScrapeRuns(eventId: number, keepLatest: number): Promise<void> {
+    const keep = Math.max(1, keepLatest);
+    const runs = await prisma.scrapeRun.findMany({
+      where: { eventId },
+      select: { id: true },
+      orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+    });
+
+    if (runs.length <= keep) {
+      return;
+    }
+
+    const idsToDelete = runs.slice(keep).map((run) => run.id);
+    if (idsToDelete.length === 0) {
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.rawCapture.updateMany({
+        where: {
+          eventId,
+          scrapeRunId: { in: idsToDelete },
+        },
+        data: {
+          scrapeRunId: null,
+        },
+      });
+
+      await tx.scrapeRun.deleteMany({
+        where: {
+          eventId,
+          id: { in: idsToDelete },
+        },
+      });
+    });
+
+    log("info", "Retencao de scrape runs aplicada", {
+      eventId,
+      kept: keep,
+      deleted: idsToDelete.length,
     });
   }
 

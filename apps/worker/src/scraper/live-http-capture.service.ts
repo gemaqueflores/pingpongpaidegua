@@ -150,20 +150,40 @@ function buildCardViewCategoryParam(categoryId: string, sequence: 0 | 1): string
 
 export class LiveHttpCaptureService {
   private readonly dxRequestBuilder = new DXRequestBuilder();
+  private static readonly MAX_HTTP_RETRIES = 3;
+  private static readonly RETRY_DELAY_MS = 1500;
 
   async capture(eventId: number, options?: CaptureOptions): Promise<LiveHttpCaptureResult> {
-    const requestContext = await request.newContext({
-      extraHTTPHeaders: {
-        "Accept-Encoding": process.env.SCRAPER_HTTP_ACCEPT_ENCODING ?? "gzip, deflate, br",
-        "User-Agent": process.env.SCRAPER_USER_AGENT ?? DEFAULT_USER_AGENT,
-      },
-    });
+    let lastError: unknown;
 
-    try {
-      return await this.captureWithContext(requestContext, eventId, options);
-    } finally {
-      await requestContext.dispose();
+    for (let attempt = 1; attempt <= LiveHttpCaptureService.MAX_HTTP_RETRIES; attempt += 1) {
+      const requestContext = await request.newContext({
+        extraHTTPHeaders: {
+          "Accept-Encoding": process.env.SCRAPER_HTTP_ACCEPT_ENCODING ?? "gzip, deflate, br",
+          "User-Agent": process.env.SCRAPER_USER_AGENT ?? DEFAULT_USER_AGENT,
+        },
+      });
+
+      try {
+        return await this.captureWithContext(requestContext, eventId, options);
+      } catch (error) {
+        lastError = error;
+        const message = String(error ?? "");
+        const retriable =
+          message.includes("ENOTFOUND") ||
+          message.includes("EAI_AGAIN") ||
+          message.includes("ECONNRESET") ||
+          message.includes("ETIMEDOUT");
+        if (!retriable || attempt >= LiveHttpCaptureService.MAX_HTTP_RETRIES) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, LiveHttpCaptureService.RETRY_DELAY_MS));
+      } finally {
+        await requestContext.dispose();
+      }
     }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 
   private async captureWithContext(

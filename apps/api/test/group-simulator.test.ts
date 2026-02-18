@@ -431,6 +431,38 @@ test("ordenacao aplica fallback para campo alternativo quando principal ausente"
   assert.deepEqual(result.stats.initialDistribution[0].athleteIds, [2, 1, 3]);
 });
 
+test("categoria de ranking desempata por rating quando ranking empata", () => {
+  const result = simulateGroupsForCategory({
+    seed: "sort:tie:ranking-uses-rating",
+    categoryName: "SUB-15 MASC",
+    athletes: [
+      athleteWithPoints({ id: 1, club: "A", rankingPoints: 1200, ratingPoints: 900 }),
+      athleteWithPoints({ id: 2, club: "B", rankingPoints: 1200, ratingPoints: 1100 }),
+      athleteWithPoints({ id: 3, club: "C", rankingPoints: 1000, ratingPoints: 2000 }),
+    ],
+    preferredGroupCount: 1,
+  });
+
+  assert.equal(result.stats.sortBasis, "ranking");
+  assert.deepEqual(result.stats.initialDistribution[0].athleteIds, [2, 1, 3]);
+});
+
+test("categoria de rating desempata por ranking quando rating empata", () => {
+  const result = simulateGroupsForCategory({
+    seed: "sort:tie:rating-uses-ranking",
+    categoryName: "RGM",
+    athletes: [
+      athleteWithPoints({ id: 1, club: "A", rankingPoints: 1400, ratingPoints: 1000 }),
+      athleteWithPoints({ id: 2, club: "B", rankingPoints: 1300, ratingPoints: 1000 }),
+      athleteWithPoints({ id: 3, club: "C", rankingPoints: 2000, ratingPoints: 900 }),
+    ],
+    preferredGroupCount: 1,
+  });
+
+  assert.equal(result.stats.sortBasis, "rating");
+  assert.deepEqual(result.stats.initialDistribution[0].athleteIds, [1, 2, 3]);
+});
+
 test("atletas dentro do grupo ficam ordenados por pontos de forma decrescente", () => {
   const result = simulateGroupsForCategory({
     seed: "sort:inside-group",

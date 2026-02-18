@@ -335,7 +335,11 @@ export class CaptureService {
           responses.push(text);
         }
       } catch (error) {
-        warnings.push(`Falha ao ler response DX: ${String(error)}`);
+        const message = String(error ?? "");
+        if (message.includes("Target page, context or browser has been closed")) {
+          return;
+        }
+        warnings.push(`Falha ao ler response DX: ${message}`);
       }
     });
 

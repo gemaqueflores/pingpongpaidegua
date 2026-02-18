@@ -1603,6 +1603,16 @@ export class UserService {
                 return rightPrimary - leftPrimary;
               }
 
+              const leftSecondary = useRatingPoints
+                ? (left.rankingPoints ?? Number.MIN_SAFE_INTEGER)
+                : (left.ratingPoints ?? Number.MIN_SAFE_INTEGER);
+              const rightSecondary = useRatingPoints
+                ? (right.rankingPoints ?? Number.MIN_SAFE_INTEGER)
+                : (right.ratingPoints ?? Number.MIN_SAFE_INTEGER);
+              if (leftSecondary !== rightSecondary) {
+                return rightSecondary - leftSecondary;
+              }
+
               const byName = left.nameDisplay.localeCompare(right.nameDisplay, "pt-BR", {
                 sensitivity: "base",
               });

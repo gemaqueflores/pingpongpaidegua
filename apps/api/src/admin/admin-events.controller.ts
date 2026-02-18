@@ -1,4 +1,4 @@
-﻿import {
+import {
   Body,
   Controller,
   Delete,
@@ -7,6 +7,7 @@
   ParseIntPipe,
   Post,
   Put,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import { AdminEventsService } from "./admin-events.service";
@@ -17,7 +18,6 @@ import { CreateAdminEventDto } from "./dto/create-admin-event.dto";
 import { UpdateAdminEventDto } from "./dto/update-admin-event.dto";
 import { ResolveAthleteConflictDto } from "./dto/resolve-athlete-conflict.dto";
 import { RawCaptureCleanupDto } from "./dto/raw-capture-cleanup.dto";
-import { ScrapeNowDto } from "./dto/scrape-now.dto";
 import { UpdateEfficiencyConfigDto } from "./dto/update-efficiency-config.dto";
 import { CreateEventMergeDto } from "./dto/create-event-merge.dto";
 
@@ -78,8 +78,20 @@ export class AdminEventsController {
   }
 
   @Post(":id/scrape-now")
-  async scrapeNow(@Param("id", ParseIntPipe) id: number, @Body() body: ScrapeNowDto) {
-    return this.service.scrapeNow(id, body.stage);
+  async scrapeNow(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() body?: Record<string, unknown>,
+    @Query("stage") stageQuery?: string,
+  ) {
+    const rawStage = body?.stage ?? stageQuery;
+    const parsedStage =
+      typeof rawStage === "number"
+        ? rawStage
+        : typeof rawStage === "string"
+          ? Number(rawStage)
+          : undefined;
+    const stage = parsedStage === 1 || parsedStage === 2 || parsedStage === 3 ? parsedStage : undefined;
+    return this.service.scrapeNow(id, stage);
   }
 
   @Get(":id/scrape-runs")

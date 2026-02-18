@@ -35,7 +35,8 @@ export class QueueService implements OnModuleDestroy {
     reason = "manual",
   ): Promise<{ jobId: string; status: "queued"; deduplicated?: boolean }> {
     const minuteBucket = Math.floor(Date.now() / 60000);
-    const jobId = `event-${eventId}-${reason}-${minuteBucket}`;
+    const reasonToken = this.toJobIdToken(reason);
+    const jobId = `event-${eventId}-${reasonToken}-${minuteBucket}`;
     return this.enqueueUnique("scrape-event", { eventId, reason }, jobId);
   }
 
@@ -52,7 +53,8 @@ export class QueueService implements OnModuleDestroy {
           : stage === 3
             ? "scrape-now-force:stage-3"
             : "scrape-now-force";
-    const jobId = `event-${eventId}-${reason}-${minuteBucket}`;
+    const reasonToken = this.toJobIdToken(reason);
+    const jobId = `event-${eventId}-${reasonToken}-${minuteBucket}`;
     return this.enqueueUnique("scrape-event", { eventId, reason }, jobId);
   }
 
@@ -62,7 +64,8 @@ export class QueueService implements OnModuleDestroy {
   ): Promise<{ jobId: string; status: "queued"; deduplicated?: boolean }> {
     const minuteBucket = Math.floor(Date.now() / 60000);
     const reason = mode;
-    const jobId = `publish-readonly-${eventId}-${mode}-${minuteBucket}`;
+    const reasonToken = this.toJobIdToken(mode);
+    const jobId = `publish-readonly-${eventId}-${reasonToken}-${minuteBucket}`;
     return this.enqueueUnique("publish-readonly-event", { eventId, reason }, jobId);
   }
 
@@ -70,6 +73,18 @@ export class QueueService implements OnModuleDestroy {
     const minuteBucket = Math.floor(Date.now() / 60000);
     const jobId = `publish-open-events-${minuteBucket}`;
     return this.enqueueUnique("publish-open-events", { eventId: 0, reason: "incremental-open-events" }, jobId);
+  }
+
+  private toJobIdToken(input: string): string {
+    const raw = String(input ?? "").trim().toLowerCase();
+    if (!raw) {
+      return "manual";
+    }
+
+    return raw
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
   }
 
   private async enqueueUnique(

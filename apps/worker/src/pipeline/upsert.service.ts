@@ -27,6 +27,10 @@ interface UpsertResult {
   extractionStats: ParsedDataset["extractionStats"];
 }
 
+interface UpsertOptions {
+  processRegistrations?: boolean;
+}
+
 interface CachedClub {
   id: number;
   name: string;
@@ -666,7 +670,8 @@ function deduplicateParsedMatches(matches: ParsedMatch[]): DedupedMatchesResult 
 }
 
 export class UpsertService {
-  async upsert(eventId: number, dataset: ParsedDataset): Promise<UpsertResult> {
+  async upsert(eventId: number, dataset: ParsedDataset, options?: UpsertOptions): Promise<UpsertResult> {
+    const processRegistrations = options?.processRegistrations ?? true;
     const inserted: Record<string, number> = {};
     const updated: Record<string, number> = {};
     const warnings: string[] = [...dataset.warnings];
@@ -735,123 +740,125 @@ export class UpsertService {
       );
     }
 
-    for (const registration of dataset.registrations) {
-      const athleteNameDisplay = compactWhitespace(registration.athleteName);
-      const athleteNameNormalized =
-        normalizeText(registration.athleteNormalizedName) || normalizeText(athleteNameDisplay);
-      if (!athleteNameDisplay || !athleteNameNormalized) {
-        warnings.push(
-          `Inscricao ignorada por atleta invalido na categoria '${registration.categoryName}'.`,
+    if (processRegistrations) {
+      for (const registration of dataset.registrations) {
+        const athleteNameDisplay = compactWhitespace(registration.athleteName);
+        const athleteNameNormalized =
+          normalizeText(registration.athleteNormalizedName) || normalizeText(athleteNameDisplay);
+        if (!athleteNameDisplay || !athleteNameNormalized) {
+          warnings.push(
+            `Inscricao ignorada por atleta invalido na categoria '${registration.categoryName}'.`,
+          );
+          continue;
+        }
+
+        const clubNameDisplay = compactWhitespace(registration.clubName) || "SEM CLUBE";
+        const clubNameNormalized =
+          normalizeText(registration.clubNormalizedName) || normalizeText(clubNameDisplay) || "sem clube";
+        const categoryNameDisplay = compactWhitespace(registration.categoryName);
+        const categoryNameNormalized =
+          normalizeText(registration.categoryNormalizedName) || normalizeText(categoryNameDisplay);
+        if (!categoryNameDisplay || !categoryNameNormalized) {
+          warnings.push(
+            `Inscricao ignorada por categoria invalida para atleta '${athleteNameDisplay}'.`,
+          );
+          continue;
+        }
+
+        const club = await this.ensureClub(
+          clubNameDisplay,
+          clubNameNormalized,
+          clubsByNormalized,
+          inserted,
+          updated,
         );
-        continue;
-      }
 
-      const clubNameDisplay = compactWhitespace(registration.clubName) || "SEM CLUBE";
-      const clubNameNormalized =
-        normalizeText(registration.clubNormalizedName) || normalizeText(clubNameDisplay) || "sem clube";
-      const categoryNameDisplay = compactWhitespace(registration.categoryName);
-      const categoryNameNormalized =
-        normalizeText(registration.categoryNormalizedName) || normalizeText(categoryNameDisplay);
-      if (!categoryNameDisplay || !categoryNameNormalized) {
-        warnings.push(
-          `Inscricao ignorada por categoria invalida para atleta '${athleteNameDisplay}'.`,
+        const category = await this.ensureCategory(
+          eventId,
+          categoryNameDisplay,
+          categoryNameNormalized,
+          registration.categoryId ?? null,
+          categoriesByNormalized,
+          categoriesByCbtmId,
+          inserted,
+          updated,
         );
-        continue;
-      }
 
-      const club = await this.ensureClub(
-        clubNameDisplay,
-        clubNameNormalized,
-        clubsByNormalized,
-        inserted,
-        updated,
-      );
+        const athlete = await this.ensureRegisteredAthlete({
+          eventId,
+          eventLevel,
+          club,
+          nameDisplay: athleteNameDisplay,
+          nameNormalized: athleteNameNormalized,
+          rankingPoints: registration.rankingPoints,
+          ratingPoints: registration.ratingPoints,
+          inserted,
+          updated,
+          warnings,
+          federationWarningKeys,
+          athletesById,
+        });
 
-      const category = await this.ensureCategory(
-        eventId,
-        categoryNameDisplay,
-        categoryNameNormalized,
-        registration.categoryId ?? null,
-        categoriesByNormalized,
-        categoriesByCbtmId,
-        inserted,
-        updated,
-      );
-
-      const athlete = await this.ensureRegisteredAthlete({
-        eventId,
-        eventLevel,
-        club,
-        nameDisplay: athleteNameDisplay,
-        nameNormalized: athleteNameNormalized,
-        rankingPoints: registration.rankingPoints,
-        ratingPoints: registration.ratingPoints,
-        inserted,
-        updated,
-        warnings,
-        federationWarningKeys,
-        athletesById,
-      });
-
-      await this.ensureAthleteAlias({
-        athleteId: athlete.id,
-        aliasDisplay: athleteNameDisplay,
-        aliasNormalized: athleteNameNormalized,
-        source: "INSCRICOES",
-        inserted,
-        updated,
-        athletesById,
-        aliasToAthleteIds,
-      });
-
-      const registrationAliases = buildRegistrationAliases({
-        nameDisplay: athleteNameDisplay,
-        nameNormalized: athleteNameNormalized,
-      });
-      for (const alias of registrationAliases) {
         await this.ensureAthleteAlias({
           athleteId: athlete.id,
-          aliasDisplay: alias.aliasDisplay,
-          aliasNormalized: alias.aliasNormalized,
+          aliasDisplay: athleteNameDisplay,
+          aliasNormalized: athleteNameNormalized,
           source: "INSCRICOES",
           inserted,
           updated,
           athletesById,
           aliasToAthleteIds,
         });
-      }
 
-      const registrationStatus = toRegistrationStatus(registration.status);
-      await prisma.athleteCategory.upsert({
-        where: {
-          athleteId_categoryId: {
+        const registrationAliases = buildRegistrationAliases({
+          nameDisplay: athleteNameDisplay,
+          nameNormalized: athleteNameNormalized,
+        });
+        for (const alias of registrationAliases) {
+          await this.ensureAthleteAlias({
+            athleteId: athlete.id,
+            aliasDisplay: alias.aliasDisplay,
+            aliasNormalized: alias.aliasNormalized,
+            source: "INSCRICOES",
+            inserted,
+            updated,
+            athletesById,
+            aliasToAthleteIds,
+          });
+        }
+
+        const registrationStatus = toRegistrationStatus(registration.status);
+        await prisma.athleteCategory.upsert({
+          where: {
+            athleteId_categoryId: {
+              athleteId: athlete.id,
+              categoryId: category.id,
+            },
+          },
+          create: {
             athleteId: athlete.id,
             categoryId: category.id,
+            registrationStatus,
+            rankingPoints: registration.rankingPoints,
+            ratingPoints: registration.ratingPoints,
           },
-        },
-        create: {
+          update: {
+            registrationStatus,
+            rankingPoints: registration.rankingPoints,
+            ratingPoints: registration.ratingPoints,
+          },
+        });
+
+        const observed = registrationCategoriesByAthlete.get(athlete.id) ?? new Set<number>();
+        observed.add(category.id);
+        registrationCategoriesByAthlete.set(athlete.id, observed);
+        observedRegistrationPairs.set(`${athlete.id}|${category.id}`, {
           athleteId: athlete.id,
           categoryId: category.id,
+          categoryName: category.name,
           registrationStatus,
-          rankingPoints: registration.rankingPoints,
-          ratingPoints: registration.ratingPoints,
-        },
-        update: {
-          registrationStatus,
-          rankingPoints: registration.rankingPoints,
-          ratingPoints: registration.ratingPoints,
-        },
-      });
-
-      const observed = registrationCategoriesByAthlete.get(athlete.id) ?? new Set<number>();
-      observed.add(category.id);
-      registrationCategoriesByAthlete.set(athlete.id, observed);
-      observedRegistrationPairs.set(`${athlete.id}|${category.id}`, {
-        athleteId: athlete.id,
-        categoryId: category.id,
-        categoryName: category.name,
-        registrationStatus,
-      });
+        });
+      }
     }
 
     const observedRegistrationStatsByCategory = new Map<number, ObservedRegistrationCategoryStats>();
@@ -878,6 +885,7 @@ export class UpsertService {
     }
 
     if (
+      processRegistrations &&
       shouldSyncRegistrationSnapshot({
         eventConcluded: Boolean(event?.concluido),
         eventSituation,
