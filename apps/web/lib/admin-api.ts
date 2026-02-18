@@ -130,10 +130,15 @@ export async function apiMarkCompleted(id: number) {
 }
 
 export async function apiScrapeNow(id: number, stage?: 1 | 2 | 3) {
-  const response = await fetch(`${API_BASE}/admin/events/${id}/scrape-now`, {
+  const url = new URL(`${API_BASE}/admin/events/${id}/scrape-now`);
+  if (stage) {
+    url.searchParams.set("stage", String(stage));
+  }
+
+  const response = await fetch(url.toString(), {
     method: "POST",
     headers: getHeaders(),
-    body: stage ? JSON.stringify({ stage }) : undefined,
+    body: stage ? JSON.stringify({ stage }) : JSON.stringify({}),
   });
 
   return handleResponse(response);

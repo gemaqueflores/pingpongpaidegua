@@ -293,6 +293,17 @@ export default function GroupSimulatorPage() {
                                     if (leftPoints !== rightPoints) {
                                       return rightPoints - leftPoints;
                                     }
+
+                                    const leftTieBreak = useRatingPoints
+                                      ? (left.rankingPoints ?? Number.MIN_SAFE_INTEGER)
+                                      : (left.ratingPoints ?? Number.MIN_SAFE_INTEGER);
+                                    const rightTieBreak = useRatingPoints
+                                      ? (right.rankingPoints ?? Number.MIN_SAFE_INTEGER)
+                                      : (right.ratingPoints ?? Number.MIN_SAFE_INTEGER);
+                                    if (leftTieBreak !== rightTieBreak) {
+                                      return rightTieBreak - leftTieBreak;
+                                    }
+
                                     return (left.nameReduced || left.nameDisplay).localeCompare(
                                       right.nameReduced || right.nameDisplay,
                                       "pt-BR",
