@@ -11,10 +11,13 @@ import {
 } from "../../../../../lib/user-api";
 import { ShareActions } from "../../../../../components/share/ShareActions";
 import { createGroupSimulationShareImageBlob } from "../../../../../lib/share-image";
-import { HeroTitle } from "../../../../../components/ui/HeroTitle";
 import { Card } from "../../../../../components/ui/Card";
 import { Skeleton } from "../../../../../components/ui/Skeleton";
 import { Badge } from "../../../../../components/ui/Badge";
+import { PageHeader } from "../../../../../components/ui/PageHeader";
+import { SearchInput } from "../../../../../components/ui/SearchInput";
+import { SegmentedControl } from "../../../../../components/ui/SegmentedControl";
+import { EmptyState } from "../../../../../components/ui/EmptyState";
 
 type EventRow = UserEventRow;
 
@@ -136,39 +139,28 @@ export default function GroupSimulatorPage() {
 
   return (
     <main className="container grid user-page">
-      <HeroTitle
+      <PageHeader
         title="Simulador de Grupos"
         subtitle="Arena de projeção de grupos"
+        compact
         actions={
           <>
-            <button type="button" className="event-back-button" onClick={() => (window.location.href = `/events/${eventId}`)}>
-              ← Voltar
-            </button>
-            <button className="secondary" onClick={() => (window.location.href = "/")}>
-              Home
-            </button>
+            <button type="button" className="event-back-button" onClick={() => (window.location.href = `/events/${eventId}`)}>← Voltar</button>
           </>
         }
       />
 
       <Card className="grid">
         <h2>{event?.nome ?? `Evento ${eventId}`}</h2>
-        <div className="balloon-group" role="group" aria-label="Escopo de inscritos">
-          <button
-            className={`balloon-button ${scope === "confirmed" ? "active" : ""}`}
-            onClick={() => setScope("confirmed")}
-            type="button"
-          >
-            {SCOPE_LABEL.confirmed}
-          </button>
-          <button
-            className={`balloon-button ${scope === "confirmed_and_pre" ? "active" : ""}`}
-            onClick={() => setScope("confirmed_and_pre")}
-            type="button"
-          >
-            Incluir pré-inscritos
-          </button>
-        </div>
+        <SegmentedControl
+          label="Escopo de inscritos"
+          value={scope}
+          onChange={(next) => setScope(next as GroupSimulationScope)}
+          items={[
+            { value: "confirmed", label: SCOPE_LABEL.confirmed },
+            { value: "confirmed_and_pre", label: "Incluir pré-inscritos" },
+          ]}
+        />
         {loading ? (
           <div className="grid">
             <Skeleton height="24px" />
@@ -179,7 +171,12 @@ export default function GroupSimulatorPage() {
         {error ? <p className="warn">{error}</p> : null}
         {!loading && !error && response ? (
           <>
-            {!hasCategories ? <p>Nenhuma categoria disponível para simulação neste escopo.</p> : null}
+            {!hasCategories ? (
+              <EmptyState
+                title="Sem categorias para simular"
+                description="Nenhuma categoria disponível para o escopo selecionado."
+              />
+            ) : null}
 
             {hasCategories ? (
               <div className="sim-category-carousel">
@@ -190,7 +187,7 @@ export default function GroupSimulatorPage() {
                       Legenda das colunas
                     </span>
                   </div>
-                  <label className="arena-muted" htmlFor="group-sim-category-search">Buscar categoria</label>
+                  <p className="arena-muted" style={{ margin: 0 }}>Buscar categoria</p>
                   <div className="row" style={{ justifyContent: "space-between" }}>
                     <p className="sim-category-carousel-counter">
                       {visibleCategories.length > 0 ? "Categoria selecionada para simulação" : "Nenhuma categoria encontrada"}
@@ -201,14 +198,11 @@ export default function GroupSimulatorPage() {
                   </div>
                   {filterOpen ? (
                     <>
-                      <input
-                        id="group-sim-category-search"
-                        className="home-athletes-search"
+                      <SearchInput
                         value={categorySearch}
-                        onChange={(event) => setCategorySearch(event.target.value)}
+                        onDebouncedChange={setCategorySearch}
                         placeholder="Digite para filtrar categorias"
-                        autoCapitalize="none"
-                        autoCorrect="off"
+                        ariaLabel="Buscar categoria do simulador"
                       />
                       <select
                         value={selectedCategoryId ?? ""}

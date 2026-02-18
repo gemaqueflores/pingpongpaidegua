@@ -11,6 +11,7 @@ import { MatchCard } from "../../../../components/ui/MatchCard";
 import { Skeleton } from "../../../../components/ui/Skeleton";
 import { AthleteSummaryCard } from "../../../../components/career/AthleteSummaryCard";
 import type { MedalMatrix } from "../../../../components/career/MedalMatrixTable";
+import { DataTableResponsive } from "../../../../components/ui/DataTableResponsive";
 
 type CareerMatch = {
   id: number;
@@ -665,29 +666,45 @@ export default function AthleteCareerPage() {
 
                   <div>
                     <strong>Aproveitamento do evento e por categoria</strong>
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Categoria</th>
-                          <th>Aproveitamento</th>
-                          <th>Classificação</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="classification-row-default">
-                          <td><strong>Total do evento</strong></td>
-                          <td><strong>{formatRatio(event.performance.ratio)} ({event.performance.pointsWon}/{event.performance.pointsPlayed})</strong></td>
-                          <td><strong>-</strong></td>
-                        </tr>
-                        {sortedCategoryPerformance.map((item) => (
-                          <tr key={`${event.id}-${item.categoryId}`} className={getClassificationRowClass(item.classification?.position)}>
-                            <td>{item.categoryName}</td>
-                            <td>{formatRatio(item.performance.ratio)} ({item.performance.pointsWon}/{item.performance.pointsPlayed})</td>
-                            <td>{item.classification?.position ? `${item.classification.position}º` : "-"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <DataTableResponsive
+                      rows={[
+                        {
+                          categoryId: -1,
+                          categoryName: "Total do evento",
+                          performance: event.performance,
+                          classification: null,
+                        },
+                        ...sortedCategoryPerformance,
+                      ]}
+                      rowClassName={(item) =>
+                        item.categoryId === -1 ? "classification-row-default" : getClassificationRowClass(item.classification?.position)
+                      }
+                      empty={<p className="arena-muted">Sem dados de aproveitamento por categoria.</p>}
+                      columns={[
+                        { key: "categoria", header: "Categoria", render: (item) => item.categoryName },
+                        {
+                          key: "aproveitamento",
+                          header: "Aproveitamento",
+                          render: (item) => `${formatRatio(item.performance.ratio)} (${item.performance.pointsWon}/${item.performance.pointsPlayed})`,
+                        },
+                        {
+                          key: "classificacao",
+                          header: "Classificação",
+                          render: (item) => (item.classification?.position ? `${item.classification.position}º` : "-"),
+                        },
+                      ]}
+                      mobileCard={(item) => (
+                        <article key={`${event.id}-${item.categoryId}`} className={`athlete-list-card ${item.categoryId === -1 ? "classification-row-default" : getClassificationRowClass(item.classification?.position)}`}>
+                          <strong>{item.categoryName}</strong>
+                          <p style={{ margin: 0 }}>
+                            Aproveitamento {formatRatio(item.performance.ratio)} ({item.performance.pointsWon}/{item.performance.pointsPlayed})
+                          </p>
+                          <p className="arena-muted" style={{ margin: 0 }}>
+                            Classificação {item.classification?.position ? `${item.classification.position}º` : "-"}
+                          </p>
+                        </article>
+                      )}
+                    />
                   </div>
 
                   <details

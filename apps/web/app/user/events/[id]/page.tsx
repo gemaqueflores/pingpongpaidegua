@@ -18,6 +18,10 @@ import { Card } from "../../../../components/ui/Card";
 import { Badge } from "../../../../components/ui/Badge";
 import { Skeleton } from "../../../../components/ui/Skeleton";
 import { EventStatusTimeline } from "../../../../components/ui/EventStatusTimeline";
+import { SearchInput } from "../../../../components/ui/SearchInput";
+import { SegmentedControl } from "../../../../components/ui/SegmentedControl";
+import { EmptyState } from "../../../../components/ui/EmptyState";
+import { DataTableResponsive } from "../../../../components/ui/DataTableResponsive";
 
 type EventRow = UserEventRow;
 type EventTab = "grupos" | "clubes" | "atletas" | "eficiencia";
@@ -333,6 +337,11 @@ export default function EventDetailPage() {
     return rows;
   }, [efficiencyData?.ranking, efficiencyMode]);
 
+  const mobileEfficiencyRows = useMemo(() => {
+    if (!hasConcludedPodium) return rankedEfficiencyRows;
+    return rankedEfficiencyRows.slice(3);
+  }, [hasConcludedPodium, rankedEfficiencyRows]);
+
   function valueForMode(row: EventEfficiencyRow, medalha: "ouro" | "prata" | "bronze" | "total"): number {
     if (efficiencyMode === "quantidade") {
       if (medalha === "total") return row.totalQuantidade;
@@ -409,20 +418,13 @@ export default function EventDetailPage() {
             <span><small>Status</small><strong>{statusLabel}</strong></span>
           </div>
           <div className="event-tabs-shell">
-            <div className="balloon-group letter-tab-strip letter-tab-sticky" role="tablist" aria-label="Seções do evento">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === tab.id}
-                  className={`balloon-button ${activeTab === tab.id ? "active" : ""}`}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              className="letter-tab-strip letter-tab-sticky"
+              label="Seções do evento"
+              value={activeTab}
+              onChange={(next) => setActiveTab(next as EventTab)}
+              items={tabs.map((tab) => ({ value: tab.id, label: tab.label }))}
+            />
           </div>
           <EventStatusTimeline phase={eventPhase} />
           {eventBanner ? (
@@ -471,14 +473,11 @@ export default function EventDetailPage() {
         <Card className="grid event-tab-panel">
           <div className="row" style={{ justifyContent: "space-between" }}>
             <h2>Clubes</h2>
-            <input
-              className="home-athletes-search"
+            <SearchInput
               value={clubSearch}
-              onChange={(event) => setClubSearch(event.target.value)}
+              onDebouncedChange={setClubSearch}
               placeholder="Buscar clube"
-              aria-label="Buscar clube"
-              autoCapitalize="none"
-              autoCorrect="off"
+              ariaLabel="Buscar clube"
             />
           </div>
           {clubsLoading ? (
@@ -488,7 +487,12 @@ export default function EventDetailPage() {
               <Skeleton height="56px" />
             </div>
           ) : null}
-          {!clubsLoading && filteredClubs.length === 0 ? <p>Nenhum clube encontrado para este evento.</p> : null}
+          {!clubsLoading && filteredClubs.length === 0 ? (
+            <EmptyState
+              title="Nenhum clube encontrado"
+              description="Ajuste o filtro para exibir clubes deste evento."
+            />
+          ) : null}
 
           <div className="grid">
             {filteredClubs.map((club) => {
@@ -542,18 +546,13 @@ export default function EventDetailPage() {
             <h2>Atletas do evento</h2>
             <Badge tone="default">Filtrados: {sortedAthletes.length}</Badge>
           </div>
-          <div className="search-input-wrap atletas-search-sticky">
-            <span className="search-input-icon" aria-hidden="true">🔎</span>
-            <input
-              className="home-athletes-search search-input-with-icon"
-              value={athleteSearch}
-              onChange={(event) => setAthleteSearch(event.target.value)}
-              placeholder="Buscar atleta por nome"
-              aria-label="Buscar atleta por nome"
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
-          </div>
+          <SearchInput
+            value={athleteSearch}
+            onDebouncedChange={setAthleteSearch}
+            placeholder="Buscar atleta por nome"
+            ariaLabel="Buscar atleta por nome"
+            stickyClassName="atletas-search-sticky"
+          />
           {athletesLoading ? (
             <div className="grid">
               <Skeleton height="52px" />
@@ -562,33 +561,25 @@ export default function EventDetailPage() {
             </div>
           ) : (
             <>
-              <div className="event-athletes-desktop">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Atleta</th>
-                      <th>Clube</th>
-                      <th>UF/Região</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleAthletes.map((athlete) => (
-                      <tr key={athlete.id}>
-                        <td>{athlete.nameDisplay ?? athlete.name}</td>
-                        <td>{athlete.club?.name ?? "-"}</td>
-                        <td>{formatAthleteFederation(athlete)}</td>
-                        <td>
-                          <Link href={`/events/${eventId}/athletes/${athlete.id}`}>Detalhes</Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="event-athletes-mobile-list">
-                {visibleAthletes.map((athlete) => (
+              <DataTableResponsive
+                rows={visibleAthletes}
+                empty={
+                  <EmptyState
+                    title="Nenhum atleta encontrado"
+                    description="Ajuste o termo da busca para encontrar atletas deste evento."
+                  />
+                }
+                columns={[
+                  { key: "atleta", header: "Atleta", render: (athlete) => athlete.nameDisplay ?? athlete.name },
+                  { key: "clube", header: "Clube", render: (athlete) => athlete.club?.name ?? "-" },
+                  { key: "federacao", header: "UF/Região", render: (athlete) => formatAthleteFederation(athlete) },
+                  {
+                    key: "acoes",
+                    header: "Ações",
+                    render: (athlete) => <Link href={`/events/${eventId}/athletes/${athlete.id}`}>Detalhes</Link>,
+                  },
+                ]}
+                mobileCard={(athlete) => (
                   <article key={athlete.id} className="athlete-list-card">
                     <h3>{athlete.nameDisplay ?? athlete.name}</h3>
                     <p className="arena-muted" style={{ margin: 0 }}>{athlete.club?.name ?? "-"}</p>
@@ -599,8 +590,8 @@ export default function EventDetailPage() {
                       Detalhes
                     </Link>
                   </article>
-                ))}
-              </div>
+                )}
+              />
               {sortedAthletes.length > athletesVisible ? (
                 <div className="row" style={{ justifyContent: "center" }}>
                   <button type="button" onClick={() => setAthletesVisible((current) => current + ATHLETES_PAGE_SIZE)}>
@@ -617,22 +608,15 @@ export default function EventDetailPage() {
         <Card className="grid event-tab-panel">
           <div className="row" style={{ justifyContent: "space-between" }}>
             <h2>Eficiência dos clubes</h2>
-            <div className="balloon-group" role="group" aria-label="Modo de exibição da eficiência">
-              <button
-                type="button"
-                className={`balloon-button ${efficiencyMode === "quantidade" ? "active" : ""}`}
-                onClick={() => setEfficiencyMode("quantidade")}
-              >
-                Quantidade
-              </button>
-              <button
-                type="button"
-                className={`balloon-button ${efficiencyMode === "pontuacao" ? "active" : ""}`}
-                onClick={() => setEfficiencyMode("pontuacao")}
-              >
-                Pontuação
-              </button>
-            </div>
+            <SegmentedControl
+              label="Modo de exibição da eficiência"
+              value={efficiencyMode}
+              onChange={(next) => setEfficiencyMode(next as EfficiencyViewMode)}
+              items={[
+                { value: "quantidade", label: "Quantidade" },
+                { value: "pontuacao", label: "Pontuação" },
+              ]}
+            />
           </div>
           {efficiencyData ? (
             <p className="arena-muted" style={{ marginTop: 0 }}>
@@ -648,10 +632,10 @@ export default function EventDetailPage() {
             </div>
           ) : null}
           {!efficiencyLoading && rankedEfficiencyRows.length === 0 ? (
-            <div className="event-empty-state">
-              <h3>Nenhuma pontuação registrada</h3>
-              <p>A eficiência será calculada quando resultados forem publicados.</p>
-            </div>
+            <EmptyState
+              title="Nenhuma pontuação registrada"
+              description="A eficiência será calculada quando resultados forem publicados."
+            />
           ) : null}
 
           {!efficiencyLoading && rankedEfficiencyRows.length > 0 && hasConcludedPodium ? (
@@ -675,55 +659,40 @@ export default function EventDetailPage() {
           ) : null}
 
           {!efficiencyLoading && rankedEfficiencyRows.length > 0 ? (
-            <div className="global-mobile-scroll event-efficiency-desktop">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Clube</th>
-                    <th>Atletas</th>
-                    <th>Ouro</th>
-                    <th>Prata</th>
-                    <th>Bronze</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rankedEfficiencyRows.map((row, index) => (
-                    <tr key={row.clubId} className={podiumClass(index)}>
-                      <td>{index + 1}</td>
-                      <td>
-                        <Link href={`/eficiencia/${row.clubId}`}>{row.clubName}</Link>
-                      </td>
-                      <td>{row.athleteCount}</td>
-                      <td>{valueForMode(row, "ouro")}</td>
-                      <td>{valueForMode(row, "prata")}</td>
-                      <td>{valueForMode(row, "bronze")}</td>
-                      <td>
-                        <strong>{valueForMode(row, "total")}</strong>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTableResponsive
+              rows={rankedEfficiencyRows}
+              rowClassName={(row, index) => podiumClass(index)}
+              empty={null}
+              columns={[
+                { key: "rank", header: "#", render: (_, index) => index + 1 },
+                { key: "clube", header: "Clube", render: (row) => <Link href={`/eficiencia/${row.clubId}`}>{row.clubName}</Link> },
+                { key: "atletas", header: "Atletas", render: (row) => row.athleteCount },
+                { key: "ouro", header: "Ouro", render: (row) => valueForMode(row, "ouro") },
+                { key: "prata", header: "Prata", render: (row) => valueForMode(row, "prata") },
+                { key: "bronze", header: "Bronze", render: (row) => valueForMode(row, "bronze") },
+                { key: "total", header: "Total", render: (row) => <strong>{valueForMode(row, "total")}</strong> },
+              ]}
+              mobileCard={(_, __) => null}
+              className="event-efficiency-responsive"
+            />
           ) : null}
 
-          {!efficiencyLoading && rankedEfficiencyRows.length > 0 ? (
-            <div className="event-efficiency-mobile-list">
-              {(hasConcludedPodium ? rankedEfficiencyRows.slice(3) : rankedEfficiencyRows).map((row, listIndex) => {
+          {!efficiencyLoading && mobileEfficiencyRows.length > 0 ? (
+            <div className="event-efficiency-mobile-list data-table-responsive-mobile">
+              {mobileEfficiencyRows.map((row, listIndex) => {
                 const index = hasConcludedPodium ? listIndex + 3 : listIndex;
                 return (
-                <article key={row.clubId} className={`athlete-list-card ${podiumClass(index)}`}>
-                  <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                    <strong>#{index + 1} {row.clubName}</strong>
-                    <strong className="event-efficiency-total">{valueForMode(row, "total")}</strong>
-                  </div>
-                  <p className="arena-muted" style={{ margin: 0 }}>
-                    Atletas {row.athleteCount} | 🥇 {valueForMode(row, "ouro")} | 🥈 {valueForMode(row, "prata")} | 🥉 {valueForMode(row, "bronze")}
-                  </p>
-                </article>
-              )})}
+                  <article key={row.clubId} className={`athlete-list-card ${podiumClass(index)}`}>
+                    <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                      <strong>#{index + 1} {row.clubName}</strong>
+                      <strong className="event-efficiency-total">{valueForMode(row, "total")}</strong>
+                    </div>
+                    <p className="arena-muted" style={{ margin: 0 }}>
+                      Atletas {row.athleteCount} | 🥇 {valueForMode(row, "ouro")} | 🥈 {valueForMode(row, "prata")} | 🥉 {valueForMode(row, "bronze")}
+                    </p>
+                  </article>
+                );
+              })}
             </div>
           ) : null}
         </Card>

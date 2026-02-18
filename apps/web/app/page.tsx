@@ -14,7 +14,10 @@ import { Card } from "../components/ui/Card";
 import { EventCard } from "../components/ui/EventCard";
 import { Skeleton } from "../components/ui/Skeleton";
 import { Badge } from "../components/ui/Badge";
-import { UserHeader } from "../components/user/UserHeader";
+import { UserShell } from "../components/user/UserShell";
+import { SegmentedControl } from "../components/ui/SegmentedControl";
+import { FilterDrawer } from "../components/ui/FilterDrawer";
+import { EmptyState } from "../components/ui/EmptyState";
 
 type EventRow = UserEventRow;
 type EventTypeFilter = "ALL" | "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN";
@@ -151,8 +154,8 @@ export default function HomePage() {
   }, [eventStatusFilter, eventTypeFilter, sortedEvents]);
 
   return (
-    <div className="user-theme home-theme">
-      <UserHeader />
+    <UserShell>
+      <div className="user-theme home-theme">
       <main className="container grid user-page">
         <Hero
           title="Plataforma de Tênis de Mesa Brasil"
@@ -239,44 +242,34 @@ export default function HomePage() {
             <Badge tone="default">Ordenado por situação e data</Badge>
           </div>
           <div className="row home-event-filters">
-            <button
-              type="button"
-              className="events-filter-trigger"
-              onClick={() => setMobileEventFiltersOpen((current) => !current)}
-              aria-expanded={mobileEventFiltersOpen}
-              aria-controls="event-filters-panel"
+            <FilterDrawer
+              title="eventos"
+              open={mobileEventFiltersOpen}
+              onToggle={() => setMobileEventFiltersOpen((current) => !current)}
             >
-              Filtrar eventos
-            </button>
-            <div
-              id="event-filters-panel"
-              className={`home-event-filters-panel ${mobileEventFiltersOpen ? "open" : ""}`}
-            >
-              <div className="balloon-group" role="group" aria-label="Filtro por tipo">
-                {(["ALL", "ESTADUAL", "COPA", "BRASILEIRAO", "OPEN"] as EventTypeFilter[]).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    className={`balloon-button ${eventTypeFilter === type ? "active" : ""}`}
-                    onClick={() => setEventTypeFilter(type)}
-                  >
-                    {type === "ALL" ? "Todos os tipos" : type === "BRASILEIRAO" ? "Brasileirão" : type}
-                  </button>
-                ))}
-              </div>
-              <div className="balloon-group" role="group" aria-label="Filtro por status">
-                {(["ALL", "OPEN", "DONE"] as EventStatusFilter[]).map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    className={`balloon-button ${eventStatusFilter === status ? "active" : ""}`}
-                    onClick={() => setEventStatusFilter(status)}
-                  >
-                    {status === "ALL" ? "Todos os status" : status === "OPEN" ? "Em aberto" : "Concluídos"}
-                  </button>
-                ))}
-              </div>
-            </div>
+              <SegmentedControl
+                label="Filtro por tipo"
+                value={eventTypeFilter}
+                onChange={setEventTypeFilter}
+                items={[
+                  { value: "ALL", label: "Todos os tipos" },
+                  { value: "ESTADUAL", label: "Estadual" },
+                  { value: "COPA", label: "Copa" },
+                  { value: "BRASILEIRAO", label: "Brasileirão" },
+                  { value: "OPEN", label: "Open" },
+                ]}
+              />
+              <SegmentedControl
+                label="Filtro por status"
+                value={eventStatusFilter}
+                onChange={setEventStatusFilter}
+                items={[
+                  { value: "ALL", label: "Todos os status" },
+                  { value: "OPEN", label: "Em aberto" },
+                  { value: "DONE", label: "Concluídos" },
+                ]}
+              />
+            </FilterDrawer>
           </div>
 
           {loadingEvents ? (
@@ -307,7 +300,10 @@ export default function HomePage() {
           )}
 
           {!loadingEvents && filteredEvents.length === 0 ? (
-            <p className="arena-muted">Nenhum evento encontrado.</p>
+            <EmptyState
+              title="Nenhum evento encontrado"
+              description="Ajuste os filtros para visualizar eventos nesta seção."
+            />
           ) : null}
         </Card>
 
@@ -315,7 +311,8 @@ export default function HomePage() {
           <p>PingPong Paid'egua © {new Date().getFullYear()} - Plataforma de Tênis de Mesa Brasil</p>
         </footer>
       </main>
-    </div>
+      </div>
+    </UserShell>
   );
 }
 

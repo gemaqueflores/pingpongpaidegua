@@ -8,9 +8,14 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { EventCard } from "../../components/ui/EventCard";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { UserShell } from "../../components/user/UserShell";
+import { SegmentedControl } from "../../components/ui/SegmentedControl";
+import { FilterDrawer } from "../../components/ui/FilterDrawer";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 type EventRow = UserEventRow;
 type EventDisplayStatus = "INSCRICOES_ABERTAS" | "INSCRICOES_ENCERRADAS" | "EM_DISPUTA" | "CONCLUIDO";
+type EventTypeFilter = "ALL" | "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN";
+type EventStatusFilter = "ALL" | "OPEN" | "DONE";
 
 function formatDate(value: string | null): string {
   if (!value) return "-";
@@ -69,10 +74,29 @@ function sortEventsByStatusAndDate(rows: EventRow[]): EventRow[] {
   });
 }
 
+function inferEventType(event: EventRow): Exclude<EventTypeFilter, "ALL"> {
+  if (event.nivel === "OPEN") return "OPEN";
+  if (event.nivel === "ESTADUAL") return "ESTADUAL";
+  if (event.nivel === "COPA") return "COPA";
+  if (event.nivel === "NACIONAL") return "BRASILEIRAO";
+
+  const normalized = event.nome
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+  if (normalized.includes("OPEN")) return "OPEN";
+  if (normalized.includes("COPA")) return "COPA";
+  if (normalized.includes("BRASILEIR") || normalized.includes("NACIONAL")) return "BRASILEIRAO";
+  return "ESTADUAL";
+}
+
 export default function EventsHubPage() {
   const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [eventTypeFilter, setEventTypeFilter] = useState<EventTypeFilter>("ALL");
+  const [eventStatusFilter, setEventStatusFilter] = useState<EventStatusFilter>("ALL");
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   useEffect(() => {
     void apiGetEvents()
@@ -82,6 +106,15 @@ export default function EventsHubPage() {
   }, []);
 
   const sortedEvents = useMemo(() => sortEventsByStatusAndDate(events), [events]);
+  const filteredEvents = useMemo(() => {
+    return sortedEvents.filter((event) => {
+      const type = inferEventType(event);
+      const status = event.userStatus === "CONCLUIDO" ? "DONE" : "OPEN";
+      if (eventTypeFilter !== "ALL" && eventTypeFilter !== type) return false;
+      if (eventStatusFilter !== "ALL" && eventStatusFilter !== status) return false;
+      return true;
+    });
+  }, [eventStatusFilter, eventTypeFilter, sortedEvents]);
 
   return (
     <UserShell>
@@ -89,6 +122,31 @@ export default function EventsHubPage() {
         <PageHeader title="Eventos" subtitle="Calendário e acompanhamento" compact className="events-page-header" />
 
         <Card className="grid" variant="event">
+          <FilterDrawer title="eventos" open={mobileFilterOpen} onToggle={() => setMobileFilterOpen((prev) => !prev)}>
+            <SegmentedControl
+              label="Tipo do evento"
+              value={eventTypeFilter}
+              onChange={setEventTypeFilter}
+              items={[
+                { value: "ALL", label: "Todos os tipos" },
+                { value: "ESTADUAL", label: "Estadual" },
+                { value: "COPA", label: "Copa" },
+                { value: "BRASILEIRAO", label: "Brasileirão" },
+                { value: "OPEN", label: "Open" },
+              ]}
+            />
+            <SegmentedControl
+              label="Status do evento"
+              value={eventStatusFilter}
+              onChange={setEventStatusFilter}
+              items={[
+                { value: "ALL", label: "Todos os status" },
+                { value: "OPEN", label: "Em aberto" },
+                { value: "DONE", label: "Concluídos" },
+              ]}
+            />
+          </FilterDrawer>
+
           {loading ? (
             <div className="event-card-grid">
               <Skeleton className="event-skeleton" height="146px" />
@@ -97,7 +155,7 @@ export default function EventsHubPage() {
             </div>
           ) : (
             <div className="event-card-grid events-page-grid">
-              {sortedEvents.map((event) => (
+              {filteredEvents.map((event) => (
                 <EventCard
                   key={event.id}
                   cbtmEventId={event.cbtmEventId}
@@ -115,6 +173,9 @@ export default function EventsHubPage() {
               ))}
             </div>
           )}
+          {!loading && filteredEvents.length === 0 ? (
+            <EmptyState title="Sem resultados" description="Nenhum evento atende aos filtros selecionados." />
+          ) : null}
         </Card>
       </main>
     </UserShell>

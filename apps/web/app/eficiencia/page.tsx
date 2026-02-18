@@ -8,6 +8,8 @@ import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { UserShell } from "../../components/user/UserShell";
+import { SearchInput } from "../../components/ui/SearchInput";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 function formatClubMedalBadge(row: EventEfficiencyRow): string {
   return `🥇${row.ouro} 🥈${row.prata} 🥉${row.bronze} (${row.totalQuantidade})`;
@@ -61,18 +63,13 @@ export default function EfficiencyHubPage() {
           <p className="efficiency-page-kicker">Ranking geral por medalhas</p>
           <p className="arena-muted efficiency-page-period">Período considerado: todos os eventos computados na base.</p>
 
-          <div className="search-input-wrap eficiencia-search-sticky">
-            <span className="search-input-icon" aria-hidden="true">🔎</span>
-            <input
-              className="home-athletes-search search-input-with-icon"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar clube"
-              aria-label="Buscar clube"
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
-          </div>
+          <SearchInput
+            value={search}
+            onDebouncedChange={setSearch}
+            placeholder="Buscar clube"
+            ariaLabel="Buscar clube"
+            stickyClassName="eficiencia-search-sticky"
+          />
 
           {loading ? (
             <div className="athlete-list-grid">
@@ -100,7 +97,10 @@ export default function EfficiencyHubPage() {
           )}
 
           {!loading && filtered.length === 0 ? (
-            <p className="arena-muted">Nenhum clube encontrado na eficiência consolidada.</p>
+            <EmptyState
+              title="Nenhum clube encontrado"
+              description="Tente um termo diferente para localizar clubes na eficiência consolidada."
+            />
           ) : null}
         </Card>
       </main>

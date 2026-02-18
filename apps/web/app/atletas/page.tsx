@@ -8,6 +8,8 @@ import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { UserShell } from "../../components/user/UserShell";
+import { SearchInput } from "../../components/ui/SearchInput";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 type AthleteDirectoryRow = {
   athleteKey: string;
@@ -26,14 +28,10 @@ export default function AthletesHubPage() {
 
   useEffect(() => {
     setLoading(true);
-    const timeout = setTimeout(() => {
-      void apiGetAthletesDirectory(search)
-        .then((rows) => setAthletes(rows as AthleteDirectoryRow[]))
-        .catch(() => setAthletes([]))
-        .finally(() => setLoading(false));
-    }, 220);
-
-    return () => clearTimeout(timeout);
+    void apiGetAthletesDirectory(search)
+      .then((rows) => setAthletes(rows as AthleteDirectoryRow[]))
+      .catch(() => setAthletes([]))
+      .finally(() => setLoading(false));
   }, [search]);
 
   useEffect(() => {
@@ -53,18 +51,13 @@ export default function AthletesHubPage() {
         />
 
         <Card className="grid" variant="athlete">
-          <div className="search-input-wrap atletas-search-sticky">
-            <span className="search-input-icon" aria-hidden="true">🔎</span>
-            <input
-              className="home-athletes-search search-input-with-icon"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar atleta por nome"
-              aria-label="Buscar atleta por nome"
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
-          </div>
+          <SearchInput
+            value={search}
+            onDebouncedChange={setSearch}
+            placeholder="Buscar atleta por nome"
+            ariaLabel="Buscar atleta por nome"
+            stickyClassName="atletas-search-sticky"
+          />
 
           {loading ? (
             <div className="grid">
@@ -93,7 +86,10 @@ export default function AthletesHubPage() {
           )}
 
           {!loading && athletes.length === 0 ? (
-            <p className="arena-muted">Nenhum atleta encontrado.</p>
+            <EmptyState
+              title="Nenhum atleta encontrado"
+              description="Refine a busca para localizar atletas cadastrados."
+            />
           ) : null}
 
           {!loading && athletes.length > visible ? (

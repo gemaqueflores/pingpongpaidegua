@@ -3,11 +3,13 @@
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { apiGetAthleteSummary } from "../../../../../../lib/user-api";
-import { HeroTitle } from "../../../../../../components/ui/HeroTitle";
 import { Card } from "../../../../../../components/ui/Card";
 import { MatchCard } from "../../../../../../components/ui/MatchCard";
 import { Skeleton } from "../../../../../../components/ui/Skeleton";
 import { PerformanceBar } from "../../../../../../components/ui/PerformanceBar";
+import { PageHeader } from "../../../../../../components/ui/PageHeader";
+import { SegmentedControl } from "../../../../../../components/ui/SegmentedControl";
+import { DataTableResponsive } from "../../../../../../components/ui/DataTableResponsive";
 
 type GroupMode = "category" | "schedule";
 
@@ -331,9 +333,10 @@ export default function AthleteSummaryPage() {
 
   return (
     <main className="container grid user-page">
-      <HeroTitle
+      <PageHeader
         title="Resumo do Atleta"
         subtitle="Tênis de Mesa / Table Tennis"
+        compact
         actions={
           <button type="button" className="event-back-button" onClick={() => (window.location.href = `/events/${eventId}`)}>
             ← Voltar
@@ -380,26 +383,34 @@ export default function AthleteSummaryPage() {
             <div>
               <strong>Aproveitamento por categoria</strong>
               {summary.performanceByCategory && summary.performanceByCategory.length > 0 ? (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Categoria</th>
-                      <th>Aproveitamento</th>
-                      <th>Classificação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summary.performanceByCategory.map((item) => (
-                      <tr key={item.categoryId}>
-                        <td>{item.categoryName}</td>
-                        <td>
-                          {formatRatio(item.performance.ratio)} ({item.performance.pointsWon}/{item.performance.pointsPlayed})
-                        </td>
-                        <td>{item.classification?.position ? `${item.classification.position}º` : "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTableResponsive
+                  rows={summary.performanceByCategory}
+                  empty={<p className="arena-muted">Sem dados de aproveitamento por categoria.</p>}
+                  columns={[
+                    { key: "categoria", header: "Categoria", render: (item) => item.categoryName },
+                    {
+                      key: "aproveitamento",
+                      header: "Aproveitamento",
+                      render: (item) => `${formatRatio(item.performance.ratio)} (${item.performance.pointsWon}/${item.performance.pointsPlayed})`,
+                    },
+                    {
+                      key: "classificacao",
+                      header: "Classificação",
+                      render: (item) => (item.classification?.position ? `${item.classification.position}º` : "-"),
+                    },
+                  ]}
+                  mobileCard={(item) => (
+                    <article key={item.categoryId} className="athlete-list-card">
+                      <strong>{item.categoryName}</strong>
+                      <p style={{ margin: 0 }}>
+                        Aproveitamento {formatRatio(item.performance.ratio)} ({item.performance.pointsWon}/{item.performance.pointsPlayed})
+                      </p>
+                      <p className="arena-muted" style={{ margin: 0 }}>
+                        Classificação {item.classification?.position ? `${item.classification.position}º` : "-"}
+                      </p>
+                    </article>
+                  )}
+                />
               ) : (
                 <p>-</p>
               )}
@@ -414,22 +425,15 @@ export default function AthleteSummaryPage() {
           <Card className="grid">
             <div className="row" style={{ justifyContent: "space-between" }}>
               <h2>Jogos</h2>
-              <div className="balloon-group" role="group" aria-label="Agrupar jogos">
-                <button
-                  type="button"
-                  className={`balloon-button ${groupMode === "category" ? "active" : ""}`}
-                  onClick={() => setGroupMode("category")}
-                >
-                  Por categoria
-                </button>
-                <button
-                  type="button"
-                  className={`balloon-button ${groupMode === "schedule" ? "active" : ""}`}
-                  onClick={() => setGroupMode("schedule")}
-                >
-                  Por horario
-                </button>
-              </div>
+              <SegmentedControl
+                label="Agrupar jogos"
+                value={groupMode}
+                onChange={(next) => setGroupMode(next as GroupMode)}
+                items={[
+                  { value: "category", label: "Por categoria" },
+                  { value: "schedule", label: "Por horário" },
+                ]}
+              />
             </div>
 
             <p>{summary.noDatetimeFallback}</p>

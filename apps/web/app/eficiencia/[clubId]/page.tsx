@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ClubEfficiencyCareerPanel } from "../../../components/user/ClubEfficiencyCareerPanel";
 import { UserShell } from "../../../components/user/UserShell";
 import { Card } from "../../../components/ui/Card";
-import { Hero } from "../../../components/ui/Hero";
+import { PageHeader } from "../../../components/ui/PageHeader";
 import { Skeleton } from "../../../components/ui/Skeleton";
 import { apiGetClubEfficiencyCareer, type ClubEfficiencyCareerResponse } from "../../../lib/user-api";
 
@@ -40,9 +40,10 @@ export default function EficienciaClubeCanonicalPage() {
   return (
     <UserShell>
       <main className="container grid user-page">
-        <Hero
+        <PageHeader
           title={(data?.club.name ?? "Eficiência").toUpperCase()}
           subtitle="Eficiência"
+          compact
           actions={
             <button type="button" className="event-back-button" onClick={() => router.push("/eficiencia")}>
               ← Voltar

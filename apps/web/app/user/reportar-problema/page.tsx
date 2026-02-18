@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { apiReportProblem } from "../../../lib/user-api";
-import { Hero } from "../../../components/ui/Hero";
+import { PageHeader } from "../../../components/ui/PageHeader";
 import { Card } from "../../../components/ui/Card";
 
 export default function ReportarProblemaPage() {
@@ -41,9 +41,10 @@ export default function ReportarProblemaPage() {
 
   return (
     <main className="container grid user-page">
-      <Hero
+      <PageHeader
         title="Reportar problema"
         subtitle="Ajude a melhorar o PingPong Paid'egua"
+        compact
       />
 
       <Card className="grid report-problem-card">

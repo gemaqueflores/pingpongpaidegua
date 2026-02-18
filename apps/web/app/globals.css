@@ -2004,7 +2004,7 @@ a {
   .home-theme .hero-header {
     padding-top: 10px;
     padding-bottom: 10px;
-    max-height: 168px;
+    max-height: none;
   }
 
   .home-theme .hero-subtitle {
@@ -2549,11 +2549,22 @@ a {
 
   .user-theme .hero-header {
     border-radius: 16px;
-    max-height: 180px;
+    max-height: none;
   }
 
   .home-theme .hero-header {
-    max-height: 150px;
+    max-height: none;
+  }
+
+  .home-page-hero .hero-actions-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .home-page-hero .hero-actions-row button {
+    width: 100%;
   }
 
   .home-theme .hero-title {
@@ -3015,4 +3026,102 @@ a {
   .club-medal-bar-label {
     font-size: 0.82rem;
   }
+}
+
+/* Responsive system foundation */
+:root {
+  --surface: rgba(6, 24, 60, 0.92);
+  --surface-2: rgba(4, 18, 58, 0.72);
+  --border-strong: rgba(117, 161, 255, 0.48);
+  --text: #ffffff;
+  --muted-2: #b7c6e9;
+  --success: #2ecc71;
+  --danger: #e74c3c;
+  --warning: #ffc300;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --radius-1: 12px;
+  --radius-2: 16px;
+  --radius-3: 20px;
+  --shadow-1: 0 8px 18px rgba(0, 0, 0, 0.24);
+  --shadow-2: 0 16px 34px rgba(0, 0, 0, 0.36);
+}
+
+.container {
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 16px;
+  padding-block: 16px;
+}
+
+@media (min-width: 640px) {
+  .container {
+    padding-inline: 24px;
+    padding-block: 20px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    padding-inline: 32px;
+    padding-block: 24px;
+  }
+}
+
+.hero-title {
+  font-size: clamp(1.85rem, 5vw, 3.6rem);
+}
+
+.events-filter-trigger {
+  min-height: 44px;
+}
+
+.segmented-control {
+  width: 100%;
+}
+
+.segmented-control .balloon-button {
+  min-height: 44px;
+}
+
+.filter-drawer {
+  display: grid;
+  gap: 8px;
+}
+
+.data-table-responsive-desktop {
+  display: none;
+}
+
+.data-table-responsive-mobile {
+  display: grid;
+  gap: 10px;
+}
+
+@media (min-width: 1024px) {
+  .data-table-responsive-desktop {
+    display: block;
+  }
+
+  .data-table-responsive-mobile {
+    display: none;
+  }
+}
+
+.event-empty-state {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-1);
+  background: var(--surface-2);
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.event-empty-state h3,
+.event-empty-state p {
+  margin: 0;
 }

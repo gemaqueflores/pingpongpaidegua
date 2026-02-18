@@ -1,9 +1,10 @@
 ﻿"use client";
 
-import React, { Fragment } from "react";
+import React from "react";
 import type { ClubEfficiencyCareerResponse } from "../../lib/user-api";
 import { Badge } from "../ui/Badge";
 import { Card } from "../ui/Card";
+import { DataTableResponsive } from "../ui/DataTableResponsive";
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat("pt-BR").format(value);
@@ -90,99 +91,108 @@ export function ClubEfficiencyCareerPanel(props: {
 
       <Card className="grid club-efficiency-section club-efficiency-section-strong" variant="event">
         <h2 style={{ margin: 0 }}>Histórico por evento</h2>
-        <div className="global-mobile-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Evento</th>
-                <th>Tipo</th>
-                <th>Atletas</th>
-                <th>🥇</th>
-                <th>🥈</th>
-                <th>🥉</th>
-                <th>Total</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.history.map((eventRow) => (
-                <Fragment key={eventRow.eventId}>
-                  <tr>
-                    <td>
-                      <strong>{eventRow.eventName}</strong>
-                      <br />
-                      <small>
-                        {formatDate(eventRow.dataInicio)} até {formatDate(eventRow.dataFim)}
-                      </small>
-                    </td>
-                    <td>{eventRow.eventType === "BRASILEIRAO" ? "BRASILEIRÃO" : eventRow.eventType}</td>
-                    <td>{formatNumber(eventRow.athleteCount)}</td>
-                    <td>{formatNumber(eventRow.ouro)}</td>
-                    <td>{formatNumber(eventRow.prata)}</td>
-                    <td>{formatNumber(eventRow.bronze)}</td>
-                    <td>
-                      <strong>{formatNumber(eventRow.totalQuantidade)}</strong>
-                    </td>
-                    <td>
-                      <button type="button" onClick={() => onToggleEvent(eventRow.eventId)}>
-                        {expandedEvents[eventRow.eventId] ? "Ocultar medalhistas" : "Ver medalhistas"}
-                      </button>
-                    </td>
-                  </tr>
+        <DataTableResponsive
+          rows={data.history}
+          empty={<p className="arena-muted">Sem histórico de eventos para este clube.</p>}
+          columns={[
+            {
+              key: "evento",
+              header: "Evento",
+              render: (eventRow) => (
+                <>
+                  <strong>{eventRow.eventName}</strong>
+                  <br />
+                  <small>{formatDate(eventRow.dataInicio)} até {formatDate(eventRow.dataFim)}</small>
+                </>
+              ),
+            },
+            {
+              key: "tipo",
+              header: "Tipo",
+              render: (eventRow) => (eventRow.eventType === "BRASILEIRAO" ? "BRASILEIRÃO" : eventRow.eventType),
+            },
+            { key: "atletas", header: "Atletas", render: (eventRow) => formatNumber(eventRow.athleteCount) },
+            { key: "ouro", header: "🥇", render: (eventRow) => formatNumber(eventRow.ouro) },
+            { key: "prata", header: "🥈", render: (eventRow) => formatNumber(eventRow.prata) },
+            { key: "bronze", header: "🥉", render: (eventRow) => formatNumber(eventRow.bronze) },
+            { key: "total", header: "Total", render: (eventRow) => <strong>{formatNumber(eventRow.totalQuantidade)}</strong> },
+            {
+              key: "acoes",
+              header: "Ações",
+              render: (eventRow) => (
+                <div className="grid" style={{ gap: 8 }}>
+                  <button type="button" onClick={() => onToggleEvent(eventRow.eventId)}>
+                    {expandedEvents[eventRow.eventId] ? "Ocultar medalhistas" : "Ver medalhistas"}
+                  </button>
                   {expandedEvents[eventRow.eventId] ? (
-                    <tr>
-                      <td colSpan={8}>
-                        {eventRow.medalists.length === 0 ? (
-                          <p style={{ margin: 0 }}>Sem medalhistas registrados para este clube no evento.</p>
-                        ) : (
-                          <ul style={{ margin: 0, paddingLeft: 18 }}>
-                            {eventRow.medalists.map((medalist) => (
-                              <li key={`${eventRow.eventId}-${medalist.athleteId}-${medalist.categoryName}-${medalist.medalha}`}>
-                                {medalEmoji(medalist.medalha)} {medalist.athleteName} · {medalist.categoryName}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </td>
-                    </tr>
+                    eventRow.medalists.length === 0 ? (
+                      <p style={{ margin: 0 }}>Sem medalhistas registrados.</p>
+                    ) : (
+                      <ul style={{ margin: 0, paddingLeft: 18 }}>
+                        {eventRow.medalists.map((medalist) => (
+                          <li key={`${eventRow.eventId}-${medalist.athleteId}-${medalist.categoryName}-${medalist.medalha}`}>
+                            {medalEmoji(medalist.medalha)} {medalist.athleteName} · {medalist.categoryName}
+                          </li>
+                        ))}
+                      </ul>
+                    )
                   ) : null}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                </div>
+              ),
+            },
+          ]}
+          mobileCard={(eventRow) => (
+            <article key={eventRow.eventId} className="athlete-list-card">
+              <strong>{eventRow.eventName}</strong>
+              <p className="arena-muted" style={{ margin: 0 }}>{formatDate(eventRow.dataInicio)} até {formatDate(eventRow.dataFim)}</p>
+              <p className="arena-muted" style={{ margin: 0 }}>
+                Tipo {eventRow.eventType === "BRASILEIRAO" ? "BRASILEIRÃO" : eventRow.eventType} · Atletas {formatNumber(eventRow.athleteCount)}
+              </p>
+              <p style={{ margin: 0 }}>🥇 {formatNumber(eventRow.ouro)} · 🥈 {formatNumber(eventRow.prata)} · 🥉 {formatNumber(eventRow.bronze)} · <strong>Total {formatNumber(eventRow.totalQuantidade)}</strong></p>
+              <button type="button" onClick={() => onToggleEvent(eventRow.eventId)}>
+                {expandedEvents[eventRow.eventId] ? "Ocultar medalhistas" : "Ver medalhistas"}
+              </button>
+              {expandedEvents[eventRow.eventId] ? (
+                eventRow.medalists.length === 0 ? (
+                  <p style={{ margin: 0 }}>Sem medalhistas registrados para este clube no evento.</p>
+                ) : (
+                  <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    {eventRow.medalists.map((medalist) => (
+                      <li key={`${eventRow.eventId}-${medalist.athleteId}-${medalist.categoryName}-${medalist.medalha}`}>
+                        {medalEmoji(medalist.medalha)} {medalist.athleteName} · {medalist.categoryName}
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : null}
+            </article>
+          )}
+        />
       </Card>
 
       <Card className="grid club-efficiency-section club-efficiency-section-strong" variant="event">
         <h2 style={{ margin: 0 }}>Contribuição por atleta</h2>
-        <div className="global-mobile-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Atleta</th>
-                <th>Eventos</th>
-                <th>🥇</th>
-                <th>🥈</th>
-                <th>🥉</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.athletesContribution.map((athlete) => (
-                <tr key={athlete.athleteId}>
-                  <td>{athlete.athleteName}</td>
-                  <td>{formatNumber(athlete.eventos)}</td>
-                  <td>{formatNumber(athlete.ouro)}</td>
-                  <td>{formatNumber(athlete.prata)}</td>
-                  <td>{formatNumber(athlete.bronze)}</td>
-                  <td>
-                    <strong>{formatNumber(athlete.totalQuantidade)}</strong>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTableResponsive
+          rows={data.athletesContribution}
+          empty={<p className="arena-muted">Sem contribuição de atletas para exibir.</p>}
+          columns={[
+            { key: "atleta", header: "Atleta", render: (athlete) => athlete.athleteName },
+            { key: "eventos", header: "Eventos", render: (athlete) => formatNumber(athlete.eventos) },
+            { key: "ouro", header: "🥇", render: (athlete) => formatNumber(athlete.ouro) },
+            { key: "prata", header: "🥈", render: (athlete) => formatNumber(athlete.prata) },
+            { key: "bronze", header: "🥉", render: (athlete) => formatNumber(athlete.bronze) },
+            { key: "total", header: "Total", render: (athlete) => <strong>{formatNumber(athlete.totalQuantidade)}</strong> },
+          ]}
+          mobileCard={(athlete) => (
+            <article key={athlete.athleteId} className="athlete-list-card">
+              <strong>{athlete.athleteName}</strong>
+              <p className="arena-muted" style={{ margin: 0 }}>
+                Eventos {formatNumber(athlete.eventos)} · 🥇 {formatNumber(athlete.ouro)} · 🥈 {formatNumber(athlete.prata)} · 🥉 {formatNumber(athlete.bronze)}
+              </p>
+              <p style={{ margin: 0 }}><strong>Total {formatNumber(athlete.totalQuantidade)}</strong></p>
+            </article>
+          )}
+        />
       </Card>
     </>
   );

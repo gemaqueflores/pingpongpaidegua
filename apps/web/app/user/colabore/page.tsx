@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useMemo, useState } from "react";
-import { Hero } from "../../../components/ui/Hero";
+import { PageHeader } from "../../../components/ui/PageHeader";
 import { Card } from "../../../components/ui/Card";
 
 const PIX_QR_DEFAULT = "/pix-qrcode.png";
@@ -83,9 +83,10 @@ export default function ColaborePage() {
 
   return (
     <main className="container grid user-page">
-      <Hero
+      <PageHeader
         title="Apoie o projeto"
         subtitle="Contribua com PIX para manter o sistema no ar"
+        compact
       />
 
       <Card className="grid donate-card">
