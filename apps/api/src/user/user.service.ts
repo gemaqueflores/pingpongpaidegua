@@ -596,7 +596,7 @@ export class UserService {
                     categoryId,
                   },
                 }
-              : undefined,
+              : { some: {} },
           },
         },
       },
@@ -612,8 +612,7 @@ export class UserService {
     }
 
     const clubIds = clubs.map((club) => club.id);
-    const athletesByClub = await this.prisma.athlete.groupBy({
-      by: ["clubId"],
+    const athletesByClub = await this.prisma.athlete.findMany({
       where: {
         eventId: { in: scope.allEventIds },
         createdFromWarning: false,
@@ -624,16 +623,20 @@ export class UserService {
                 categoryId,
               },
             }
-          : undefined,
+          : { some: {} },
       },
-      _count: {
-        _all: true,
+      select: {
+        clubId: true,
+        nameNormalized: true,
       },
+      // Count unique athlete identities inside the event scope.
+      // The same athlete can appear in multiple categories and must count only once.
+      distinct: ["clubId", "nameNormalized"],
     });
 
     const athleteCountByClub = new Map<number, number>();
     for (const row of athletesByClub) {
-      athleteCountByClub.set(row.clubId, row._count._all);
+      athleteCountByClub.set(row.clubId, (athleteCountByClub.get(row.clubId) ?? 0) + 1);
     }
 
     return clubs.map((club) => ({
@@ -1719,13 +1722,14 @@ export class UserService {
         athletes: {
           some: {
             eventId: { in: scope.allEventIds },
+            createdFromWarning: false,
             categories: categoryId
               ? {
                   some: {
                     categoryId,
                   },
                 }
-              : undefined,
+              : { some: {} },
           },
         },
       },
@@ -1746,14 +1750,29 @@ export class UserService {
                 categoryId,
               },
             }
-          : undefined,
+          : { some: {} },
       },
-      orderBy: [{ nameDisplay: "asc" }],
+      select: {
+        id: true,
+        eventId: true,
+        nameDisplay: true,
+        nameNormalized: true,
+        stateCode: true,
+        region: true,
+      },
+      orderBy: [{ eventId: "asc" }, { nameDisplay: "asc" }],
     });
+
+    const dedupedAthletes = new Map<string, (typeof athletes)[number]>();
+    for (const athlete of athletes) {
+      if (!dedupedAthletes.has(athlete.nameNormalized)) {
+        dedupedAthletes.set(athlete.nameNormalized, athlete);
+      }
+    }
 
     return {
       club,
-      athletes,
+      athletes: Array.from(dedupedAthletes.values()),
     };
   }
 

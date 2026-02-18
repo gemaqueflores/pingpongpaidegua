@@ -266,6 +266,7 @@ export async function apiGetClubs(eventId: number, search = "", categoryId?: num
   const suffix = query.toString() ? `?${query.toString()}` : "";
   const response = await fetch(`${API_BASE}/events/${eventId}/clubs${suffix}`, {
     headers: getHeaders(),
+    cache: "no-store",
   });
 
   return handleResponse(response) as Promise<UserClubRow[]>;
@@ -329,6 +330,7 @@ export async function apiGetClubAthletes(eventId: number, clubId: number, catego
   const suffix = query.toString() ? `?${query.toString()}` : "";
   const response = await fetch(`${API_BASE}/events/${eventId}/clubs/${clubId}/athletes${suffix}`, {
     headers: getHeaders(),
+    cache: "no-store",
   });
 
   return handleResponse(response);

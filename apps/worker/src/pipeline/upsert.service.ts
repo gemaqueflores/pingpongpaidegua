@@ -905,6 +905,12 @@ export class UpsertService {
         updated,
         warnings,
       });
+
+      await this.sanitizeRegistrationOrphanAthletes({
+        eventId,
+        updated,
+        warnings,
+      });
     }
 
     const mergedMatches = mergeMatchesAcrossSources(eventId, dataset.matches);
@@ -1668,6 +1674,84 @@ export class UpsertService {
       input.updated.registration_categories_snapshot_mismatch =
         (input.updated.registration_categories_snapshot_mismatch ?? 0) + categoriesWithMismatch;
     }
+  }
+
+  private async sanitizeRegistrationOrphanAthletes(input: {
+    eventId: number;
+    updated: Record<string, number>;
+    warnings: string[];
+  }): Promise<void> {
+    const orphanAthletes = await prisma.athlete.findMany({
+      where: {
+        eventId: input.eventId,
+        createdFromWarning: false,
+        categories: {
+          none: {},
+        },
+      },
+      select: {
+        id: true,
+        nameDisplay: true,
+      },
+    });
+
+    if (orphanAthletes.length === 0) {
+      return;
+    }
+
+    const orphanAthleteIds = orphanAthletes.map((athlete) => athlete.id);
+    const athletesWithMatches = await prisma.matchParticipant.findMany({
+      where: {
+        athleteId: { in: orphanAthleteIds },
+        match: {
+          eventId: input.eventId,
+        },
+      },
+      select: {
+        athleteId: true,
+      },
+      distinct: ["athleteId"],
+    });
+
+    const protectedByMatches = new Set<number>(athletesWithMatches.map((row) => row.athleteId));
+    const removableAthletes = orphanAthletes.filter((athlete) => !protectedByMatches.has(athlete.id));
+    const removableAthleteIds = removableAthletes.map((athlete) => athlete.id);
+
+    if (protectedByMatches.size > 0) {
+      input.warnings.push(
+        `Sanitizacao de inscricoes preservou ${protectedByMatches.size} atleta(s) sem vinculo atleta-categoria por ja possuirem partidas no evento ${input.eventId}.`,
+      );
+    }
+
+    if (removableAthleteIds.length === 0) {
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.athleteAlias.deleteMany({
+        where: {
+          athleteId: { in: removableAthleteIds },
+        },
+      });
+
+      await tx.athleteCategory.deleteMany({
+        where: {
+          athleteId: { in: removableAthleteIds },
+        },
+      });
+
+      await tx.athlete.deleteMany({
+        where: {
+          id: { in: removableAthleteIds },
+        },
+      });
+    });
+
+    input.updated.athletes_removed_without_category_link =
+      (input.updated.athletes_removed_without_category_link ?? 0) + removableAthleteIds.length;
+    input.warnings.push(
+      `Sanitizacao de inscricoes removeu ${removableAthleteIds.length} atleta(s) sem vinculo atleta-categoria no evento ${input.eventId}.`,
+    );
   }
 
   private async findRegistrationAthleteByAlias(input: {

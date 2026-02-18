@@ -564,9 +564,9 @@ a {
 .event-actions button {
   min-height: 44px;
   width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .event-actions.event-actions-single {
@@ -1767,14 +1767,12 @@ a {
 }
 
 .club-athletes-panel {
-  max-height: 0;
-  overflow: hidden;
+  display: none;
   opacity: 0;
-  transition: max-height 230ms ease, opacity 200ms ease;
 }
 
 .club-athletes-panel.open {
-  max-height: 720px;
+  display: block;
   opacity: 1;
 }
 
@@ -2116,10 +2114,10 @@ a {
 }
 
 .athlete-name-clamp {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .athlete-list-card-clickable {
@@ -2716,7 +2714,6 @@ a {
 
 @media (max-width: 430px) {
   .user-theme .hero-header.event-page-hero {
-    max-height: 30vh;
     padding: 10px 12px !important;
   }
 
@@ -2739,6 +2736,9 @@ a {
 .admin-page {
   gap: 14px;
   padding-bottom: 32px;
+  max-width: min(1720px, calc(100vw - 16px)) !important;
+  width: 100%;
+  margin-inline: auto;
 }
 
 .admin-card {
@@ -2763,6 +2763,18 @@ a {
   width: 100%;
 }
 
+.admin-form-row-efficiency {
+  grid-template-columns: repeat(3, minmax(170px, 1fr));
+}
+
+.admin-form-row-event-main {
+  grid-template-columns: minmax(260px, 2fr) minmax(140px, 1fr) minmax(170px, 1fr) minmax(180px, 1fr);
+}
+
+.admin-form-row-event-dates {
+  grid-template-columns: repeat(4, minmax(170px, 1fr));
+}
+
 .admin-form-row > * {
   min-width: 0;
 }
@@ -2771,6 +2783,10 @@ a {
   min-width: 0;
   width: 100%;
   gap: 4px;
+}
+
+.admin-field-grid {
+  display: grid;
 }
 
 .admin-field > span {
@@ -2793,11 +2809,16 @@ a {
 }
 
 .admin-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
   min-height: 42px;
   width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .admin-action-row {
@@ -2820,13 +2841,15 @@ a {
 }
 
 .admin-table {
-  min-width: 980px;
+  min-width: 920px;
 }
 
 .admin-table th,
 .admin-table td {
   white-space: nowrap;
   vertical-align: top;
+  font-size: 0.86rem;
+  padding: 6px 8px;
 }
 
 .admin-table thead th {
@@ -2836,14 +2859,35 @@ a {
   z-index: 2;
 }
 
+@media (max-width: 1280px) {
+  .admin-form-row-efficiency {
+    grid-template-columns: repeat(2, minmax(170px, 1fr));
+  }
+
+  .admin-form-row-event-main {
+    grid-template-columns: minmax(220px, 1.8fr) minmax(140px, 1fr) minmax(170px, 1fr);
+  }
+
+  .admin-form-row-event-main .admin-checkbox-row {
+    grid-column: 1 / -1;
+  }
+
+  .admin-form-row-event-dates {
+    grid-template-columns: repeat(2, minmax(170px, 1fr));
+  }
+}
+
 .admin-table-actions {
-  min-width: 240px;
+  min-width: 190px;
   gap: 8px;
 }
 
 .admin-table-actions button,
 .admin-table-actions select {
-  min-height: 38px;
+  min-height: 34px;
+  padding: 6px 9px;
+  font-size: 0.8rem;
+  line-height: 1.1;
 }
 
 @media (max-width: 900px) {
@@ -2855,6 +2899,7 @@ a {
 
   .admin-page {
     gap: 10px;
+    max-width: 100% !important;
   }
 
   .admin-card {
@@ -2873,6 +2918,12 @@ a {
   .admin-form-row {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .admin-form-row-efficiency,
+  .admin-form-row-event-main,
+  .admin-form-row-event-dates {
+    grid-template-columns: 1fr;
   }
 
   .admin-input-id,
@@ -2899,7 +2950,7 @@ a {
   }
 
   .admin-table {
-    min-width: 860px;
+    min-width: 820px;
   }
 
   .admin-table-actions {
@@ -2910,6 +2961,7 @@ a {
 @media (max-width: 560px) {
   .admin-page {
     padding-inline: 10px;
+    max-width: 100% !important;
   }
 
   .admin-card h2 {
@@ -2924,7 +2976,7 @@ a {
   }
 
   .admin-table {
-    min-width: 760px;
+    min-width: 740px;
   }
 }
 

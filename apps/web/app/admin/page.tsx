@@ -750,8 +750,8 @@ export default function AdminPage() {
 
       <section className="card grid admin-card">
         <h2>Configuração de Eficiência</h2>
-        <div className="row admin-form-row" style={{ flexWrap: "wrap" }}>
-          <label className="admin-field" style={{ display: "grid" }}>
+        <div className="admin-form-row admin-form-row-efficiency">
+          <label className="admin-field admin-field-grid">
             <span>Peso Ouro</span>
             <input
               className="admin-input"
@@ -762,7 +762,7 @@ export default function AdminPage() {
               onChange={(event) => setPesoOuro(event.target.value)}
             />
           </label>
-          <label className="admin-field" style={{ display: "grid" }}>
+          <label className="admin-field admin-field-grid">
             <span>Peso Prata</span>
             <input
               className="admin-input"
@@ -773,7 +773,7 @@ export default function AdminPage() {
               onChange={(event) => setPesoPrata(event.target.value)}
             />
           </label>
-          <label className="admin-field" style={{ display: "grid" }}>
+          <label className="admin-field admin-field-grid">
             <span>Peso Bronze</span>
             <input
               className="admin-input"
@@ -800,7 +800,7 @@ export default function AdminPage() {
       <section className="card grid admin-card">
         <h2>{editingEventId ? `Editar evento #${editingEventId}` : "Novo evento monitorado"}</h2>
 
-        <div className="row admin-form-row" style={{ flexWrap: "wrap" }}>
+        <div className="admin-form-row admin-form-row-event-main">
           <input className="admin-input" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome do evento" />
           <input className="admin-input admin-input-id" value={cbtmEventId} onChange={(e) => setCbtmEventId(e.target.value)} placeholder="ID CBTM" />
           <select className="admin-input admin-input-level" value={nivel} onChange={(e) => setNivel((e.target.value as EventLevel) || "")}>
@@ -811,7 +811,7 @@ export default function AdminPage() {
               </option>
             ))}
           </select>
-          <label className="row admin-checkbox-row" style={{ gap: 8 }}>
+          <label className="admin-checkbox-row">
             <input
               type="checkbox"
               checked={concluidoForm}
@@ -821,8 +821,8 @@ export default function AdminPage() {
           </label>
         </div>
 
-        <div className="row admin-form-row" style={{ flexWrap: "wrap" }}>
-          <label className="admin-field" style={{ display: "grid" }}>
+        <div className="admin-form-row admin-form-row-event-dates">
+          <label className="admin-field admin-field-grid">
             <span>Início inscrições</span>
             <input
               className="admin-input"
@@ -834,7 +834,7 @@ export default function AdminPage() {
               disabled={concluidoForm}
             />
           </label>
-          <label className="admin-field" style={{ display: "grid" }}>
+          <label className="admin-field admin-field-grid">
             <span>Fim inscrições</span>
             <input
               className="admin-input"
@@ -846,7 +846,7 @@ export default function AdminPage() {
               disabled={concluidoForm}
             />
           </label>
-          <label className="admin-field" style={{ display: "grid" }}>
+          <label className="admin-field admin-field-grid">
             <span>Início realização</span>
             <input
               className="admin-input"
@@ -858,7 +858,7 @@ export default function AdminPage() {
               disabled={concluidoForm}
             />
           </label>
-          <label className="admin-field" style={{ display: "grid" }}>
+          <label className="admin-field admin-field-grid">
             <span>Fim realização</span>
             <input
               className="admin-input"

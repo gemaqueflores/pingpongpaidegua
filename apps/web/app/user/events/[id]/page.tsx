@@ -506,6 +506,7 @@ export default function EventDetailPage() {
               const isExpanded = Boolean(expandedClubs[club.id]);
               const athletesInClub = clubAthletesByClub[club.id] ?? [];
               const resolvedCount =
+                (clubAthletesByClub[club.id] ? athletesInClub.length : null) ??
                 (Number.isFinite(club.athleteCount) ? Number(club.athleteCount) : null) ??
                 clubCountFallbackById[club.id] ??
                 athletesInClub.length;
