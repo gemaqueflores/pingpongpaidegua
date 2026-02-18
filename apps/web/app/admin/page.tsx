@@ -177,6 +177,8 @@ function situationLabel(situation: EventSituation | undefined): string {
       return "Inscrições abertas";
     case "POS_INSCRICOES_PRE_EVENTO":
       return "Pós-inscrições";
+    case "GRADES_PUBLICADAS_PRE_JOGO":
+      return "Grades publicadas";
     case "EM_ANDAMENTO":
       return "Em andamento";
     case "POS_EVENTO":
@@ -194,6 +196,8 @@ function situationStyle(situation: EventSituation | undefined): { background: st
       return { background: "#dff6eb", color: "#0f5132" };
     case "EM_ANDAMENTO":
       return { background: "#e7f3ff", color: "#0b4c83" };
+    case "GRADES_PUBLICADAS_PRE_JOGO":
+      return { background: "#e6f0ff", color: "#1f4f9b" };
     case "POS_EVENTO":
       return { background: "#f0f0f0", color: "#4a4a4a" };
     case "DRAFT":

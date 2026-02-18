@@ -107,6 +107,10 @@ function resolveEventStatusLabel(event: EventRow | null): string {
     return event.groupsDefined ? "Grupos Divulgados" : "Formação de Grupos";
   }
 
+  if (event.situacaoComputada === "GRADES_PUBLICADAS_PRE_JOGO") {
+    return "Confrontos Publicados";
+  }
+
   if (event.situacaoComputada === "INSCRICOES_ABERTAS" || event.situacaoComputada === "PRE_INSCRICOES") {
     return "Inscrições Abertas";
   }
@@ -125,6 +129,9 @@ function resolveEventBanner(event: EventRow | null): { message: string; tone: "i
   }
   if (event.situacaoComputada === "EM_ANDAMENTO") {
     return { message: "Evento em andamento — dados parciais", tone: "info" };
+  }
+  if (event.situacaoComputada === "GRADES_PUBLICADAS_PRE_JOGO") {
+    return { message: "Confrontos oficiais publicados — aguardando início dos placares", tone: "info" };
   }
   return null;
 }
