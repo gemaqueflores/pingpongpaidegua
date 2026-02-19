@@ -94,15 +94,27 @@ export class QueueService implements OnModuleDestroy {
   ): Promise<{ jobId: string; status: "queued"; deduplicated?: boolean }> {
     const existing = await this.queue.getJob(jobId);
     if (existing) {
+      const state = await existing.getState();
+      if (state === "waiting" || state === "delayed" || state === "active") {
+        this.logger.log(`Job reaproveitado (${jobId})`, {
+          eventId: data.eventId,
+          reason: data.reason,
+          state,
+        });
+        return {
+          jobId: String(existing.id),
+          status: "queued",
+          deduplicated: true,
+        };
+      }
+
+      await existing.remove();
       this.logger.log(`Job reaproveitado (${jobId})`, {
         eventId: data.eventId,
         reason: data.reason,
+        state,
+        recreated: true,
       });
-      return {
-        jobId: String(existing.id),
-        status: "queued",
-        deduplicated: true,
-      };
     }
 
     const job = await this.queue.add(name, data, { jobId });

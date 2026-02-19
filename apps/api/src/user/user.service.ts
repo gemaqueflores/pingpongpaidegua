@@ -453,7 +453,7 @@ export class UserService {
         where: {
           eventId: { in: allScopedEventIds },
           phase: { in: ["GRUPOS", "RESULTADOS", "ELIMINATORIA"] },
-          OR: [{ winnerIndex: { not: null } }, { p1Sets: { not: null } }, { p2Sets: { not: null } }],
+          OR: [{ p1Sets: { gte: 2 } }, { p2Sets: { gte: 2 } }],
         },
         _count: {
           _all: true,
@@ -1831,7 +1831,7 @@ export class UserService {
 
   async getAthleteSummary(eventId: number, athleteId: number, orderBy: SummaryOrderBy) {
     const scope = await this.resolveEventScope(eventId);
-    await this.ensureEvent(scope.canonicalEventId);
+    const event = await this.ensureEvent(scope.canonicalEventId);
 
     const athlete = await this.prisma.athlete.findFirst({
       where: {
@@ -1952,6 +1952,10 @@ export class UserService {
     }
 
     return {
+      event: {
+        id: event.id,
+        name: event.nome,
+      },
       athlete: {
         id: athlete.id,
         name: athlete.nameDisplay,

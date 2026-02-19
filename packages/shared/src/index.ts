@@ -42,6 +42,8 @@ export interface ParsedRegistration {
 }
 
 export interface ParsedMatch {
+  athleteARefType?: "REAL" | "GROUP_SLOT" | "WINNER_SLOT";
+  athleteBRefType?: "REAL" | "GROUP_SLOT" | "WINNER_SLOT";
   categoryId?: string | null;
   phase: MatchPhase;
   categoryName: string;

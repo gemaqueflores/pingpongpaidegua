@@ -436,7 +436,29 @@ export class AdminEventsService {
   }
 
   async scrapeNow(id: number, stage?: 1 | 2 | 3) {
-    await this.ensureEvent(id);
+    const event = await this.ensureEvent(id);
+
+    if (event.scrapeLockedAt) {
+      const lockAgeMs = Date.now() - event.scrapeLockedAt.getTime();
+      const staleLockMs = 45 * 60 * 1000;
+      if (lockAgeMs < staleLockMs) {
+        return {
+          status: "busy",
+          eventId: id,
+          stage: stage ?? null,
+          lockedAt: event.scrapeLockedAt.toISOString(),
+          message: "Já existe um scrape em execução para este evento.",
+        } as const;
+      }
+
+      // Lock órfão (ex.: restart do worker): libera para não bloquear o admin indefinidamente.
+      await this.prisma.event.update({
+        where: { id },
+        data: {
+          scrapeLockedAt: null,
+        },
+      });
+    }
 
     return this.queue.enqueueScrapeNow(id, stage);
   }

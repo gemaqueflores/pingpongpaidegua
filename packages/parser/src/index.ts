@@ -907,6 +907,20 @@ function isBracketReferenceToken(value: string): boolean {
   return false;
 }
 
+function parseParticipantRefType(value: string): "REAL" | "GROUP_SLOT" | "WINNER_SLOT" {
+  const normalized = compactWhitespace(value ?? "");
+  if (!normalized) {
+    return "REAL";
+  }
+  if (/^[vVwW]\s*\d{1,3}$/.test(normalized)) {
+    return "WINNER_SLOT";
+  }
+  if (/^\d{1,2}\s*-\s*\d{1,2}$/.test(normalized)) {
+    return "GROUP_SLOT";
+  }
+  return "REAL";
+}
+
 function isCardMetaLine(value: string): boolean {
   const line = compactWhitespace(value ?? "");
   if (!line) {
@@ -1014,6 +1028,8 @@ function parseCardBasedMatches(
 
     const athleteAName = compactWhitespace(athleteANameRaw);
     const athleteBName = compactWhitespace(athleteBNameRaw);
+    const athleteARefType = parseParticipantRefType(athleteAName);
+    const athleteBRefType = parseParticipantRefType(athleteBName);
     const athleteANameNormalized = normalizeText(athleteAName);
     const athleteBNameNormalized = normalizeText(athleteBName);
     const scoreRaw =
@@ -1078,8 +1094,10 @@ function parseCardBasedMatches(
       matchDatetime,
       scoreRaw,
       athleteAName,
+      athleteARefType,
       athleteANormalizedName,
       athleteBName,
+      athleteBRefType,
       athleteBNormalizedName,
       athleteARankingPoints: athleteAHint?.rankingPoints ?? null,
       athleteARatingPoints: athleteAHint?.ratingPoints ?? null,
@@ -1121,7 +1139,7 @@ function parseGroupMatches(
     const uniquePlayers = [...new Set(players)].slice(0, 8);
     const scoreTokens = lines.filter((line) => /^\d+\s*[xX]\s*\d+$/.test(line));
 
-    if (uniquePlayers.length < 2 || scoreTokens.length === 0) {
+    if (uniquePlayers.length < 2) {
       warnings.push(`Grupos sem matriz completa para '${title}'.`);
       continue;
     }
@@ -1133,6 +1151,17 @@ function parseGroupMatches(
       }
     }
 
+    if (scoreTokens.length === 0) {
+      // Grupos já divulgados, mas sem confrontos publicados na matriz ainda.
+      continue;
+    }
+
+    if (scoreTokens.length < pairs.length) {
+      warnings.push(
+        `Grupos com matriz parcial para '${title}' (${scoreTokens.length}/${pairs.length} confrontos).`,
+      );
+    }
+
     const limit = Math.min(scoreTokens.length, pairs.length);
     for (let i = 0; i < limit; i += 1) {
       const [athleteAName, athleteBName] = pairs[i];
@@ -1140,6 +1169,8 @@ function parseGroupMatches(
 
       const athleteANormalizedName = normalizeText(athleteAName);
       const athleteBNormalizedName = normalizeText(athleteBName);
+      const athleteARefType = parseParticipantRefType(athleteAName);
+      const athleteBRefType = parseParticipantRefType(athleteBName);
       const categoryNormalizedName = normalizeText(categoryName);
 
       const athleteAHint = athleteHintResolver({
@@ -1168,8 +1199,10 @@ function parseGroupMatches(
         matchDatetime: null,
         scoreRaw,
         athleteAName,
+        athleteARefType,
         athleteANormalizedName,
         athleteBName,
+        athleteBRefType,
         athleteBNormalizedName,
         athleteARankingPoints: athleteAHint?.rankingPoints ?? null,
         athleteARatingPoints: athleteAHint?.ratingPoints ?? null,
@@ -1311,6 +1344,8 @@ function parseEliminationMatches(
 
       const athleteANormalizedName = normalizeText(athleteAName);
       const athleteBNormalizedName = normalizeText(athleteBName);
+      const athleteARefType = parseParticipantRefType(athleteAName);
+      const athleteBRefType = parseParticipantRefType(athleteBName);
       const athleteAHint = athleteHintResolver({
         categoryId: payload.categoryId,
         categoryNormalizedName,
@@ -1342,8 +1377,10 @@ function parseEliminationMatches(
         matchDatetime: metaData.matchDatetime,
         scoreRaw,
         athleteAName,
+        athleteARefType,
         athleteANormalizedName,
         athleteBName,
+        athleteBRefType,
         athleteBNormalizedName,
         athleteARankingPoints: athleteAHint?.rankingPoints ?? null,
         athleteARatingPoints: athleteAHint?.ratingPoints ?? null,
@@ -1813,3 +1850,7 @@ export function parseResultsText(eventId: number, rawText: string): ParsedDatase
   const payloads = extractDxPayloads(rawText);
   return parseDxPayloads(eventId, payloads);
 }
+
+export const __testables = {
+  parseGroupMatches,
+};

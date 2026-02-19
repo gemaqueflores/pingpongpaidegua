@@ -507,7 +507,7 @@ export class ScrapeProcessor {
         where: {
           eventId,
           phase: { in: [...scheduledMatchPhases] },
-          OR: [{ winnerIndex: { not: null } }, { p1Sets: { not: null } }, { p2Sets: { not: null } }],
+          OR: [{ p1Sets: { gte: 2 } }, { p2Sets: { gte: 2 } }],
         },
         select: { id: true },
       }),

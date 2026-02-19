@@ -182,6 +182,73 @@ describe("resolveAthleteCandidate", () => {
     expect(resolved.status).toBe("conflict");
   });
 
+  it("gera conflito para homonimos com mesmo alias e mesmo clube sem discriminador forte", () => {
+    const resolved = resolveAthleteCandidate({
+      eventId: 5368,
+      shortName: "daniel santos",
+      clubNormalizedName: "academia ping drive ltda",
+      candidates: [
+        {
+          athleteId: 101,
+          eventId: 5368,
+          nameDisplay: "DANIEL BATISTA SANTOS",
+          nameNormalized: "daniel batista santos",
+          rankingPoints: 0,
+          ratingPoints: 520,
+          clubNormalizedName: "academia ping drive ltda",
+          aliasesNormalized: ["daniel santos"],
+        },
+        {
+          athleteId: 102,
+          eventId: 5368,
+          nameDisplay: "DANIEL FERREIRA DOS SANTOS",
+          nameNormalized: "daniel ferreira dos santos",
+          rankingPoints: 0,
+          ratingPoints: 520,
+          clubNormalizedName: "academia ping drive ltda",
+          aliasesNormalized: ["daniel santos"],
+        },
+      ],
+    });
+
+    expect(resolved.status).toBe("conflict");
+  });
+
+  it("resolve homonimo quando alias coincide mas ranking/rating identificam unico atleta", () => {
+    const resolved = resolveAthleteCandidate({
+      eventId: 5368,
+      shortName: "fernando silva",
+      clubNormalizedName: "associacao paraense de tenis de mesa-aptm",
+      rankingPoints: 0,
+      ratingPoints: 640,
+      candidates: [
+        {
+          athleteId: 201,
+          eventId: 5368,
+          nameDisplay: "FERNANDO ANTONIO DUTRA E SILVA",
+          nameNormalized: "fernando antonio dutra e silva",
+          rankingPoints: 0,
+          ratingPoints: 640,
+          clubNormalizedName: "associacao paraense de tenis de mesa-aptm",
+          aliasesNormalized: ["fernando silva"],
+        },
+        {
+          athleteId: 202,
+          eventId: 5368,
+          nameDisplay: "FERNANDO ALVES SILVA",
+          nameNormalized: "fernando alves silva",
+          rankingPoints: 0,
+          ratingPoints: 410,
+          clubNormalizedName: "associacao paraense de tenis de mesa-aptm",
+          aliasesNormalized: ["fernando silva"],
+        },
+      ],
+    });
+
+    expect(resolved.status).toBe("resolved");
+    expect(resolved.athleteId).toBe(201);
+  });
+
   it("ordena fases e rodadas semanticamente", () => {
     expect(getMatchPhaseOrder("GRUPOS")).toBeLessThan(getMatchPhaseOrder("ELIMINATORIA"));
     expect(getMatchPhaseOrder("ELIMINATORIA")).toBeLessThan(getMatchPhaseOrder("RESULTADOS"));

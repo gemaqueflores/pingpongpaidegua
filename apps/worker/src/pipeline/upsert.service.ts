@@ -86,6 +86,7 @@ function toRegistrationStatus(status: string | null | undefined): RegistrationSt
 
 interface ResolveMatchAthleteInput {
   eventId: number;
+  categoryId: number;
   side: "A" | "B";
   matchKey: string;
   categoryName: string;
@@ -96,10 +97,11 @@ interface ResolveMatchAthleteInput {
   inserted: Record<string, number>;
   updated: Record<string, number>;
   warnings: string[];
-  clubsByNormalized: Map<string, CachedClub>;
   athletesById: Map<number, CachedAthlete>;
   aliasToAthleteIds: Map<string, Set<number>>;
   conflictsByKey: Map<string, CachedConflict>;
+  categoryAthleteIds: Set<number> | null;
+  participantRefType?: "REAL" | "GROUP_SLOT" | "WINNER_SLOT";
 }
 
 interface ObservedRegistrationCategoryStats {
@@ -121,15 +123,6 @@ function conflictCacheKey(context: string, shortNameNormalized: string): string 
 
 function toOptionalInt(value: number | null | undefined): number | null {
   return Number.isInteger(value) ? (value as number) : null;
-}
-
-function extractPlaceholderAthleteId(payload: unknown): number | null {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-
-  const raw = (payload as { placeholderAthleteId?: unknown }).placeholderAthleteId;
-  return Number.isInteger(raw) ? Number(raw) : null;
 }
 
 function mergePointValue(current: number | null, observed: number | null): number | null {
@@ -193,6 +186,33 @@ function buildRegistrationAliases(input: {
   }
 
   return aliases;
+}
+
+function toReducedAliasNormalized(nameDisplay: string): string {
+  const tokens = compactWhitespace(nameDisplay)
+    .split(/[\s.]+/g)
+    .filter(Boolean);
+  if (tokens.length === 0) {
+    return "";
+  }
+  if (tokens.length === 1) {
+    return normalizeText(tokens[0]);
+  }
+  return normalizeText(`${tokens[0]} ${tokens[tokens.length - 1]}`);
+}
+
+function isBracketReferenceToken(value: string): boolean {
+  const normalized = compactWhitespace(value ?? "");
+  if (!normalized) {
+    return false;
+  }
+  if (/^\d{1,2}\s*-\s*\d{1,2}$/.test(normalized)) {
+    return true;
+  }
+  if (/^[vVwW]\s*\d{1,3}$/.test(normalized)) {
+    return true;
+  }
+  return false;
 }
 
 interface DedupedMatchesResult {
@@ -862,6 +882,7 @@ export class UpsertService {
     }
 
     const observedRegistrationStatsByCategory = new Map<number, ObservedRegistrationCategoryStats>();
+    const athleteIdsByCategoryId = new Map<number, Set<number>>();
     for (const pair of observedRegistrationPairs.values()) {
       const bucket = observedRegistrationStatsByCategory.get(pair.categoryId) ?? {
         categoryName: pair.categoryName,
@@ -911,6 +932,23 @@ export class UpsertService {
         updated,
         warnings,
       });
+    }
+
+    const persistedAthleteCategories = await prisma.athleteCategory.findMany({
+      where: {
+        category: {
+          eventId,
+        },
+      },
+      select: {
+        athleteId: true,
+        categoryId: true,
+      },
+    });
+    for (const row of persistedAthleteCategories) {
+      const bucket = athleteIdsByCategoryId.get(row.categoryId) ?? new Set<number>();
+      bucket.add(row.athleteId);
+      athleteIdsByCategoryId.set(row.categoryId, bucket);
     }
 
     const mergedMatches = mergeMatchesAcrossSources(eventId, dataset.matches);
@@ -977,38 +1015,42 @@ export class UpsertService {
 
       const athleteA = await this.resolveMatchAthlete({
         eventId,
+        categoryId: category.id,
         side: "A",
         matchKey: parsedMatch.matchKey,
         categoryName: parsedMatch.categoryName,
         shortName: parsedMatch.athleteAName,
+        participantRefType: parsedMatch.athleteARefType ?? "REAL",
         rankingPoints: toOptionalInt(parsedMatch.athleteARankingPoints),
         ratingPoints: toOptionalInt(parsedMatch.athleteARatingPoints),
         clubNormalizedName: normalizeText(parsedMatch.athleteAClubNormalizedName ?? "") || null,
         inserted,
         updated,
         warnings,
-        clubsByNormalized,
         athletesById,
         aliasToAthleteIds,
         conflictsByKey,
+        categoryAthleteIds: athleteIdsByCategoryId.get(category.id) ?? null,
       });
 
       const athleteB = await this.resolveMatchAthlete({
         eventId,
+        categoryId: category.id,
         side: "B",
         matchKey: parsedMatch.matchKey,
         categoryName: parsedMatch.categoryName,
         shortName: parsedMatch.athleteBName,
+        participantRefType: parsedMatch.athleteBRefType ?? "REAL",
         rankingPoints: toOptionalInt(parsedMatch.athleteBRankingPoints),
         ratingPoints: toOptionalInt(parsedMatch.athleteBRatingPoints),
         clubNormalizedName: normalizeText(parsedMatch.athleteBClubNormalizedName ?? "") || null,
         inserted,
         updated,
         warnings,
-        clubsByNormalized,
         athletesById,
         aliasToAthleteIds,
         conflictsByKey,
+        categoryAthleteIds: athleteIdsByCategoryId.get(category.id) ?? null,
       });
 
       const existingMatch = await prisma.match.findUnique({
@@ -1088,12 +1130,12 @@ export class UpsertService {
 
       const scorePlayers: Prisma.InputJsonValue = [
         {
-          athleteId: athleteA.id,
-          name: athleteA.nameDisplay,
+          athleteId: athleteA?.id ?? null,
+          name: athleteA?.nameDisplay ?? compactWhitespace(parsedMatch.athleteAName),
         },
         {
-          athleteId: athleteB.id,
-          name: athleteB.nameDisplay,
+          athleteId: athleteB?.id ?? null,
+          name: athleteB?.nameDisplay ?? compactWhitespace(parsedMatch.athleteBName),
         },
       ];
       const setsJsonValue: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput =
@@ -1198,49 +1240,67 @@ export class UpsertService {
         inc(inserted, "matches");
       }
 
-      await prisma.athleteCategory.upsert({
-        where: {
-          athleteId_categoryId: {
+      if (athleteA) {
+        await prisma.athleteCategory.upsert({
+          where: {
+            athleteId_categoryId: {
+              athleteId: athleteA.id,
+              categoryId: category.id,
+            },
+          },
+          update: {},
+          create: {
             athleteId: athleteA.id,
             categoryId: category.id,
           },
-        },
-        update: {},
-        create: {
-          athleteId: athleteA.id,
-          categoryId: category.id,
-        },
-      });
+        });
+        const categoryAthleteBucketA = athleteIdsByCategoryId.get(category.id) ?? new Set<number>();
+        categoryAthleteBucketA.add(athleteA.id);
+        athleteIdsByCategoryId.set(category.id, categoryAthleteBucketA);
+      }
 
-      await prisma.athleteCategory.upsert({
-        where: {
-          athleteId_categoryId: {
+      if (athleteB) {
+        await prisma.athleteCategory.upsert({
+          where: {
+            athleteId_categoryId: {
+              athleteId: athleteB.id,
+              categoryId: category.id,
+            },
+          },
+          update: {},
+          create: {
             athleteId: athleteB.id,
             categoryId: category.id,
           },
-        },
-        update: {},
-        create: {
-          athleteId: athleteB.id,
-          categoryId: category.id,
-        },
-      });
+        });
+        const categoryAthleteBucketB = athleteIdsByCategoryId.get(category.id) ?? new Set<number>();
+        categoryAthleteBucketB.add(athleteB.id);
+        athleteIdsByCategoryId.set(category.id, categoryAthleteBucketB);
+      }
 
-      const participantIds = [...new Set([athleteA.id, athleteB.id])];
-      if (participantIds.length < 2) {
+      const participantIds = [...new Set([athleteA?.id, athleteB?.id].filter((value): value is number => value !== undefined))];
+      if (athleteA && athleteB && athleteA.id === athleteB.id) {
         warnings.push(
           `Jogo ${parsedMatch.matchKey} ficou com atleta duplicado (${athleteA.nameDisplay}).`,
         );
       }
 
-      await prisma.matchParticipant.deleteMany({
-        where: {
-          matchId: persistedMatch.id,
-          athleteId: {
-            notIn: participantIds,
+      if (participantIds.length > 0) {
+        await prisma.matchParticipant.deleteMany({
+          where: {
+            matchId: persistedMatch.id,
+            athleteId: {
+              notIn: participantIds,
+            },
           },
-        },
-      });
+        });
+      } else {
+        await prisma.matchParticipant.deleteMany({
+          where: {
+            matchId: persistedMatch.id,
+          },
+        });
+      }
 
       for (const athleteId of participantIds) {
         await prisma.matchParticipant.upsert({
@@ -1259,11 +1319,10 @@ export class UpsertService {
       }
     }
 
-    await this.cleanupOrphanPlaceholders({
+    await this.cleanupNonRealAthleteRecords({
       eventId,
       athletesById,
-      conflictsByKey,
-      inserted,
+      aliasToAthleteIds,
       updated,
     });
 
@@ -1499,42 +1558,8 @@ export class UpsertService {
       return;
     }
 
-    const candidateAthleteIds = [...new Set(removablePairs.map((pair) => pair.athleteId))];
-    const candidateCategoryIds = [...new Set(removablePairs.map((pair) => pair.categoryId))];
-
-    const pairsWithMatches = new Set<string>();
-    if (candidateAthleteIds.length > 0 && candidateCategoryIds.length > 0) {
-      const participantsWithMatches = await prisma.matchParticipant.findMany({
-        where: {
-          athleteId: { in: candidateAthleteIds },
-          match: {
-            eventId: input.eventId,
-            categoryId: { in: candidateCategoryIds },
-          },
-        },
-        select: {
-          athleteId: true,
-          match: {
-            select: {
-              categoryId: true,
-            },
-          },
-        },
-      });
-
-      for (const row of participantsWithMatches) {
-        pairsWithMatches.add(`${row.athleteId}|${row.match.categoryId}`);
-      }
-    }
-
     const removableByAthlete = new Map<number, Set<number>>();
-    let skippedWithMatches = 0;
     for (const pair of removablePairs) {
-      const pairKey = `${pair.athleteId}|${pair.categoryId}`;
-      if (pairsWithMatches.has(pairKey)) {
-        skippedWithMatches += 1;
-        continue;
-      }
       const bucket = removableByAthlete.get(pair.athleteId) ?? new Set<number>();
       bucket.add(pair.categoryId);
       removableByAthlete.set(pair.athleteId, bucket);
@@ -1584,13 +1609,6 @@ export class UpsertService {
         `Sincronizacao de inscricoes removeu ${removedCount} vinculo(s) obsoleto(s) de atleta-categoria no evento ${input.eventId}.`,
       );
     }
-
-    if (skippedWithMatches > 0) {
-      input.warnings.push(
-        `Sincronizacao de inscricoes preservou ${skippedWithMatches} vinculo(s) com partidas ja registradas no evento ${input.eventId}.`,
-      );
-    }
-
   }
 
   private async reportRegistrationSnapshotStats(input: {
@@ -1752,67 +1770,6 @@ export class UpsertService {
     input.warnings.push(
       `Sanitizacao de inscricoes removeu ${removableAthleteIds.length} atleta(s) sem vinculo atleta-categoria no evento ${input.eventId}.`,
     );
-  }
-
-  private async findRegistrationAthleteByAlias(input: {
-    eventId: number;
-    clubId: number;
-    nameNormalized: string;
-    rankingPoints: number | null;
-    ratingPoints: number | null;
-  }): Promise<Athlete | null> {
-    const candidates = await prisma.athlete.findMany({
-      where: {
-        eventId: input.eventId,
-        clubId: input.clubId,
-        OR: [
-          { nameNormalized: input.nameNormalized },
-          {
-            aliases: {
-              some: {
-                aliasNormalized: input.nameNormalized,
-              },
-            },
-          },
-        ],
-      },
-    });
-
-    if (candidates.length === 0) {
-      return null;
-    }
-    if (candidates.length === 1) {
-      return candidates[0];
-    }
-
-    const scored = candidates
-      .map((candidate) => {
-        let score = 0;
-        if (candidate.nameNormalized === input.nameNormalized) {
-          score += 100;
-        }
-        if (input.rankingPoints !== null && candidate.rankingPoints === input.rankingPoints) {
-          score += 30;
-        }
-        if (input.ratingPoints !== null && candidate.ratingPoints === input.ratingPoints) {
-          score += 30;
-        }
-        if (!candidate.createdFromWarning) {
-          score += 10;
-        }
-        return { candidate, score };
-      })
-      .sort((a, b) => b.score - a.score);
-
-    if (scored.length < 2) {
-      return scored[0]?.candidate ?? null;
-    }
-
-    if (scored[0].score === scored[1].score && scored[0].score < 100) {
-      return null;
-    }
-
-    return scored[0].candidate;
   }
 
   private async ensureCategory(
@@ -2146,19 +2103,6 @@ export class UpsertService {
       },
     });
 
-    if (!existing) {
-      existing = await this.findRegistrationAthleteByAlias({
-        eventId: input.eventId,
-        clubId: input.club.id,
-        nameNormalized: input.nameNormalized,
-        rankingPoints: input.rankingPoints,
-        ratingPoints: input.ratingPoints,
-      });
-      if (existing) {
-        inc(input.updated, "athletes_reused_by_alias");
-      }
-    }
-
     if (existing) {
       const inferredFederation = inferAthleteFederationFromClub({
         eventLevel: input.eventLevel,
@@ -2366,11 +2310,15 @@ export class UpsertService {
   private buildResolverCandidates(
     eventId: number,
     athletesById: Map<number, CachedAthlete>,
+    categoryAthleteIds?: Set<number> | null,
   ): AthleteResolverCandidate[] {
     const candidates: AthleteResolverCandidate[] = [];
 
     for (const athlete of athletesById.values()) {
       if (athlete.eventId !== eventId || athlete.createdFromWarning) {
+        continue;
+      }
+      if (categoryAthleteIds && !categoryAthleteIds.has(athlete.id)) {
         continue;
       }
 
@@ -2389,9 +2337,12 @@ export class UpsertService {
     return candidates;
   }
 
-  private async resolveMatchAthlete(input: ResolveMatchAthleteInput): Promise<CachedAthlete> {
+  private async resolveMatchAthlete(input: ResolveMatchAthleteInput): Promise<CachedAthlete | null> {
     const shortName = compactWhitespace(input.shortName);
     const shortNameNormalized = normalizeText(shortName);
+    if ((input.participantRefType ?? "REAL") !== "REAL" || isBracketReferenceToken(shortName)) {
+      return null;
+    }
     const context = `${input.matchKey}:${input.side}`;
     const conflictKey = conflictCacheKey(context, shortNameNormalized);
 
@@ -2425,7 +2376,186 @@ export class UpsertService {
       }
     }
 
-    const resolverCandidates = this.buildResolverCandidates(input.eventId, input.athletesById);
+    let eventAliasHomonymAmbiguous = false;
+    const resolveEventAliasHomonymCollision = (): CachedAthlete | null => {
+      const aliasBucket = input.aliasToAthleteIds.get(shortNameNormalized);
+      if (!aliasBucket || aliasBucket.size <= 1) {
+        return null;
+      }
+
+      const homonyms: CachedAthlete[] = [];
+      for (const athleteId of aliasBucket) {
+        const athlete = input.athletesById.get(athleteId);
+        if (!athlete || athlete.eventId !== input.eventId || athlete.createdFromWarning) {
+          continue;
+        }
+        homonyms.push(athlete);
+      }
+
+      if (homonyms.length <= 1) {
+        return homonyms[0] ?? null;
+      }
+
+      let narrowed = homonyms;
+      if (input.clubNormalizedName) {
+        const byClub = narrowed.filter((candidate) => candidate.clubNormalizedName === input.clubNormalizedName);
+        if (byClub.length === 1) {
+          return byClub[0];
+        }
+        if (byClub.length > 1) {
+          narrowed = byClub;
+        }
+      }
+
+      if (Number.isInteger(input.rankingPoints) && Number.isInteger(input.ratingPoints)) {
+        const byBothPoints = narrowed.filter(
+          (candidate) =>
+            candidate.rankingPoints === input.rankingPoints && candidate.ratingPoints === input.ratingPoints,
+        );
+        if (byBothPoints.length === 1) {
+          return byBothPoints[0];
+        }
+        if (byBothPoints.length > 1) {
+          narrowed = byBothPoints;
+        }
+      }
+
+      if (Number.isInteger(input.ratingPoints)) {
+        const byRating = narrowed.filter((candidate) => candidate.ratingPoints === input.ratingPoints);
+        if (byRating.length === 1) {
+          return byRating[0];
+        }
+        if (byRating.length > 1) {
+          narrowed = byRating;
+        }
+      }
+
+      if (Number.isInteger(input.rankingPoints)) {
+        const byRanking = narrowed.filter((candidate) => candidate.rankingPoints === input.rankingPoints);
+        if (byRanking.length === 1) {
+          return byRanking[0];
+        }
+      }
+
+      eventAliasHomonymAmbiguous = true;
+      return null;
+    };
+
+    const eventAliasResolvedAthlete = resolveEventAliasHomonymCollision();
+    if (eventAliasResolvedAthlete) {
+      await this.reconcileAthletePoints(
+        eventAliasResolvedAthlete,
+        input.rankingPoints,
+        input.ratingPoints,
+        input.updated,
+      );
+
+      await this.ensureAthleteAlias({
+        athleteId: eventAliasResolvedAthlete.id,
+        aliasDisplay: shortName,
+        aliasNormalized: shortNameNormalized,
+        source: "JOGOS",
+        inserted: input.inserted,
+        updated: input.updated,
+        athletesById: input.athletesById,
+        aliasToAthleteIds: input.aliasToAthleteIds,
+      });
+
+      return eventAliasResolvedAthlete;
+    }
+
+    let categoryAliasAmbiguous = false;
+    const resolveCategoryAliasCollision = (): CachedAthlete | null => {
+      if (!input.categoryAthleteIds || input.categoryAthleteIds.size === 0) {
+        return null;
+      }
+
+      const candidates: CachedAthlete[] = [];
+      for (const athleteId of input.categoryAthleteIds) {
+        const athlete = input.athletesById.get(athleteId);
+        if (!athlete || athlete.eventId !== input.eventId || athlete.createdFromWarning) {
+          continue;
+        }
+
+        const reducedAlias = toReducedAliasNormalized(athlete.nameDisplay);
+        if (athlete.aliases.has(shortNameNormalized) || reducedAlias === shortNameNormalized) {
+          candidates.push(athlete);
+        }
+      }
+
+      if (candidates.length <= 1) {
+        return candidates[0] ?? null;
+      }
+      categoryAliasAmbiguous = true;
+
+      // Em colisão de nome reduzido na mesma categoria, só resolve automaticamente com discriminador forte.
+      let narrowed = candidates;
+      if (input.clubNormalizedName) {
+        const byClub = narrowed.filter((candidate) => candidate.clubNormalizedName === input.clubNormalizedName);
+        if (byClub.length === 1) {
+          return byClub[0];
+        }
+        if (byClub.length > 1) {
+          narrowed = byClub;
+        }
+      }
+
+      if (Number.isInteger(input.rankingPoints)) {
+        const byRanking = narrowed.filter((candidate) => candidate.rankingPoints === input.rankingPoints);
+        if (byRanking.length === 1) {
+          return byRanking[0];
+        }
+        if (byRanking.length > 1) {
+          narrowed = byRanking;
+        }
+      }
+
+      if (Number.isInteger(input.ratingPoints)) {
+        const byRating = narrowed.filter((candidate) => candidate.ratingPoints === input.ratingPoints);
+        if (byRating.length === 1) {
+          categoryAliasAmbiguous = false;
+          return byRating[0];
+        }
+        if (byRating.length > 1) {
+          narrowed = byRating;
+        }
+      }
+
+      return null;
+    };
+
+    const collidedResolvedAthlete = resolveCategoryAliasCollision();
+    if (collidedResolvedAthlete) {
+      await this.reconcileAthletePoints(
+        collidedResolvedAthlete,
+        input.rankingPoints,
+        input.ratingPoints,
+        input.updated,
+      );
+
+      await this.ensureAthleteAlias({
+        athleteId: collidedResolvedAthlete.id,
+        aliasDisplay: shortName,
+        aliasNormalized: shortNameNormalized,
+        source: "JOGOS",
+        inserted: input.inserted,
+        updated: input.updated,
+        athletesById: input.athletesById,
+        aliasToAthleteIds: input.aliasToAthleteIds,
+      });
+
+      return collidedResolvedAthlete;
+    }
+
+    let resolverCandidates = this.buildResolverCandidates(
+      input.eventId,
+      input.athletesById,
+      input.categoryAthleteIds,
+    );
+    if (resolverCandidates.length === 0) {
+      // Fallback: mantém comportamento anterior quando a categoria ainda não possui vínculos pré-cadastrados.
+      resolverCandidates = this.buildResolverCandidates(input.eventId, input.athletesById);
+    }
 
     const decision = resolveAthleteCandidate({
       eventId: input.eventId,
@@ -2437,7 +2567,7 @@ export class UpsertService {
       candidates: resolverCandidates,
     });
 
-    if (decision.status === "resolved" && decision.athleteId) {
+    if (!categoryAliasAmbiguous && !eventAliasHomonymAmbiguous && decision.status === "resolved" && decision.athleteId) {
       const resolvedAthlete = await this.getAthleteById(decision.athleteId, input.athletesById);
       if (resolvedAthlete) {
         await this.reconcileAthletePoints(
@@ -2481,45 +2611,16 @@ export class UpsertService {
       }
     }
 
-    let placeholderAthlete: CachedAthlete | null = null;
-    const existingPlaceholderId = extractPlaceholderAthleteId(existingConflict?.candidateAthletes);
-    if (existingPlaceholderId) {
-      placeholderAthlete = await this.getAthleteById(existingPlaceholderId, input.athletesById);
-    }
-
-    if (!placeholderAthlete) {
-      placeholderAthlete = await this.createOrReusePlaceholderAthlete({
-        eventId: input.eventId,
-        shortName,
-        shortNameNormalized,
-        inserted: input.inserted,
-        updated: input.updated,
-        clubsByNormalized: input.clubsByNormalized,
-        athletesById: input.athletesById,
-      });
-    }
-
-    await this.ensureAthleteAlias({
-      athleteId: placeholderAthlete.id,
-      aliasDisplay: shortName,
-      aliasNormalized: shortNameNormalized,
-      source: "JOGOS",
-      inserted: input.inserted,
-      updated: input.updated,
-      athletesById: input.athletesById,
-      aliasToAthleteIds: input.aliasToAthleteIds,
-    });
-
     const payload = {
       matchKey: input.matchKey,
       side: input.side,
       categoryName: input.categoryName,
       shortName,
       shortNameNormalized,
+      participantRefType: input.participantRefType ?? "REAL",
       observedRankingPoints: input.rankingPoints,
       observedRatingPoints: input.ratingPoints,
       observedClubNormalizedName: input.clubNormalizedName,
-      placeholderAthleteId: placeholderAthlete.id,
       strategy: decision.strategy,
       candidates: decision.scoredCandidates.slice(0, 10).map((candidate) => ({
         athleteId: candidate.athleteId,
@@ -2564,7 +2665,7 @@ export class UpsertService {
       `Conflito de atleta (${input.categoryName}) em ${context}: '${shortName}' não pôde ser resolvido automaticamente.`,
     );
 
-    return placeholderAthlete;
+    return null;
   }
 
   private async reconcileAthletePoints(
@@ -2593,140 +2694,90 @@ export class UpsertService {
     inc(updated, "athletes_points_reconciled");
   }
 
-  private async cleanupOrphanPlaceholders(input: {
+  private async cleanupNonRealAthleteRecords(input: {
     eventId: number;
     athletesById: Map<number, CachedAthlete>;
-    conflictsByKey: Map<string, CachedConflict>;
-    inserted: Record<string, number>;
+    aliasToAthleteIds: Map<string, Set<number>>;
     updated: Record<string, number>;
   }): Promise<void> {
-    const protectedPlaceholderIds = new Set<number>();
-    for (const conflict of input.conflictsByKey.values()) {
-      if (conflict.resolvedAthleteId) {
-        continue;
-      }
-      const placeholderId = extractPlaceholderAthleteId(conflict.candidateAthletes);
-      if (placeholderId) {
-        protectedPlaceholderIds.add(placeholderId);
-      }
+    const placeholderIds = [...input.athletesById.values()]
+      .filter(
+        (athlete) =>
+          athlete.eventId === input.eventId &&
+          athlete.createdFromWarning &&
+          isBracketReferenceToken(athlete.nameDisplay),
+      )
+      .map((athlete) => athlete.id);
+
+    if (placeholderIds.length === 0) {
+      return;
     }
 
-    const placeholders = [...input.athletesById.values()].filter(
-      (athlete) => athlete.eventId === input.eventId && athlete.createdFromWarning,
-    );
-
-    for (const placeholder of placeholders) {
-      if (protectedPlaceholderIds.has(placeholder.id)) {
-        continue;
-      }
-
-      const participantCount = await prisma.matchParticipant.count({
-        where: {
-          athleteId: placeholder.id,
-          match: {
-            eventId: input.eventId,
-          },
-        },
-      });
-
-      if (participantCount > 0) {
-        continue;
-      }
-
-      await prisma.athleteAlias.deleteMany({
-        where: {
-          athleteId: placeholder.id,
-        },
-      });
-
-      await prisma.athleteCategory.deleteMany({
-        where: {
-          athleteId: placeholder.id,
-        },
-      });
-
-      await prisma.athlete.delete({
-        where: {
-          id: placeholder.id,
-        },
-      });
-
-      input.athletesById.delete(placeholder.id);
-      inc(input.updated, "athletes_placeholders_removed");
-    }
-  }
-
-  private async createOrReusePlaceholderAthlete(input: {
-    eventId: number;
-    shortName: string;
-    shortNameNormalized: string;
-    inserted: Record<string, number>;
-    updated: Record<string, number>;
-    clubsByNormalized: Map<string, CachedClub>;
-    athletesById: Map<number, CachedAthlete>;
-  }): Promise<CachedAthlete> {
-    const fallbackClub = await this.ensureClub(
-      "SEM CLUBE",
-      "sem clube",
-      input.clubsByNormalized,
-      input.inserted,
-      input.updated,
-    );
-
-    const existing = await prisma.athlete.findUnique({
+    await prisma.matchParticipant.deleteMany({
       where: {
-        eventId_nameNormalized_clubId: {
-          eventId: input.eventId,
-          nameNormalized: input.shortNameNormalized,
-          clubId: fallbackClub.id,
+        athleteId: {
+          in: placeholderIds,
         },
       },
     });
 
-    const athlete = existing
-      ? await prisma.athlete.update({
-          where: { id: existing.id },
-          data: {
-            nameDisplay: input.shortName,
-            createdFromWarning: true,
-          },
-        })
-      : await prisma.athlete.create({
-          data: {
-            eventId: input.eventId,
-            clubId: fallbackClub.id,
-            nameDisplay: input.shortName,
-            nameNormalized: input.shortNameNormalized,
-            rankingPoints: null,
-            ratingPoints: null,
-            createdFromWarning: true,
-          },
-        });
+    await prisma.athleteCategory.deleteMany({
+      where: {
+        athleteId: {
+          in: placeholderIds,
+        },
+      },
+    });
 
-    if (existing) {
-      inc(input.updated, "athletes_placeholders");
-    } else {
-      inc(input.inserted, "athletes_placeholders");
+    await prisma.athleteAlias.deleteMany({
+      where: {
+        athleteId: {
+          in: placeholderIds,
+        },
+      },
+    });
+
+    await prisma.athleteMatchConflict.updateMany({
+      where: {
+        eventId: input.eventId,
+        resolvedAthleteId: {
+          in: placeholderIds,
+        },
+      },
+      data: {
+        resolvedAthleteId: null,
+        resolvedAt: null,
+      },
+    });
+
+    await prisma.athlete.deleteMany({
+      where: {
+        id: {
+          in: placeholderIds,
+        },
+      },
+    });
+
+    for (const athleteId of placeholderIds) {
+      const athlete = input.athletesById.get(athleteId);
+      if (!athlete) {
+        continue;
+      }
+      for (const alias of athlete.aliases) {
+        const ids = input.aliasToAthleteIds.get(alias);
+        if (!ids) {
+          continue;
+        }
+        ids.delete(athleteId);
+        if (ids.size === 0) {
+          input.aliasToAthleteIds.delete(alias);
+        }
+      }
+      input.athletesById.delete(athleteId);
     }
 
-    const cached: CachedAthlete = {
-      id: athlete.id,
-      eventId: athlete.eventId,
-      clubId: athlete.clubId,
-      clubNormalizedName: fallbackClub.normalizedName,
-      stateCode: athlete.stateCode,
-      stateName: athlete.stateName,
-      region: athlete.region,
-      nameDisplay: athlete.nameDisplay,
-      nameNormalized: athlete.nameNormalized,
-      rankingPoints: athlete.rankingPoints,
-      ratingPoints: athlete.ratingPoints,
-      createdFromWarning: true,
-      aliases: new Set([athlete.nameNormalized]),
-    };
-
-    input.athletesById.set(cached.id, cached);
-    return cached;
+    input.updated.athletes_placeholders_removed =
+      (input.updated.athletes_placeholders_removed ?? 0) + placeholderIds.length;
   }
 
   private async getAthleteById(
