@@ -411,6 +411,15 @@ function computeGroupSingleClassification(input: {
   athlete: AthletePerformanceInput;
 }): { position: number | null; reason: string; tieTechnical: boolean } {
   const parsedMatches = input.matches.map(toParsedMatch);
+  const hasDecisiveResult = parsedMatches.some((match) => match.winnerKey !== null);
+  if (!hasDecisiveResult) {
+    return {
+      position: null,
+      reason: "grupo_sem_resultados_publicados",
+      tieTechnical: false,
+    };
+  }
+
   const allKeys = [...new Set(parsedMatches.flatMap((match) => [match.p1Key, match.p2Key]))];
 
   const ordered = rankTiedGroupRecursively({
