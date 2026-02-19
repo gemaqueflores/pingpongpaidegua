@@ -44,6 +44,41 @@ type AthleteRow = {
 };
 const ATHLETES_PAGE_SIZE = 30;
 type EventPhase = "INSCRICOES_ABERTAS" | "INSCRICOES_ENCERRADAS" | "EM_DISPUTA" | "CONCLUIDO";
+const EVENT_TIME_ZONE = "America/Belem";
+
+function toBelemDateKey(input: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: EVENT_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(input);
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "00";
+
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+function hasReachedEventLastDay(event: EventRow | null): boolean {
+  if (!event) {
+    return false;
+  }
+
+  const endRaw = event.fimRealizacao ?? event.dataFim;
+  if (!endRaw) {
+    return false;
+  }
+
+  const eventEnd = new Date(endRaw);
+  if (Number.isNaN(eventEnd.getTime())) {
+    return false;
+  }
+
+  const todayKey = toBelemDateKey(new Date());
+  const lastDayKey = toBelemDateKey(eventEnd);
+  return todayKey >= lastDayKey;
+}
 
 function formatAthleteFederation(athlete: AthleteRow): string {
   if (!athlete.stateCode || !athlete.region) {
@@ -58,7 +93,7 @@ function formatDate(value: string | null): string {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-    timeZone: "America/Belem",
+    timeZone: EVENT_TIME_ZONE,
   }).format(new Date(value));
 }
 
@@ -71,7 +106,7 @@ function formatDateTime(value: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: "America/Belem",
+    timeZone: EVENT_TIME_ZONE,
   }).formatToParts(new Date(value));
 
   const get = (type: Intl.DateTimeFormatPartTypes) =>
@@ -188,6 +223,17 @@ export default function EventDetailPage() {
 
   useEffect(() => {
     if (!event) return;
+    if (hasReachedEventLastDay(event)) {
+      setActiveTab("eficiencia");
+      return;
+    }
+    const groupsPublished =
+      event.situacaoComputada === "GRADES_PUBLICADAS_PRE_JOGO" ||
+      (event.situacaoComputada === "POS_INSCRICOES_PRE_EVENTO" && event.groupsDefined);
+    if (groupsPublished) {
+      setActiveTab("atletas");
+      return;
+    }
     if (event.concluido || event.situacaoComputada === "EM_ANDAMENTO" || event.situacaoComputada === "POS_EVENTO") {
       setActiveTab("eficiencia");
       return;
@@ -303,9 +349,13 @@ export default function EventDetailPage() {
       : statusLabel === "Inscrições Abertas"
         ? "closed"
         : "open";
+  const isGroupsPublished =
+    event?.situacaoComputada === "GRADES_PUBLICADAS_PRE_JOGO" ||
+    (event?.situacaoComputada === "POS_INSCRICOES_PRE_EVENTO" && Boolean(event?.groupsDefined));
+  const hideGroupsTab = Boolean(event?.concluido) || event?.situacaoComputada === "EM_ANDAMENTO" || isGroupsPublished;
 
   const tabs: Array<{ id: EventTab; label: string }> = [
-    { id: "grupos", label: "Grupos" },
+    ...(hideGroupsTab ? [] : [{ id: "grupos" as const, label: "Grupos" }]),
     { id: "clubes", label: "Clubes" },
     { id: "atletas", label: "Atletas" },
     { id: "eficiencia", label: "Eficiência do evento" },
@@ -444,7 +494,7 @@ export default function EventDetailPage() {
         </Card>
       )}
 
-      {activeTab === "grupos" ? (
+      {activeTab === "grupos" && !hideGroupsTab ? (
         <Card className="grid event-tab-panel">
           <h2>Grupos</h2>
           <p className="arena-muted" style={{ marginTop: 0 }}>{phaseHelpText}</p>
