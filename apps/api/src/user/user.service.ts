@@ -1759,15 +1759,68 @@ export class UserService {
         nameNormalized: true,
         stateCode: true,
         region: true,
+        categories: {
+          select: {
+            category: {
+              select: {
+                id: true,
+                eventId: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
       orderBy: [{ eventId: "asc" }, { nameDisplay: "asc" }],
     });
 
-    const dedupedAthletes = new Map<string, (typeof athletes)[number]>();
-    for (const athlete of athletes) {
-      if (!dedupedAthletes.has(athlete.nameNormalized)) {
-        dedupedAthletes.set(athlete.nameNormalized, athlete);
+    const dedupedAthletes = new Map<
+      string,
+      {
+        id: number;
+        eventId: number;
+        nameDisplay: string;
+        nameNormalized: string;
+        stateCode: string | null;
+        region: string | null;
+        categoryNames: string[];
       }
+    >();
+
+    const mapCategoryName = (category: { eventId: number; name: string }) =>
+      category.eventId === scope.canonicalEventId
+        ? category.name
+        : `${category.name}${scope.childSuffixByEventId.get(category.eventId) ?? " -X"}`;
+
+    for (const athlete of athletes) {
+      const key = athlete.nameNormalized;
+      const categoryNames = Array.from(
+        new Set(
+          (athlete.categories ?? [])
+            .map((item) => item.category)
+            .filter((category): category is { id: number; eventId: number; name: string } => Boolean(category))
+            .map(mapCategoryName),
+        ),
+      ).sort((left, right) => left.localeCompare(right, "pt-BR", { sensitivity: "base" }));
+
+      const existing = dedupedAthletes.get(key);
+      if (!existing) {
+        dedupedAthletes.set(key, {
+          id: athlete.id,
+          eventId: athlete.eventId,
+          nameDisplay: athlete.nameDisplay,
+          nameNormalized: athlete.nameNormalized,
+          stateCode: athlete.stateCode ?? null,
+          region: athlete.region ?? null,
+          categoryNames,
+        });
+        continue;
+      }
+
+      const merged = new Set<string>([...existing.categoryNames, ...categoryNames]);
+      existing.categoryNames = Array.from(merged).sort((left, right) =>
+        left.localeCompare(right, "pt-BR", { sensitivity: "base" }),
+      );
     }
 
     return {

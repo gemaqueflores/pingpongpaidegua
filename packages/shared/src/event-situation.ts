@@ -41,6 +41,44 @@ export interface EventAutoScheduleDecision {
   waitMs: number;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function isBusinessDay(date: Date): boolean {
+  const day = date.getDay();
+  return day !== 0 && day !== 6;
+}
+
+function addBusinessDays(base: Date, businessDays: number): Date {
+  const cursor = new Date(base.getTime());
+  if (businessDays <= 0) {
+    return cursor;
+  }
+
+  let remaining = businessDays;
+  while (remaining > 0) {
+    cursor.setDate(cursor.getDate() + 1);
+    if (isBusinessDay(cursor)) {
+      remaining -= 1;
+    }
+  }
+  return cursor;
+}
+
+function classifyPostRegistrationWindow(now: Date, fimInscricoes: Date): "INSCRICOES_ENCERRADAS" | "FORMACAO_GRUPOS" | "DEFINICAO_CONFRONTOS" {
+  const cutoffInscricoesEncerradas = addBusinessDays(fimInscricoes, 2);
+  if (now.getTime() <= cutoffInscricoesEncerradas.getTime()) {
+    return "INSCRICOES_ENCERRADAS";
+  }
+
+  const inicioFormacao = addBusinessDays(fimInscricoes, 3);
+  const fimFormacao = addBusinessDays(fimInscricoes, 5);
+  if (now.getTime() >= inicioFormacao.getTime() && now.getTime() <= fimFormacao.getTime()) {
+    return "FORMACAO_GRUPOS";
+  }
+
+  return "DEFINICAO_CONFRONTOS";
+}
+
 function toDate(value: Date | string | null | undefined): Date | null {
   if (!value) {
     return null;
@@ -150,12 +188,13 @@ export function buildEventScrapePolicy(
 ): EventScrapePolicy {
   const now = options.now ?? new Date();
   const isManualForce = options.isManualForce ?? false;
+  const timeline = resolveEventTimeline(input);
   const intervalBySituationMs = {
     PRE_INSCRICOES: 5 * 60 * 60 * 1000,
-    INSCRICOES_ABERTAS: 5 * 60 * 60 * 1000,
+    INSCRICOES_ABERTAS: 6 * 60 * 60 * 1000,
     POS_INSCRICOES_PRE_EVENTO: 3 * 60 * 60 * 1000,
-    GRADES_PUBLICADAS_PRE_JOGO: 60 * 60 * 1000,
-    EM_ANDAMENTO: 30 * 60 * 1000,
+    GRADES_PUBLICADAS_PRE_JOGO: 45 * 60 * 1000,
+    EM_ANDAMENTO: 20 * 60 * 1000,
     ...options.intervalBySituationMs,
   } satisfies Partial<Record<EventSituation, number>>;
   const situation = computeEventSituation(input, now);
@@ -204,16 +243,53 @@ export function buildEventScrapePolicy(
         reason: "inscricoes-abertas",
       };
     case "POS_INSCRICOES_PRE_EVENTO":
-      return {
-        autoSchedule: true,
-        captureInscricoes: false,
-        captureGrupos: true,
-        captureResultados: true,
-        fetchEliminatoria: true,
-        recommendedIntervalMs:
-          intervalBySituationMs.POS_INSCRICOES_PRE_EVENTO ?? 3 * 60 * 60 * 1000,
-        reason: "pos-inscricoes-pre-evento",
-      };
+      if (!timeline.fimInscricoes) {
+        return {
+          autoSchedule: true,
+          captureInscricoes: true,
+          captureGrupos: true,
+          captureResultados: false,
+          fetchEliminatoria: false,
+          recommendedIntervalMs:
+            intervalBySituationMs.POS_INSCRICOES_PRE_EVENTO ?? 3 * 60 * 60 * 1000,
+          reason: "pos-inscricoes-pre-evento",
+        };
+      }
+
+      switch (classifyPostRegistrationWindow(now, timeline.fimInscricoes)) {
+        case "INSCRICOES_ENCERRADAS":
+          return {
+            autoSchedule: true,
+            captureInscricoes: true,
+            captureGrupos: false,
+            captureResultados: false,
+            fetchEliminatoria: false,
+            recommendedIntervalMs: 6 * 60 * 60 * 1000,
+            reason: "inscricoes-encerradas-sanitizacao",
+          };
+        case "FORMACAO_GRUPOS":
+          return {
+            autoSchedule: true,
+            captureInscricoes: true,
+            captureGrupos: true,
+            captureResultados: true,
+            fetchEliminatoria: true,
+            recommendedIntervalMs: 2 * 60 * 60 * 1000,
+            reason: "formacao-de-grupos",
+          };
+        case "DEFINICAO_CONFRONTOS":
+        default:
+          return {
+            autoSchedule: true,
+            captureInscricoes: false,
+            captureGrupos: true,
+            captureResultados: true,
+            fetchEliminatoria: true,
+            recommendedIntervalMs:
+              intervalBySituationMs.POS_INSCRICOES_PRE_EVENTO ?? 3 * 60 * 60 * 1000,
+            reason: "definicao-de-confrontos",
+          };
+      }
     case "GRADES_PUBLICADAS_PRE_JOGO":
       return {
         autoSchedule: true,
@@ -222,7 +298,7 @@ export function buildEventScrapePolicy(
         captureResultados: true,
         fetchEliminatoria: true,
         recommendedIntervalMs:
-          intervalBySituationMs.GRADES_PUBLICADAS_PRE_JOGO ?? 60 * 60 * 1000,
+          intervalBySituationMs.GRADES_PUBLICADAS_PRE_JOGO ?? 45 * 60 * 1000,
         reason: "grades-publicadas-pre-jogo",
       };
     case "EM_ANDAMENTO":
@@ -236,6 +312,20 @@ export function buildEventScrapePolicy(
         reason: "em-andamento",
       };
     case "POS_EVENTO":
+      if (timeline.fimRealizacao) {
+        const elapsedAfterFinishMs = now.getTime() - timeline.fimRealizacao.getTime();
+        if (elapsedAfterFinishMs >= 0 && elapsedAfterFinishMs <= DAY_MS) {
+          return {
+            autoSchedule: true,
+            captureInscricoes: false,
+            captureGrupos: false,
+            captureResultados: true,
+            fetchEliminatoria: true,
+            recommendedIntervalMs: 2 * 60 * 60 * 1000,
+            reason: "pos-evento-imediato-consolidacao",
+          };
+        }
+      }
       return {
         autoSchedule: false,
         captureInscricoes: false,

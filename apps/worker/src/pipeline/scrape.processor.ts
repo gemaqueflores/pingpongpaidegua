@@ -21,6 +21,13 @@ interface EventDataCleanupSummary {
   orphanClubs: number;
 }
 
+interface EventMatchesCleanupSummary {
+  matchParticipants: number;
+  matches: number;
+  conflicts: number;
+  rawCaptures: number;
+}
+
 function resolveManualForceStage(reason?: string): ManualForceStage {
   const normalized = String(reason ?? "").trim().toLowerCase();
   if (!normalized.startsWith("scrape-now-force")) {
@@ -150,7 +157,7 @@ export class ScrapeProcessor {
           ? {
               ...baseScrapePolicy,
               captureInscricoes: false,
-              captureGrupos: false,
+              captureGrupos: true,
               captureResultados: true,
               fetchEliminatoria: true,
               reason: "manual-force-stage-3-resultados",
@@ -279,6 +286,14 @@ export class ScrapeProcessor {
     }
 
     try {
+      let stage2CleanupSummary: EventMatchesCleanupSummary | null = null;
+      if (manualForceStage === "stage-2-inscricoes") {
+        stage2CleanupSummary = await this.withDbRetry(
+          () => this.clearEventMatchesData(eventId),
+          "event.clearMatchesData:stage2",
+        );
+      }
+
       const capture = await Promise.race([
         this.captureService.capture(event.cbtmEventId, {
           captureInscricoes: scrapePolicy.captureInscricoes,
@@ -366,6 +381,14 @@ export class ScrapeProcessor {
                 },
                 eventSituation,
                 scrapePolicy: { ...scrapePolicy },
+                stage2CleanupSummary: stage2CleanupSummary
+                  ? {
+                      matchParticipants: stage2CleanupSummary.matchParticipants,
+                      matches: stage2CleanupSummary.matches,
+                      conflicts: stage2CleanupSummary.conflicts,
+                      rawCaptures: stage2CleanupSummary.rawCaptures,
+                    }
+                  : undefined,
               },
               warnings: combinedWarnings,
               errorMessage: null,
@@ -657,6 +680,45 @@ export class ScrapeProcessor {
         categories: deletedCategories.count,
         rawCaptures: deletedRawCaptures.count,
         orphanClubs,
+      };
+    });
+  }
+
+  private async clearEventMatchesData(eventId: number): Promise<EventMatchesCleanupSummary> {
+    return prisma.$transaction(async (tx) => {
+      const matches = await tx.match.findMany({
+        where: { eventId },
+        select: { id: true },
+      });
+      const matchIds = matches.map((item) => item.id);
+
+      const deletedMatchParticipants =
+        matchIds.length === 0
+          ? { count: 0 }
+          : await tx.matchParticipant.deleteMany({
+              where: { matchId: { in: matchIds } },
+            });
+
+      const deletedConflicts = await tx.athleteMatchConflict.deleteMany({
+        where: { eventId },
+      });
+
+      const deletedMatches = await tx.match.deleteMany({
+        where: { eventId },
+      });
+
+      const deletedRawCaptures = await tx.rawCapture.deleteMany({
+        where: {
+          eventId,
+          tab: { in: ["GRUPOS", "RESULTADOS", "ELIMINATORIA_API"] },
+        },
+      });
+
+      return {
+        matchParticipants: deletedMatchParticipants.count,
+        matches: deletedMatches.count,
+        conflicts: deletedConflicts.count,
+        rawCaptures: deletedRawCaptures.count,
       };
     });
   }

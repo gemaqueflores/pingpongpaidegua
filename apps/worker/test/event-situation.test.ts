@@ -57,13 +57,21 @@ test("buildEventScrapePolicy desliga auto apos pos-evento e respeita modo manual
     fimRealizacao: dt("2026-03-22T19:00:00.000Z"),
   };
 
-  const postEvent = buildEventScrapePolicy(input, {
+  const postEventImmediate = buildEventScrapePolicy(input, {
+    now: dt("2026-03-22T22:00:00.000Z"),
+  });
+  assert.equal(postEventImmediate.autoSchedule, true);
+  assert.equal(postEventImmediate.captureResultados, true);
+  assert.equal(postEventImmediate.fetchEliminatoria, true);
+  assert.equal(postEventImmediate.recommendedIntervalMs, 2 * 60 * 60 * 1000);
+
+  const postEventStabilized = buildEventScrapePolicy(input, {
     now: dt("2026-03-30T12:00:00.000Z"),
   });
-  assert.equal(postEvent.autoSchedule, false);
-  assert.equal(postEvent.captureResultados, false);
-  assert.equal(postEvent.fetchEliminatoria, false);
-  assert.equal(postEvent.recommendedIntervalMs, null);
+  assert.equal(postEventStabilized.autoSchedule, false);
+  assert.equal(postEventStabilized.captureResultados, false);
+  assert.equal(postEventStabilized.fetchEliminatoria, false);
+  assert.equal(postEventStabilized.recommendedIntervalMs, null);
 
   const manual = buildEventScrapePolicy(
     {
@@ -97,21 +105,21 @@ test("buildEventScrapePolicy segue ciclo de vida para blocos de captura", () => 
   assert.equal(open.captureGrupos, false);
   assert.equal(open.captureResultados, false);
   assert.equal(open.fetchEliminatoria, false);
-  assert.equal(open.recommendedIntervalMs, 5 * 60 * 60 * 1000);
+  assert.equal(open.recommendedIntervalMs, 6 * 60 * 60 * 1000);
 
   const preEvent = buildEventScrapePolicy(input, { now: dt("2026-03-15T12:00:00.000Z") });
-  assert.equal(preEvent.captureInscricoes, false);
+  assert.equal(preEvent.captureInscricoes, true);
   assert.equal(preEvent.captureGrupos, true);
   assert.equal(preEvent.captureResultados, true);
   assert.equal(preEvent.fetchEliminatoria, true);
-  assert.equal(preEvent.recommendedIntervalMs, 3 * 60 * 60 * 1000);
+  assert.equal(preEvent.recommendedIntervalMs, 2 * 60 * 60 * 1000);
 
   const inProgress = buildEventScrapePolicy(input, { now: dt("2026-03-21T12:00:00.000Z") });
   assert.equal(inProgress.captureInscricoes, false);
   assert.equal(inProgress.captureGrupos, false);
   assert.equal(inProgress.captureResultados, true);
   assert.equal(inProgress.fetchEliminatoria, true);
-  assert.equal(inProgress.recommendedIntervalMs, 30 * 60 * 1000);
+  assert.equal(inProgress.recommendedIntervalMs, 20 * 60 * 1000);
 
   const publishedGrids = buildEventScrapePolicy(
     {
@@ -125,7 +133,38 @@ test("buildEventScrapePolicy segue ciclo de vida para blocos de captura", () => 
   assert.equal(publishedGrids.captureGrupos, true);
   assert.equal(publishedGrids.captureResultados, true);
   assert.equal(publishedGrids.fetchEliminatoria, true);
-  assert.equal(publishedGrids.recommendedIntervalMs, 60 * 60 * 1000);
+  assert.equal(publishedGrids.recommendedIntervalMs, 45 * 60 * 1000);
+});
+
+test("buildEventScrapePolicy aplica janela de inscricoes encerradas e definicao de confrontos", () => {
+  const input = {
+    inicioInscricoes: dt("2026-03-01T00:00:00.000Z"),
+    fimInscricoes: dt("2026-03-10T23:59:59.000Z"),
+    inicioRealizacao: dt("2026-03-20T08:00:00.000Z"),
+    fimRealizacao: dt("2026-03-22T19:00:00.000Z"),
+  };
+
+  const closedRegistrations = buildEventScrapePolicy(input, { now: dt("2026-03-11T12:00:00.000Z") });
+  assert.equal(closedRegistrations.captureInscricoes, true);
+  assert.equal(closedRegistrations.captureGrupos, false);
+  assert.equal(closedRegistrations.captureResultados, false);
+  assert.equal(closedRegistrations.fetchEliminatoria, false);
+  assert.equal(closedRegistrations.recommendedIntervalMs, 6 * 60 * 60 * 1000);
+  assert.equal(closedRegistrations.reason, "inscricoes-encerradas-sanitizacao");
+
+  const matchDefinition = buildEventScrapePolicy(input, { now: dt("2026-03-18T12:00:00.000Z") });
+  assert.equal(matchDefinition.captureInscricoes, false);
+  assert.equal(matchDefinition.captureGrupos, true);
+  assert.equal(matchDefinition.captureResultados, true);
+  assert.equal(matchDefinition.fetchEliminatoria, true);
+  assert.equal(matchDefinition.reason, "definicao-de-confrontos");
+
+  const groupFormation = buildEventScrapePolicy(input, { now: dt("2026-03-14T12:00:00.000Z") });
+  assert.equal(groupFormation.captureInscricoes, true);
+  assert.equal(groupFormation.captureGrupos, true);
+  assert.equal(groupFormation.captureResultados, true);
+  assert.equal(groupFormation.fetchEliminatoria, true);
+  assert.equal(groupFormation.reason, "formacao-de-grupos");
 });
 
 test("shouldRunEventAutoScrape aplica intervalo recomendado", () => {

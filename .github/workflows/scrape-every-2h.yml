@@ -75,7 +75,7 @@ jobs:
             $COMPOSE_BIN up -d postgres redis
             $COMPOSE_BIN ps
 
-            RUN_ONCE_CMD="npm run scrape:once"
+            RUN_ONCE_CMD="node apps/worker/dist/run-once.js"
             echo "Comando de run-once: $RUN_ONCE_CMD (one-shot container)"
             echo "Diagnostico rapido do worker (one-shot):"
             $COMPOSE_BIN run --rm worker sh -lc "node -v && pwd && ls -la apps/worker/dist | sed -n '1,80p'" || true

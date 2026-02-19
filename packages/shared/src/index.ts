@@ -776,7 +776,9 @@ export function parseBrazilianDateTime(dateText: string | null, timeText: string
   const [, dd, mm, yyyy] = dateMatch;
   const time = timeText && /^\d{1,2}:\d{2}$/.test(timeText) ? timeText.padStart(5, "0") : "00:00";
 
-  return `${yyyy}-${mm}-${dd}T${time}:00.000Z`;
+  // O site CBTM exibe horario local de Belem (UTC-03:00, sem horario de verao).
+  // Persistimos com offset explicito para evitar deslocamento de -3h no frontend.
+  return `${yyyy}-${mm}-${dd}T${time}:00-03:00`;
 }
 
 export function isLikelyAthleteName(value: string): boolean {

@@ -890,6 +890,40 @@ function parseSetScoresFromCardHtml(cardHtml: string): {
   };
 }
 
+function isBracketReferenceToken(value: string): boolean {
+  const normalized = compactWhitespace(value ?? "");
+  if (!normalized) {
+    return false;
+  }
+
+  if (/^\d{1,2}\s*-\s*\d{1,2}$/.test(normalized)) {
+    return true;
+  }
+
+  if (/^[vVwW]\s*\d{1,3}$/.test(normalized)) {
+    return true;
+  }
+
+  return false;
+}
+
+function isCardMetaLine(value: string): boolean {
+  const line = compactWhitespace(value ?? "");
+  if (!line) {
+    return false;
+  }
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(line)) {
+    return true;
+  }
+
+  if (/jogo\s*\d+/i.test(line)) {
+    return true;
+  }
+
+  return false;
+}
+
 function inferWinnerIndexFromSets(input: {
   setsResult: ParsedMatchSetsResult | null;
   sets: ParsedMatchSet[];
@@ -935,13 +969,12 @@ function parseCardBasedMatches(
 
   for (const card of cards) {
     const lines = card.lines;
-    if (lines.length < 6) {
+    if (lines.length < 4) {
       continue;
     }
 
     const cardScoreData = parseSetScoresFromCardHtml(card.html);
     const title = lines[0] ?? "";
-    const scoreRaw = lines.find((line) => /^\d+\s*-\s*\d+$/.test(line)) ?? "";
     const metaLine = lines.find((line) => /jogo\s*\d+/i.test(line)) ?? "";
     const dateLine = lines.find((line) => /^\d{2}\/\d{2}\/\d{4}$/.test(line)) ?? "";
     const categoryName = compactWhitespace(title.split(" - ")[0] ?? "");
@@ -954,13 +987,7 @@ function parseCardBasedMatches(
       if (idx === 0) {
         return false;
       }
-      if (/^\d+\s*-\s*\d+$/.test(line)) {
-        return false;
-      }
-      if (/^\d{2}\/\d{2}\/\d{4}$/.test(line)) {
-        return false;
-      }
-      if (/jogo\s*\d+/i.test(line)) {
+      if (isCardMetaLine(line)) {
         return false;
       }
       if (line.includes(" - ")) {
@@ -969,14 +996,37 @@ function parseCardBasedMatches(
       return isLikelyAthleteName(line);
     });
 
-    const athleteANameRaw = cardScoreData?.athleteAName ?? filteredNames[0];
-    const athleteBNameRaw = cardScoreData?.athleteBName ?? filteredNames[1];
+    const bracketReferenceCandidates = lines.filter((line, idx) => {
+      if (idx === 0) {
+        return false;
+      }
+      if (isCardMetaLine(line)) {
+        return false;
+      }
+      return isBracketReferenceToken(line);
+    });
+
+    const athleteANameRaw = cardScoreData?.athleteAName ?? filteredNames[0] ?? bracketReferenceCandidates[0];
+    const athleteBNameRaw = cardScoreData?.athleteBName ?? filteredNames[1] ?? bracketReferenceCandidates[1];
     if (!athleteANameRaw || !athleteBNameRaw || !categoryName) {
       continue;
     }
 
     const athleteAName = compactWhitespace(athleteANameRaw);
     const athleteBName = compactWhitespace(athleteBNameRaw);
+    const athleteANameNormalized = normalizeText(athleteAName);
+    const athleteBNameNormalized = normalizeText(athleteBName);
+    const scoreRaw =
+      lines.find((line) => {
+        if (!/^\d+\s*-\s*\d+$/.test(line)) {
+          return false;
+        }
+        const normalizedLine = normalizeText(line);
+        if (normalizedLine === athleteANameNormalized || normalizedLine === athleteBNameNormalized) {
+          return false;
+        }
+        return true;
+      }) ?? "";
     const meta = extractMatchMeta(metaLine);
     const fallbackSetScores = parseSetScoresFromCardLines(lines, athleteAName, athleteBName);
     const setScores =
@@ -993,8 +1043,8 @@ function parseCardBasedMatches(
 
     const matchDatetime = parseBrazilianDateTime(dateLine || null, meta.time);
     const categoryNormalizedName = normalizeText(categoryName);
-    const athleteANormalizedName = normalizeText(athleteAName);
-    const athleteBNormalizedName = normalizeText(athleteBName);
+    const athleteANormalizedName = athleteANameNormalized;
+    const athleteBNormalizedName = athleteBNameNormalized;
 
     const athleteAHint = athleteHintResolver({
       categoryId,
