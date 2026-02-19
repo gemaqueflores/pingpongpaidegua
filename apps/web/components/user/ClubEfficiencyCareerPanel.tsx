@@ -12,7 +12,12 @@ function formatNumber(value: number): string {
 
 function formatDate(value: string | null): string {
   if (!value) return "-";
-  return new Date(value).toLocaleDateString("pt-BR");
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "America/Belem",
+  }).format(new Date(value));
 }
 
 function medalEmoji(medalha: "ouro" | "prata" | "bronze"): string {

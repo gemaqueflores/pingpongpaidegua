@@ -40,6 +40,7 @@ type AthleteRow = {
   stateCode?: string | null;
   region?: string | null;
   club?: { name: string } | null;
+  categoryNames?: string[];
 };
 const ATHLETES_PAGE_SIZE = 30;
 type EventPhase = "INSCRICOES_ABERTAS" | "INSCRICOES_ENCERRADAS" | "EM_DISPUTA" | "CONCLUIDO";
@@ -534,6 +535,9 @@ export default function EventDetailPage() {
                             <li key={athlete.id}>
                               <Link href={`/events/${eventId}/athletes/${athlete.id}`}>
                                 {athlete.nameDisplay ?? athlete.name}
+                                {athlete.categoryNames && athlete.categoryNames.length > 0
+                                  ? ` (${athlete.categoryNames.join(" / ")})`
+                                  : ""}
                               </Link>
                             </li>
                           ))}
