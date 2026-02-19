@@ -606,6 +606,22 @@ export function computeCategoryClassificationSummaries(
   return [...byCategory.entries()]
     .map(([categoryId, categoryMatches]) => {
       const first = categoryMatches[0];
+      const parsedCategoryMatches = categoryMatches.map(toParsedMatch);
+      const hasAnyMatch = parsedCategoryMatches.length > 0;
+      const hasPendingMatches = parsedCategoryMatches.some((match) => match.winnerKey === null);
+      if (!hasAnyMatch || hasPendingMatches) {
+        return {
+          categoryId,
+          categoryName: first.categoryName,
+          position: null,
+          reason: !hasAnyMatch
+            ? "sem_confrontos_publicados"
+            : "classificacao_final_pendente_confrontos_nao_finalizados",
+          mode: "indefinido",
+          tieTechnical: false,
+        } satisfies CategoryClassificationSummary;
+      }
+
       const participants = new Set<string>();
       const groupRounds = new Set<string>();
 
