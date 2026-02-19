@@ -88,7 +88,7 @@ describe("resolveAthleteCandidate", () => {
     });
 
     expect(resolved.status).toBe("conflict");
-    expect(resolved.scoredCandidates.length).toBeGreaterThanOrEqual(2);
+    expect(resolved.scoredCandidates.length).toBe(0);
   });
 
   it("resolve variacao ortografica pequena em nome reduzido quando houver candidato dominante", () => {
@@ -157,6 +157,29 @@ describe("resolveAthleteCandidate", () => {
     expect(resolved.status).toBe("resolved");
     expect(resolved.strategy).toBe("forte-ranking-rating");
     expect(resolved.athleteId).toBe(20);
+  });
+
+  it("nao resolve por apenas um token do alias quando houver homonimia parcial", () => {
+    const resolved = resolveAthleteCandidate({
+      eventId: 5246,
+      shortName: "elias santos",
+      rankingPoints: 500,
+      ratingPoints: 700,
+      candidates: [
+        {
+          athleteId: 30,
+          eventId: 5246,
+          nameDisplay: "LEONARDO GEMAQUE SANTOS",
+          nameNormalized: "leonardo gemaque santos",
+          rankingPoints: 500,
+          ratingPoints: 700,
+          clubNormalizedName: "clube a",
+          aliasesNormalized: [],
+        },
+      ],
+    });
+
+    expect(resolved.status).toBe("conflict");
   });
 
   it("ordena fases e rodadas semanticamente", () => {

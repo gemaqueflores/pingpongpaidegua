@@ -238,10 +238,13 @@ function isBaseNameCompatible(shortNameNormalized: string, fullNameNormalized: s
     return false;
   }
 
-  const overlap = shortTokens.filter((token) => hasTokenCompatible(token, fullTokens));
-  const firstLast = `${fullTokens[0]} ${fullTokens[fullTokens.length - 1]}`;
+  // Regra preventiva para alias reduzido: exige match completo dos tokens do alias.
+  // Evita falso-positivo por apenas 1 token coincidente (ex.: "ELIAS SANTOS" vs "... SANTOS").
+  if (shortTokens.length === 1) {
+    return false;
+  }
 
-  return overlap.length >= 1 || normalizeAthleteAliasKey(shortNameNormalized) === firstLast;
+  return shortTokens.every((token) => hasTokenCompatible(token, fullTokens));
 }
 
 function scoreCandidate(input: {
