@@ -41,6 +41,10 @@ type SummaryMatch = {
 };
 
 type SummaryResponse = {
+  event: {
+    id: number;
+    name: string;
+  };
   athlete: {
     id: number;
     name: string;
@@ -331,6 +335,24 @@ export default function AthleteSummaryPage() {
     };
   }, [summary]);
 
+  const sharePayload = useMemo(() => {
+    if (!summary) {
+      return null;
+    }
+
+    const alias = toReducedName(summary.athlete.shortName || summary.athlete.name);
+    const shareText = `${alias} no evento ${summary.event.name} de Tênis de Mesa`;
+    const shareUrl = `${window.location.origin}/events/${eventId}/athletes/${athleteId}`;
+    return { shareText, shareUrl };
+  }, [summary, eventId, athleteId]);
+
+  async function copySummaryLink() {
+    if (!sharePayload) return;
+    const content = `${sharePayload.shareText}\n${sharePayload.shareUrl}`;
+    await navigator.clipboard.writeText(content);
+    window.alert("Link copiado para compartilhamento.");
+  }
+
   return (
     <main className="container grid user-page">
       <PageHeader
@@ -358,6 +380,38 @@ export default function AthleteSummaryPage() {
             <p>
               Nome reduzido: <strong>{summary.athlete.shortName || "-"}</strong>
             </p>
+            <div className="event-athlete-share-row">
+              <strong>Compartilhar resumo:</strong>
+              <div className="event-athlete-share-actions">
+                {sharePayload ? (
+                  <>
+                    <a
+                      className="event-athlete-secondary-link"
+                      href={`https://wa.me/?text=${encodeURIComponent(`${sharePayload.shareText}\n${sharePayload.shareUrl}`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      WhatsApp
+                    </a>
+                    <a
+                      className="event-athlete-secondary-link"
+                      href={`https://t.me/share/url?url=${encodeURIComponent(sharePayload.shareUrl)}&text=${encodeURIComponent(sharePayload.shareText)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Telegram
+                    </a>
+                    <button
+                      type="button"
+                      className="event-athlete-secondary-link event-athlete-secondary-button"
+                      onClick={() => void copySummaryLink()}
+                    >
+                      Copiar link
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
             <p>
               Clube: <strong>{summary.club.name}</strong>
             </p>
@@ -470,5 +524,4 @@ export default function AthleteSummaryPage() {
     </main>
   );
 }
-
 

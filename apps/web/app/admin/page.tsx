@@ -598,6 +598,22 @@ export default function AdminPage() {
     setBusyScrapeStage(stage ?? null);
     try {
       const queued = await apiScrapeNow(event.id, stage);
+      const status =
+        queued && typeof queued === "object" && typeof queued.status === "string"
+          ? queued.status.toLowerCase()
+          : "queued";
+
+      if (status === "busy") {
+        setNotice({
+          type: "error",
+          text:
+            queued && typeof queued === "object" && typeof queued.message === "string"
+              ? queued.message
+              : `Já existe um scrape em execução para '${event.nome}'.`,
+        });
+        return;
+      }
+
       const queuedStatus =
         queued && typeof queued === "object"
           ? `${queued.status ?? "queued"}${queued.jobId ? ` (job ${queued.jobId})` : ""}`

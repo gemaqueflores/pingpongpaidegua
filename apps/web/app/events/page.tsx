@@ -13,7 +13,12 @@ import { FilterDrawer } from "../../components/ui/FilterDrawer";
 import { EmptyState } from "../../components/ui/EmptyState";
 
 type EventRow = UserEventRow;
-type EventDisplayStatus = "INSCRICOES_ABERTAS" | "INSCRICOES_ENCERRADAS" | "EM_DISPUTA" | "CONCLUIDO";
+type EventDisplayStatus =
+  | "INSCRICOES_ABERTAS"
+  | "INSCRICOES_ENCERRADAS"
+  | "GRUPOS_DIVULGADOS"
+  | "EM_DISPUTA"
+  | "CONCLUIDO";
 type EventTypeFilter = "ALL" | "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN";
 type EventStatusFilter = "ALL" | "OPEN" | "DONE";
 
@@ -38,6 +43,13 @@ function resolveDisplayStatus(event: EventRow): EventDisplayStatus {
     return "CONCLUIDO";
   }
 
+  if (
+    event.situacaoComputada === "GRADES_PUBLICADAS_PRE_JOGO" ||
+    (event.situacaoComputada === "POS_INSCRICOES_PRE_EVENTO" && event.groupsDefined)
+  ) {
+    return "GRUPOS_DIVULGADOS";
+  }
+
   const now = Date.now();
   const inicioRealizacao = toTs(event.inicioRealizacao ?? event.dataInicio);
   const fimRealizacao = toTs(event.fimRealizacao ?? event.dataFim);
@@ -56,6 +68,7 @@ function resolveDisplayStatus(event: EventRow): EventDisplayStatus {
 function eventStatusLabel(status: EventDisplayStatus): string {
   if (status === "INSCRICOES_ABERTAS") return "Inscrições abertas";
   if (status === "INSCRICOES_ENCERRADAS") return "Inscrições encerradas";
+  if (status === "GRUPOS_DIVULGADOS") return "Grupos divulgados";
   if (status === "EM_DISPUTA") return "Em disputa";
   return "Concluído";
 }
@@ -63,6 +76,7 @@ function eventStatusLabel(status: EventDisplayStatus): string {
 function eventStatusTone(status: EventDisplayStatus): "open" | "closed" | "done" {
   if (status === "INSCRICOES_ABERTAS" || status === "EM_DISPUTA") return "open";
   if (status === "INSCRICOES_ENCERRADAS") return "closed";
+  if (status === "GRUPOS_DIVULGADOS") return "closed";
   return "done";
 }
 

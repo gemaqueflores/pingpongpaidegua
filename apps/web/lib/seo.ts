@@ -1,0 +1,75 @@
+import type { Metadata } from "next";
+
+const DEFAULT_SITE_URL = "https://pingpongpaidegua.vercel.app";
+const API_BASE =
+  process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? DEFAULT_SITE_URL;
+export const SITE_NAME = "PingPong Paid'egua";
+
+function normalizePath(path: string): string {
+  if (!path) return "/";
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+export function absoluteUrl(path: string): string {
+  const base = SITE_URL.endsWith("/") ? SITE_URL.slice(0, -1) : SITE_URL;
+  return `${base}${normalizePath(path)}`;
+}
+
+export function buildMetadata(input: {
+  title: string;
+  description?: string;
+  path: string;
+}): Metadata {
+  const title = input.title;
+  const description = input.description ?? title;
+  const url = absoluteUrl(input.path);
+  const image = absoluteUrl("/opengraph-image");
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: url,
+    },
+    openGraph: {
+      type: "website",
+      locale: "pt_BR",
+      url,
+      title,
+      description,
+      siteName: SITE_NAME,
+      images: [
+        {
+          url: image,
+          width: 1200,
+          height: 630,
+          alt: SITE_NAME,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [image],
+    },
+  };
+}
+
+export async function fetchJson<T>(path: string): Promise<T | null> {
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}

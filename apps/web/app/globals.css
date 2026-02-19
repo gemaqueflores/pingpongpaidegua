@@ -1757,6 +1757,22 @@ a {
   font-weight: 700;
 }
 
+.event-athlete-secondary-button {
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.event-athlete-share-row {
+  display: grid;
+  gap: 8px;
+}
+
+.event-athlete-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .club-athlete-count {
   color: #9db7e4;
   font-size: 0.82rem;
