@@ -17,7 +17,6 @@ import { Hero } from "../../../../components/ui/Hero";
 import { Card } from "../../../../components/ui/Card";
 import { Badge } from "../../../../components/ui/Badge";
 import { Skeleton } from "../../../../components/ui/Skeleton";
-import { EventStatusTimeline } from "../../../../components/ui/EventStatusTimeline";
 import { SearchInput } from "../../../../components/ui/SearchInput";
 import { SegmentedControl } from "../../../../components/ui/SegmentedControl";
 import { EmptyState } from "../../../../components/ui/EmptyState";
@@ -344,11 +343,11 @@ export default function EventDetailPage() {
 
   const statusLabel = resolveEventStatusLabel(event);
   const statusTone =
-    event?.userStatus === "CONCLUIDO"
+    statusLabel === "Encerrado"
       ? "done"
-      : statusLabel === "Inscrições Abertas"
-        ? "closed"
-        : "open";
+      : statusLabel === "Inscrições Abertas" || statusLabel === "Em Realização"
+        ? "open"
+        : "closed";
   const isGroupsPublished =
     event?.situacaoComputada === "GRADES_PUBLICADAS_PRE_JOGO" ||
     (event?.situacaoComputada === "POS_INSCRICOES_PRE_EVENTO" && Boolean(event?.groupsDefined));
@@ -453,9 +452,7 @@ export default function EventDetailPage() {
           <div className="row event-summary-head">
             <h2>Resumo do evento</h2>
             <div className="row event-status-badges">
-              <Badge tone={statusTone}>
-                {event?.userStatus === "CONCLUIDO" ? "Concluído" : "Em disputa"}
-              </Badge>
+              <Badge tone={statusTone}>{statusLabel}</Badge>
               {eventType ? (
                 <Badge tone="default">
                   {eventType === "BRASILEIRAO" ? "Brasileirão" : eventType}
@@ -473,7 +470,6 @@ export default function EventDetailPage() {
             <span><small>Inscritos</small><strong>{String(event?.totalInscritos ?? 0)}</strong></span>
             <span><small>Categorias</small><strong>{String(event?.totalCategorias ?? 0)}</strong></span>
             <span><small>Técnicos</small><strong>{String(event?.totalTecnicos ?? 0)}</strong></span>
-            <span><small>Status</small><strong>{statusLabel}</strong></span>
           </div>
           <div className="event-tabs-shell">
             <SegmentedControl
@@ -484,7 +480,6 @@ export default function EventDetailPage() {
               items={tabs.map((tab) => ({ value: tab.id, label: tab.label }))}
             />
           </div>
-          <EventStatusTimeline phase={eventPhase} />
           {eventBanner ? (
             <div className={`event-state-banner event-state-banner-${eventBanner.tone}`} role="status" aria-live="polite">
               {eventBanner.tone === "success" ? <span className="event-state-banner-icon">✅</span> : null}

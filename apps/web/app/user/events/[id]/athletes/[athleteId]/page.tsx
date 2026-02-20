@@ -9,7 +9,6 @@ import { Skeleton } from "../../../../../../components/ui/Skeleton";
 import { PerformanceBar } from "../../../../../../components/ui/PerformanceBar";
 import { PageHeader } from "../../../../../../components/ui/PageHeader";
 import { SegmentedControl } from "../../../../../../components/ui/SegmentedControl";
-import { DataTableResponsive } from "../../../../../../components/ui/DataTableResponsive";
 
 type GroupMode = "category" | "schedule";
 
@@ -176,9 +175,9 @@ function formatAthleteFederation(input: {
   stateCode?: string | null;
   stateName?: string | null;
   region?: string | null;
-}): string {
+}): string | null {
   if (!input.stateCode || !input.region) {
-    return "-";
+    return null;
   }
   return `${input.stateCode} (${input.stateName ?? "UF"}) - ${input.region}`;
 }
@@ -335,24 +334,6 @@ export default function AthleteSummaryPage() {
     };
   }, [summary]);
 
-  const sharePayload = useMemo(() => {
-    if (!summary) {
-      return null;
-    }
-
-    const alias = toReducedName(summary.athlete.shortName || summary.athlete.name);
-    const shareText = `${alias} no evento ${summary.event.name} de Tênis de Mesa`;
-    const shareUrl = `${window.location.origin}/events/${eventId}/athletes/${athleteId}`;
-    return { shareText, shareUrl };
-  }, [summary, eventId, athleteId]);
-
-  async function copySummaryLink() {
-    if (!sharePayload) return;
-    const content = `${sharePayload.shareText}\n${sharePayload.shareUrl}`;
-    await navigator.clipboard.writeText(content);
-    window.alert("Link copiado para compartilhamento.");
-  }
-
   return (
     <main className="container grid user-page">
       <PageHeader
@@ -378,46 +359,13 @@ export default function AthleteSummaryPage() {
           <Card className="grid">
             <h2>{summary.athlete.name}</h2>
             <p>
-              Nome reduzido: <strong>{summary.athlete.shortName || "-"}</strong>
-            </p>
-            <div className="event-athlete-share-row">
-              <strong>Compartilhar resumo:</strong>
-              <div className="event-athlete-share-actions">
-                {sharePayload ? (
-                  <>
-                    <a
-                      className="event-athlete-secondary-link"
-                      href={`https://wa.me/?text=${encodeURIComponent(`${sharePayload.shareText}\n${sharePayload.shareUrl}`)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      WhatsApp
-                    </a>
-                    <a
-                      className="event-athlete-secondary-link"
-                      href={`https://t.me/share/url?url=${encodeURIComponent(sharePayload.shareUrl)}&text=${encodeURIComponent(sharePayload.shareText)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Telegram
-                    </a>
-                    <button
-                      type="button"
-                      className="event-athlete-secondary-link event-athlete-secondary-button"
-                      onClick={() => void copySummaryLink()}
-                    >
-                      Copiar link
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            </div>
-            <p>
               Clube: <strong>{summary.club.name}</strong>
             </p>
-            <p>
-              UF/Regiao: <strong>{formatAthleteFederation(summary.athlete)}</strong>
-            </p>
+            {formatAthleteFederation(summary.athlete) ? (
+              <p>
+                UF/Região: <strong>{formatAthleteFederation(summary.athlete)}</strong>
+              </p>
+            ) : null}
             <p>
               Categorias: {summary.categories.map((category) => category.name).join(", ") || "-"}
             </p>
@@ -433,41 +381,6 @@ export default function AthleteSummaryPage() {
               <span><small>Sets disputados</small><strong>{athleteStats.setsDisputados}</strong></span>
               <span><small>Pontos ganhos</small><strong>{athleteStats.pontosGanhos}</strong></span>
               <span><small>Pontos disputados</small><strong>{athleteStats.pontosDisputados}</strong></span>
-            </div>
-            <div>
-              <strong>Aproveitamento por categoria</strong>
-              {summary.performanceByCategory && summary.performanceByCategory.length > 0 ? (
-                <DataTableResponsive
-                  rows={summary.performanceByCategory}
-                  empty={<p className="arena-muted">Sem dados de aproveitamento por categoria.</p>}
-                  columns={[
-                    { key: "categoria", header: "Categoria", render: (item) => item.categoryName },
-                    {
-                      key: "aproveitamento",
-                      header: "Aproveitamento",
-                      render: (item) => `${formatRatio(item.performance.ratio)} (${item.performance.pointsWon}/${item.performance.pointsPlayed})`,
-                    },
-                    {
-                      key: "classificacao",
-                      header: "Classificação",
-                      render: (item) => (item.classification?.position ? `${item.classification.position}º` : "-"),
-                    },
-                  ]}
-                  mobileCard={(item) => (
-                    <article key={item.categoryId} className="athlete-list-card">
-                      <strong>{item.categoryName}</strong>
-                      <p style={{ margin: 0 }}>
-                        Aproveitamento {formatRatio(item.performance.ratio)} ({item.performance.pointsWon}/{item.performance.pointsPlayed})
-                      </p>
-                      <p className="arena-muted" style={{ margin: 0 }}>
-                        Classificação {item.classification?.position ? `${item.classification.position}º` : "-"}
-                      </p>
-                    </article>
-                  )}
-                />
-              ) : (
-                <p>-</p>
-              )}
             </div>
             <div>
               <a className="event-athlete-secondary-link" href={`/career/${encodeURIComponent(summary.athlete.athleteKey)}`}>
@@ -524,4 +437,3 @@ export default function AthleteSummaryPage() {
     </main>
   );
 }
-
