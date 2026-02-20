@@ -2326,6 +2326,38 @@ export class UserService {
     };
   }
 
+  async getAthleteIdentity(eventId: number, athleteId: number) {
+    const scope = await this.resolveEventScope(eventId);
+    const event = await this.ensureEvent(scope.canonicalEventId);
+
+    const athlete = await this.prisma.athlete.findFirst({
+      where: {
+        id: athleteId,
+        eventId: { in: scope.allEventIds },
+      },
+      select: {
+        id: true,
+        nameDisplay: true,
+      },
+    });
+
+    if (!athlete) {
+      throw new NotFoundException("Atleta nao encontrado");
+    }
+
+    return {
+      event: {
+        id: event.id,
+        name: event.nome,
+      },
+      athlete: {
+        id: athlete.id,
+        name: athlete.nameDisplay,
+        shortName: toReducedName(athlete.nameDisplay),
+      },
+    };
+  }
+
   private buildAthleteSummaryMatch(match: MatchWithRelations, athleteId: number): AthleteSummaryMatch | null {
     const participants = match.participants.map((participant) => participant.athlete);
     const ordered = this.resolveOrderedPlayers(match.scorePlayers, participants);

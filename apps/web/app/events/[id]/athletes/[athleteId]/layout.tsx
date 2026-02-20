@@ -25,7 +25,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { id, athleteId } = await params;
   const summary = await fetchJson<AthleteSummaryResponse>(
-    `/events/${id}/athletes/${athleteId}/summary?orderBy=phase_hierarchy_datetime`,
+    `/events/${id}/athletes/${athleteId}/identity`,
   );
 
   const alias = summary?.athlete?.shortName || summary?.athlete?.name || `Atleta ${athleteId}`;

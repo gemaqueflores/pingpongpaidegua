@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 const DEFAULT_SITE_URL = "https://pingpongpaidegua.vercel.app";
-const API_BASE =
-  process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_BASE_INTERNAL = process.env.API_INTERNAL_URL ?? null;
+const API_BASE_PUBLIC = process.env.NEXT_PUBLIC_API_URL ?? null;
 
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? DEFAULT_SITE_URL;
 export const SITE_NAME = "PingPong Paid'egua";
@@ -59,17 +59,28 @@ export function buildMetadata(input: {
 }
 
 export async function fetchJson<T>(path: string): Promise<T | null> {
-  try {
-    const response = await fetch(`${API_BASE}${path}`, {
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+  const bases = [API_BASE_INTERNAL, API_BASE_PUBLIC, "http://localhost:4000"].filter(
+    (base): base is string => Boolean(base),
+  );
+  const uniqueBases = [...new Set(bases)];
 
-    if (!response.ok) return null;
-    return (await response.json()) as T;
-  } catch {
-    return null;
+  for (const base of uniqueBases) {
+    try {
+      const response = await fetch(`${base}${path}`, {
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+      return (await response.json()) as T;
+    } catch {
+      continue;
+    }
   }
+
+  return null;
 }

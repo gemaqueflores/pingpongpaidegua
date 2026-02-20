@@ -93,6 +93,14 @@ export class UserController {
     return this.service.getAthleteSummary(eventId, athleteId, query.orderBy ?? "phase_hierarchy_datetime");
   }
 
+  @Get("events/:id/athletes/:athleteId/identity")
+  async athleteIdentity(
+    @Param("id", ParseIntPipe) eventId: number,
+    @Param("athleteId", ParseIntPipe) athleteId: number,
+  ) {
+    return this.service.getAthleteIdentity(eventId, athleteId);
+  }
+
   @Get("athletes/directory")
   async athletesDirectory(@Query("search") search?: string) {
     return this.service.listAthleteDirectory(search ?? "");
