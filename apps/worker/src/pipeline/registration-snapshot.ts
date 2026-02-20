@@ -70,3 +70,54 @@ export function computeEventRegistrationPairRemovals(input: {
 
   return removals;
 }
+
+export function shouldAllowDestructiveRegistrationSync(input: {
+  existingPairCount: number;
+  observedPairCount: number;
+  projectedRemovalCount?: number;
+  minExistingPairCount?: number;
+  minCoverageRatio?: number;
+  maxRemovalRatio?: number;
+}): {
+  allow: boolean;
+  reason: "ok" | "low-coverage" | "high-removal-ratio";
+  coverageRatio: number;
+  removalRatio: number | null;
+} {
+  const existing = Math.max(0, Math.trunc(input.existingPairCount));
+  const observed = Math.max(0, Math.trunc(input.observedPairCount));
+  const minExistingPairCount = input.minExistingPairCount ?? 80;
+  const minCoverageRatio = input.minCoverageRatio ?? 0.65;
+  const maxRemovalRatio = input.maxRemovalRatio ?? 0.45;
+  const coverageRatio = existing === 0 ? 1 : observed / existing;
+
+  if (existing >= minExistingPairCount && coverageRatio < minCoverageRatio) {
+    return {
+      allow: false,
+      reason: "low-coverage",
+      coverageRatio,
+      removalRatio: null,
+    };
+  }
+
+  const projectedRemovalCount =
+    input.projectedRemovalCount === undefined ? null : Math.max(0, Math.trunc(input.projectedRemovalCount));
+  const removalRatio =
+    projectedRemovalCount === null || existing === 0 ? null : projectedRemovalCount / existing;
+
+  if (existing >= minExistingPairCount && removalRatio !== null && removalRatio > maxRemovalRatio) {
+    return {
+      allow: false,
+      reason: "high-removal-ratio",
+      coverageRatio,
+      removalRatio,
+    };
+  }
+
+  return {
+    allow: true,
+    reason: "ok",
+    coverageRatio,
+    removalRatio,
+  };
+}

@@ -16,6 +16,7 @@ import { inferAthleteFederationFromClub } from "./athlete-federation";
 import { mergeMatchesAcrossSources } from "./match-merge";
 import {
   computeEventRegistrationPairRemovals,
+  shouldAllowDestructiveRegistrationSync,
   shouldSyncRegistrationSnapshot,
 } from "./registration-snapshot";
 import { parseScoreRaw } from "./score-parser";
@@ -1538,6 +1539,21 @@ export class UpsertService {
       return;
     }
 
+    const precheck = shouldAllowDestructiveRegistrationSync({
+      existingPairCount: existing.length,
+      observedPairCount: observedPairKeys.size,
+    });
+    if (!precheck.allow) {
+      input.warnings.push(
+        `Sincronizacao de inscricoes ignorada no evento ${input.eventId} por snapshot parcial (coverage=${Math.round(
+          precheck.coverageRatio * 100,
+        )}%, observados=${observedPairKeys.size}, atuais=${existing.length}, motivo=${precheck.reason}).`,
+      );
+      input.updated.registration_sync_skipped_guard =
+        (input.updated.registration_sync_skipped_guard ?? 0) + 1;
+      return;
+    }
+
     const protectedCategoryIds = new Set<number>(
       existing
         .filter((row) => row.category.cbtmCategoryId && IGNORED_CATEGORY_IDS.has(row.category.cbtmCategoryId))
@@ -1555,6 +1571,22 @@ export class UpsertService {
     });
 
     if (removablePairs.length === 0) {
+      return;
+    }
+
+    const removalGuard = shouldAllowDestructiveRegistrationSync({
+      existingPairCount: existing.length,
+      observedPairCount: observedPairKeys.size,
+      projectedRemovalCount: removablePairs.length,
+    });
+    if (!removalGuard.allow) {
+      input.warnings.push(
+        `Sincronizacao de inscricoes bloqueou remocao massiva no evento ${input.eventId} (remocoes=${removablePairs.length}, atuais=${existing.length}, coverage=${Math.round(
+          removalGuard.coverageRatio * 100,
+        )}%, motivo=${removalGuard.reason}).`,
+      );
+      input.updated.registration_sync_skipped_guard =
+        (input.updated.registration_sync_skipped_guard ?? 0) + 1;
       return;
     }
 

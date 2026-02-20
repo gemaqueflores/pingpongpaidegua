@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   computeEventRegistrationPairRemovals,
   computeRegistrationCategoryRemovals,
+  shouldAllowDestructiveRegistrationSync,
   shouldSyncRegistrationSnapshot,
 } from "../src/pipeline/registration-snapshot";
 
@@ -75,4 +76,36 @@ test("computeEventRegistrationPairRemovals preserva pares protegidos e pares sem
   });
 
   assert.deepEqual(removals, [{ athleteId: 1, categoryId: 10, registrationStatus: "INSCRITO" }]);
+});
+
+test("shouldAllowDestructiveRegistrationSync bloqueia sincronizacao destrutiva com baixa cobertura", () => {
+  const decision = shouldAllowDestructiveRegistrationSync({
+    existingPairCount: 300,
+    observedPairCount: 90,
+  });
+
+  assert.equal(decision.allow, false);
+  assert.equal(decision.reason, "low-coverage");
+});
+
+test("shouldAllowDestructiveRegistrationSync bloqueia remocao massiva mesmo com cobertura suficiente", () => {
+  const decision = shouldAllowDestructiveRegistrationSync({
+    existingPairCount: 200,
+    observedPairCount: 180,
+    projectedRemovalCount: 120,
+  });
+
+  assert.equal(decision.allow, false);
+  assert.equal(decision.reason, "high-removal-ratio");
+});
+
+test("shouldAllowDestructiveRegistrationSync permite sincronizacao normal", () => {
+  const decision = shouldAllowDestructiveRegistrationSync({
+    existingPairCount: 200,
+    observedPairCount: 180,
+    projectedRemovalCount: 20,
+  });
+
+  assert.equal(decision.allow, true);
+  assert.equal(decision.reason, "ok");
 });
