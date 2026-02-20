@@ -1,4 +1,4 @@
-import type { Metadata, ResolvingMetadata } from "next";
+﻿import type { Metadata, ResolvingMetadata } from "next";
 import type { ReactNode } from "react";
 import { buildMetadata, fetchJson } from "../../../lib/seo";
 
@@ -18,7 +18,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { id } = await params;
   const events = await fetchJson<EventRow[]>("/events");
-  const eventName = events?.find((row) => String(row.id) === String(id))?.nome ?? id;
+  const eventName = events?.find((row) => String(row.id) === String(id))?.nome || "evento";
 
   return buildMetadata({
     title: `Confira o evento ${eventName} de Tênis de Mesa`,

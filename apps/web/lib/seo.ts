@@ -6,6 +6,8 @@ const API_BASE_PUBLIC = process.env.NEXT_PUBLIC_API_URL ?? null;
 
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? DEFAULT_SITE_URL;
 export const SITE_NAME = "PingPong Paid'egua";
+const FETCH_TIMEOUT_MS = 1200;
+const FETCH_REVALIDATE_SECONDS = 300;
 
 function normalizePath(path: string): string {
   if (!path) return "/";
@@ -58,29 +60,41 @@ export function buildMetadata(input: {
   };
 }
 
+async function fetchJsonFromBase<T>(base: string, path: string): Promise<T | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${base}${path}`, {
+      next: { revalidate: FETCH_REVALIDATE_SECONDS },
+      headers: {
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function fetchJson<T>(path: string): Promise<T | null> {
   const bases = [API_BASE_INTERNAL, API_BASE_PUBLIC, "http://localhost:4000"].filter(
     (base): base is string => Boolean(base),
   );
   const uniqueBases = [...new Set(bases)];
-
-  for (const base of uniqueBases) {
-    try {
-      const response = await fetch(`${base}${path}`, {
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        continue;
-      }
-      return (await response.json()) as T;
-    } catch {
-      continue;
-    }
+  if (uniqueBases.length === 0) {
+    return null;
   }
 
+  const attempts = await Promise.all(uniqueBases.map((base) => fetchJsonFromBase<T>(base, path)));
+  const firstSuccess = attempts.find((item) => item !== null) ?? null;
+  if (firstSuccess) {
+    return firstSuccess;
+  }
   return null;
 }

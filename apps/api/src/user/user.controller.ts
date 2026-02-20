@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Header, Inject, Param, ParseIntPipe, Post, Query } from "@nestjs/common";
 import { UserService } from "./user.service";
 import { AthleteSummaryQueryDto } from "./dto/athlete-summary-query.dto";
 import { ReportProblemDto } from "./dto/report-problem.dto";
@@ -94,6 +94,7 @@ export class UserController {
   }
 
   @Get("events/:id/athletes/:athleteId/identity")
+  @Header("Cache-Control", "public, s-maxage=300, stale-while-revalidate=86400")
   async athleteIdentity(
     @Param("id", ParseIntPipe) eventId: number,
     @Param("athleteId", ParseIntPipe) athleteId: number,

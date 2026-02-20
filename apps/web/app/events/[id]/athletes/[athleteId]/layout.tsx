@@ -1,4 +1,4 @@
-import type { Metadata, ResolvingMetadata } from "next";
+﻿import type { Metadata, ResolvingMetadata } from "next";
 import type { ReactNode } from "react";
 import { buildMetadata, fetchJson } from "../../../../../lib/seo";
 
@@ -28,8 +28,8 @@ export async function generateMetadata(
     `/events/${id}/athletes/${athleteId}/identity`,
   );
 
-  const alias = summary?.athlete?.shortName || summary?.athlete?.name || `Atleta ${athleteId}`;
-  const eventName = summary?.event?.name || `Evento ${id}`;
+  const alias = summary?.athlete?.shortName || summary?.athlete?.name || "Resumo do Atleta";
+  const eventName = summary?.event?.name || "evento";
 
   return buildMetadata({
     title: `${alias} no evento ${eventName} de Tênis de Mesa`,
