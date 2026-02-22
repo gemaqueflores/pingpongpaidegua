@@ -15,7 +15,11 @@ test("quadro de medalhas agrega ouro/prata/bronze por nivel", () => {
   const table = buildCareerMedalTable([
     {
       nivel: "ESTADUAL",
-      performanceByCategory: [{ classification: { position: 1 } }, { classification: { position: 3 } }],
+      performanceByCategory: [
+        { classification: { position: 1 } },
+        { classification: { position: 3 } },
+        { classification: { position: 4 } },
+      ],
     },
     {
       nivel: "COPA",
@@ -28,7 +32,7 @@ test("quadro de medalhas agrega ouro/prata/bronze por nivel", () => {
   ]);
 
   assert.deepEqual(table, {
-    ESTADUAL: { bronze: 1, prata: 0, ouro: 1 },
+    ESTADUAL: { bronze: 2, prata: 0, ouro: 1 },
     COPA: { bronze: 0, prata: 2, ouro: 0 },
     NACIONAL: { bronze: 0, prata: 0, ouro: 2 },
     OPEN: { bronze: 0, prata: 0, ouro: 0 },

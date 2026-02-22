@@ -14,7 +14,7 @@ import {
   type RegistrationScope,
 } from "@cbtm/shared";
 import { Prisma } from "@prisma/client";
-import { PrismaReadService } from "../common/prisma.service";
+import { PrismaReadService, PrismaService } from "../common/prisma.service";
 import {
   computeCategoryClassificationSummaries,
   computeCategoryPerformanceSummaries,
@@ -178,6 +178,11 @@ type EventScope = {
   childSuffixByEventId: Map<number, string>;
 };
 
+type ResolvedAthleteRouteContext = {
+  routeAthleteId: number;
+  rawAthleteId: number;
+};
+
 function toReducedName(name: string): string {
   const tokens = name
     .trim()
@@ -232,6 +237,13 @@ function totalEfficiencyMedals(counter: EfficiencyMedalCounter): number {
   return counter.ouro + counter.prata + counter.bronze;
 }
 
+function resolveMedalFromPosition(position: number | null | undefined): "ouro" | "prata" | "bronze" | null {
+  if (position === 1) return "ouro";
+  if (position === 2) return "prata";
+  if (position === 3 || position === 4) return "bronze";
+  return null;
+}
+
 function toEfficiencyCompetitionType(level: "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN" | null): EfficiencyCompetitionType {
   if (level === "OPEN") return "OPEN";
   if (level === "COPA") return "COPA";
@@ -264,6 +276,7 @@ function sanitizeUserWarnings(warnings: string[]): string[] {
 @Injectable()
 export class UserService {
   private readonly prisma: PrismaReadService;
+  private readonly prismaWrite: PrismaService;
   private globalEfficiencyCache:
     | {
         expiresAt: number;
@@ -288,8 +301,12 @@ export class UserService {
     | null = null;
   private static readonly EFFICIENCY_CACHE_TTL_MS = 60_000;
 
-  constructor(@Inject(PrismaReadService) prisma: PrismaReadService) {
+  constructor(
+    @Inject(PrismaReadService) prisma: PrismaReadService,
+    @Inject(PrismaService) prismaWrite: PrismaService,
+  ) {
     this.prisma = prisma;
+    this.prismaWrite = prismaWrite;
   }
 
   async reportProblem(titleRaw: string, descriptionRaw: string): Promise<{ success: true }> {
@@ -553,11 +570,210 @@ export class UserService {
     });
   }
 
+  async getEventSummary(eventId: number) {
+    const scope = await this.resolveEventScope(eventId);
+    const event = await this.ensureEvent(scope.canonicalEventId);
+    const latestReliableRunId = await this.getLatestReliableScrapeRunId(scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey("event-summary", scope.canonicalEventId);
+
+    const cached = await this.prisma.readModelCache.findUnique({
+      where: { key: cacheKey },
+      select: {
+        sourceScrapeRunId: true,
+        payload: true,
+      },
+    });
+
+    if (
+      cached &&
+      (latestReliableRunId === null || cached.sourceScrapeRunId === latestReliableRunId) &&
+      cached.payload
+    ) {
+      return cached.payload;
+    }
+
+    const allEventIds = scope.allEventIds;
+    const [
+      categoriesCountByEvent,
+      inscritosCountByEvent,
+      tecnicosByEvent,
+      groupMatchesByEvent,
+      publishedMatchesByEvent,
+      publishedResultsByEvent,
+      scopedLastScrape,
+    ] = await Promise.all([
+      this.prisma.category.groupBy({
+        by: ["eventId"],
+        where: {
+          eventId: { in: allEventIds },
+          OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.athlete.groupBy({
+        by: ["eventId"],
+        where: {
+          eventId: { in: allEventIds },
+          createdFromWarning: false,
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.athlete.findMany({
+        where: {
+          eventId: { in: allEventIds },
+          createdFromWarning: false,
+          categories: {
+            some: {
+              category: {
+                cbtmCategoryId: "99999999",
+              },
+            },
+          },
+        },
+        select: { eventId: true },
+      }),
+      this.prisma.match.groupBy({
+        by: ["eventId"],
+        where: {
+          eventId: { in: allEventIds },
+          OR: [{ phase: "GRUPOS" }, { round: { contains: "grupo", mode: "insensitive" } }],
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.match.groupBy({
+        by: ["eventId"],
+        where: {
+          eventId: { in: allEventIds },
+          phase: { in: ["GRUPOS", "RESULTADOS", "ELIMINATORIA"] },
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.match.groupBy({
+        by: ["eventId"],
+        where: {
+          eventId: { in: allEventIds },
+          phase: { in: ["GRUPOS", "RESULTADOS", "ELIMINATORIA"] },
+          OR: [{ winnerIndex: { not: null } }, { p1Sets: { not: null } }, { p2Sets: { not: null } }],
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.event.findMany({
+        where: { id: { in: allEventIds } },
+        select: {
+          id: true,
+          lastScrapeAt: true,
+        },
+      }),
+    ]);
+
+    const categoriasMap = new Map<number, number>();
+    for (const row of categoriesCountByEvent) {
+      categoriasMap.set(row.eventId, row._count._all);
+    }
+
+    const inscritosMap = new Map<number, number>();
+    for (const row of inscritosCountByEvent) {
+      inscritosMap.set(row.eventId, row._count._all);
+    }
+
+    const tecnicosMap = new Map<number, number>();
+    for (const athlete of tecnicosByEvent) {
+      tecnicosMap.set(athlete.eventId, (tecnicosMap.get(athlete.eventId) ?? 0) + 1);
+    }
+
+    const groupsDefinedByEventMap = new Map<number, boolean>();
+    for (const row of groupMatchesByEvent) {
+      groupsDefinedByEventMap.set(row.eventId, row._count._all > 0);
+    }
+
+    const publishedMatchesByEventMap = new Map<number, boolean>();
+    for (const row of publishedMatchesByEvent) {
+      publishedMatchesByEventMap.set(row.eventId, row._count._all > 0);
+    }
+
+    const publishedResultsByEventMap = new Map<number, boolean>();
+    for (const row of publishedResultsByEvent) {
+      publishedResultsByEventMap.set(row.eventId, row._count._all > 0);
+    }
+
+    const lastScrapeByEventId = new Map<number, Date>();
+    for (const row of scopedLastScrape) {
+      if (row.lastScrapeAt) {
+        lastScrapeByEventId.set(row.id, row.lastScrapeAt);
+      }
+    }
+
+    const totalCategorias = allEventIds.reduce((sum, currentEventId) => sum + (categoriasMap.get(currentEventId) ?? 0), 0);
+    const totalInscritos = allEventIds.reduce((sum, currentEventId) => sum + (inscritosMap.get(currentEventId) ?? 0), 0);
+    const totalTecnicos = allEventIds.reduce((sum, currentEventId) => sum + (tecnicosMap.get(currentEventId) ?? 0), 0);
+    const groupsDefined = allEventIds.some((currentEventId) => groupsDefinedByEventMap.get(currentEventId) ?? false);
+    const hasPublishedMatches = allEventIds.some((currentEventId) => publishedMatchesByEventMap.get(currentEventId) ?? false);
+    const hasPublishedResults = allEventIds.some((currentEventId) => publishedResultsByEventMap.get(currentEventId) ?? false);
+
+    const mergedLastScrape =
+      allEventIds
+        .map((currentEventId) => lastScrapeByEventId.get(currentEventId) ?? null)
+        .filter((item): item is Date => Boolean(item))
+        .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+
+    const situacaoComputada = computeEventSituation({
+      ...event,
+      hasPublishedMatches,
+      hasPublishedResults,
+    });
+
+    const response = {
+      id: event.id,
+      cbtmEventId: event.cbtmEventId,
+      nome: event.nome,
+      nivel: event.nivel,
+      inicioInscricoes: event.inicioInscricoes,
+      fimInscricoes: event.fimInscricoes,
+      inicioRealizacao: event.inicioRealizacao,
+      fimRealizacao: event.fimRealizacao,
+      dataInicio: event.dataInicio,
+      dataFim: event.dataFim,
+      concluido: event.concluido,
+      lastScrapeAt: mergedLastScrape,
+      situacaoComputada,
+      totalCategorias,
+      totalInscritos,
+      totalTecnicos,
+      groupsDefined,
+      userStatus: resolveUserEventStatus({
+        concluido: event.concluido,
+        eventSituation: situacaoComputada,
+      }),
+      groupSimulationEligible: canUseGroupSimulation({
+        concluido: event.concluido,
+        groupsDefined,
+        eventSituation: situacaoComputada,
+      }),
+    };
+
+    await this.prismaWrite.readModelCache.upsert({
+      where: { key: cacheKey },
+      create: {
+        key: cacheKey,
+        kind: "event-summary",
+        eventId: scope.canonicalEventId,
+        payload: response as Prisma.InputJsonValue,
+        sourceScrapeRunId: latestReliableRunId,
+      },
+      update: {
+        payload: response as Prisma.InputJsonValue,
+        sourceScrapeRunId: latestReliableRunId,
+      },
+    });
+
+    return response;
+  }
+
   async listAthletes(eventId: number, search: string) {
     const scope = await this.resolveEventScope(eventId);
     await this.ensureEvent(scope.canonicalEventId);
 
-    return this.prisma.athlete.findMany({
+    const athletes = await this.prisma.athlete.findMany({
       where: {
         eventId: { in: scope.allEventIds },
         createdFromWarning: false,
@@ -566,11 +782,47 @@ export class UserService {
           mode: "insensitive",
         },
       },
-      include: {
-        club: true,
+      select: {
+        id: true,
+        eventId: true,
+        nameDisplay: true,
+        nameNormalized: true,
+        stateCode: true,
+        region: true,
+        club: {
+          select: {
+            id: true,
+            name: true,
+            normalizedName: true,
+          },
+        },
       },
       orderBy: [{ nameDisplay: "asc" }],
     });
+
+    const routeIdByAthleteId = await this.ensureStableAthleteRouteIds(
+      athletes.map((athlete) => ({
+        eventId: athlete.eventId,
+        athleteId: athlete.id,
+        athleteName: athlete.nameDisplay,
+        athleteNameNormalized: athlete.nameNormalized,
+        clubNormalizedName: athlete.club?.normalizedName ?? null,
+      })),
+    );
+
+    return athletes.map((athlete) => ({
+      id: routeIdByAthleteId.get(athlete.id) ?? athlete.id,
+      rawAthleteId: athlete.id,
+      nameDisplay: athlete.nameDisplay,
+      stateCode: athlete.stateCode,
+      region: athlete.region,
+      club: athlete.club
+        ? {
+            id: athlete.club.id,
+            name: athlete.club.name,
+          }
+        : null,
+    }));
   }
 
   async listClubs(eventId: number, search: string, categoryId: number | null) {
@@ -860,7 +1112,8 @@ export class UserService {
 
       for (const athlete of athletesInCategory) {
         const position = positionByAthleteId.get(athlete.athleteId) ?? null;
-        if (position !== 1 && position !== 2 && position !== 3) {
+        const medal = resolveMedalFromPosition(position);
+        if (!medal) {
           continue;
         }
 
@@ -870,13 +1123,7 @@ export class UserService {
           continue;
         }
 
-        if (position === 1) {
-          row.ouro += 1;
-        } else if (position === 2) {
-          row.prata += 1;
-        } else if (position === 3) {
-          row.bronze += 1;
-        }
+        row[medal] += 1;
       }
     }
 
@@ -1160,12 +1407,8 @@ export class UserService {
 
       for (const athlete of categoryAthletes) {
         const position = positionByAthleteId.get(athlete.athleteId) ?? null;
-        if (position !== 1 && position !== 2 && position !== 3) continue;
-
-        let medal: "ouro" | "prata" | "bronze";
-        if (position === 1) medal = "ouro";
-        else if (position === 2) medal = "prata";
-        else medal = "bronze";
+        const medal = resolveMedalFromPosition(position);
+        if (!medal) continue;
 
         totals[medal] += 1;
         eventMedals[medal] += 1;
@@ -1823,26 +2066,89 @@ export class UserService {
       );
     }
 
+    const dedupedValues = Array.from(dedupedAthletes.values());
+    const routeIdByAthleteId = await this.ensureStableAthleteRouteIds(
+      dedupedValues.map((athlete) => ({
+        eventId: athlete.eventId,
+        athleteId: athlete.id,
+        athleteName: athlete.nameDisplay,
+        athleteNameNormalized: athlete.nameNormalized,
+        clubNormalizedName: club.normalizedName,
+      })),
+    );
+
     return {
       club,
-      athletes: Array.from(dedupedAthletes.values()),
+      athletes: dedupedValues.map((athlete) => ({
+        ...athlete,
+        rawAthleteId: athlete.id,
+        id: routeIdByAthleteId.get(athlete.id) ?? athlete.id,
+      })),
     };
   }
 
   async getAthleteSummary(eventId: number, athleteId: number, orderBy: SummaryOrderBy) {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
+    const athleteRoute = await this.resolveAthleteRouteContext(scope, athleteId);
+    const routeAthleteId = athleteRoute.routeAthleteId;
+    const rawAthleteId = athleteRoute.rawAthleteId;
+    const normalizedOrderBy: SummaryOrderBy =
+      orderBy === "category_phase_datetime" ? "category_phase_datetime" : "phase_hierarchy_datetime";
+    const latestReliableRunId = await this.getLatestReliableScrapeRunId(scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey(
+      "athlete-summary",
+      scope.canonicalEventId,
+      routeAthleteId,
+      normalizedOrderBy,
+    );
+    const cached = await this.prisma.readModelCache.findUnique({
+      where: { key: cacheKey },
+      select: {
+        sourceScrapeRunId: true,
+        payload: true,
+      },
+    });
+
+    if (
+      cached &&
+      (latestReliableRunId === null || cached.sourceScrapeRunId === latestReliableRunId) &&
+      cached.payload
+    ) {
+      return cached.payload;
+    }
 
     const athlete = await this.prisma.athlete.findFirst({
       where: {
-        id: athleteId,
+        id: rawAthleteId,
         eventId: { in: scope.allEventIds },
       },
-      include: {
-        club: true,
+      select: {
+        id: true,
+        eventId: true,
+        nameDisplay: true,
+        nameNormalized: true,
+        rankingPoints: true,
+        ratingPoints: true,
+        stateCode: true,
+        stateName: true,
+        region: true,
+        club: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         categories: {
-          include: {
-            category: true,
+          select: {
+            category: {
+              select: {
+                id: true,
+                eventId: true,
+                name: true,
+                cbtmCategoryId: true,
+              },
+            },
           },
         },
       },
@@ -1856,17 +2162,61 @@ export class UserService {
       where: {
         eventId: { in: scope.allEventIds },
         participants: {
-          some: { athleteId },
+          some: { athleteId: rawAthleteId },
         },
       },
-      include: {
-        event: true,
-        category: true,
+      select: {
+        id: true,
+        eventId: true,
+        categoryId: true,
+        cbtmMatchId: true,
+        phase: true,
+        round: true,
+        tableNumber: true,
+        matchDatetime: true,
+        scoreRaw: true,
+        setsJson: true,
+        scoreFinal: true,
+        scoreSets: true,
+        sourceFlags: true,
+        p1Sets: true,
+        p2Sets: true,
+        winnerIndex: true,
+        scorePlayers: true,
+        sourceUrl: true,
+        fetchedAt: true,
+        matchKey: true,
+        event: {
+          select: {
+            id: true,
+            cbtmEventId: true,
+            nome: true,
+            nivel: true,
+            dataInicio: true,
+            dataFim: true,
+            concluido: true,
+          },
+        },
+        category: {
+          select: {
+            id: true,
+            name: true,
+            cbtmCategoryId: true,
+          },
+        },
         participants: {
-          include: {
+          select: {
+            athleteId: true,
             athlete: {
-              include: {
-                club: true,
+              select: {
+                id: true,
+                nameDisplay: true,
+                club: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
               },
             },
           },
@@ -1874,12 +2224,9 @@ export class UserService {
       },
     });
 
-    const matchSummaries = matches
-      .map((match) => this.buildAthleteSummaryMatch(match, athleteId))
+    const matchSummaries = (matches as unknown as MatchWithRelations[])
+      .map((match) => this.buildAthleteSummaryMatch(match, rawAthleteId))
       .filter((match): match is AthleteSummaryMatch => Boolean(match));
-
-    const normalizedOrderBy: SummaryOrderBy =
-      orderBy === "category_phase_datetime" ? "category_phase_datetime" : "phase_hierarchy_datetime";
 
     const deduplicated = this.deduplicateMatches(matchSummaries);
     this.sortMatches(deduplicated.matches, normalizedOrderBy);
@@ -1887,14 +2234,14 @@ export class UserService {
     const performance = calculateAthletePointPerformance(
       deduplicated.matches.map((match) => this.toMatchPerformanceInput(match)),
       {
-        athleteId,
+        athleteId: rawAthleteId,
         athleteName: athlete.nameDisplay,
         athleteNameNormalized: athlete.nameNormalized,
       },
     );
     const categoryMatches = deduplicated.matches.map((match) => this.toCategoryAnalyticsMatch(match));
     const performanceByCategoryRaw = computeCategoryPerformanceSummaries(categoryMatches, {
-      athleteId,
+      athleteId: rawAthleteId,
       athleteName: athlete.nameDisplay,
       athleteNameNormalized: athlete.nameNormalized,
     });
@@ -1908,13 +2255,47 @@ export class UserService {
                 in: categoryIdsForClassification,
               },
             },
-            include: {
-              category: true,
+            select: {
+              id: true,
+              eventId: true,
+              categoryId: true,
+              cbtmMatchId: true,
+              phase: true,
+              round: true,
+              tableNumber: true,
+              matchDatetime: true,
+              scoreRaw: true,
+              setsJson: true,
+              scoreFinal: true,
+              scoreSets: true,
+              sourceFlags: true,
+              p1Sets: true,
+              p2Sets: true,
+              winnerIndex: true,
+              scorePlayers: true,
+              sourceUrl: true,
+              fetchedAt: true,
+              matchKey: true,
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                  cbtmCategoryId: true,
+                },
+              },
               participants: {
-                include: {
+                select: {
+                  athleteId: true,
                   athlete: {
-                    include: {
-                      club: true,
+                    select: {
+                      id: true,
+                      nameDisplay: true,
+                      club: {
+                        select: {
+                          id: true,
+                          name: true,
+                        },
+                      },
                     },
                   },
                 },
@@ -1922,12 +2303,12 @@ export class UserService {
             },
           })
         : [];
-    const fullCategoryMatches = fullCategoryMatchesRaw
+    const fullCategoryMatches = (fullCategoryMatchesRaw as unknown as MatchMinimalWithRelations[])
       .map((match) => this.buildCategoryAnalyticsMatchFromRaw(match))
       .filter((item): item is CategoryAnalyticsMatch => Boolean(item));
 
     const classificationByCategory = computeCategoryClassificationSummaries(fullCategoryMatches, {
-      athleteId,
+      athleteId: rawAthleteId,
       athleteName: athlete.nameDisplay,
       athleteNameNormalized: athlete.nameNormalized,
     });
@@ -1951,7 +2332,7 @@ export class UserService {
       categoryNameById.set(category.id, `${category.name}${suffix}`);
     }
 
-    return {
+    const response = {
       event: {
         id: event.id,
         name: event.nome,
@@ -1998,6 +2379,24 @@ export class UserService {
       deduplicatedMatchesRemoved: deduplicated.removed,
       noDatetimeFallback: "Jogos sem horario ficam no final da fase/rodada e sao desempatados por mesa e match_key.",
     };
+
+    await this.prismaWrite.readModelCache.upsert({
+      where: { key: cacheKey },
+      create: {
+        key: cacheKey,
+        kind: "athlete-summary",
+        eventId: scope.canonicalEventId,
+        athleteId: routeAthleteId,
+        payload: response as unknown as Prisma.InputJsonValue,
+        sourceScrapeRunId: latestReliableRunId,
+      },
+      update: {
+        payload: response as unknown as Prisma.InputJsonValue,
+        sourceScrapeRunId: latestReliableRunId,
+      },
+    });
+
+    return response;
   }
 
   async listAthleteDirectory(search: string): Promise<AthleteDirectoryRow[]> {
@@ -2329,10 +2728,13 @@ export class UserService {
   async getAthleteIdentity(eventId: number, athleteId: number) {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
+    const athleteRoute = await this.resolveAthleteRouteContext(scope, athleteId);
+    const routeAthleteId = athleteRoute.routeAthleteId;
+    const rawAthleteId = athleteRoute.rawAthleteId;
 
     const athlete = await this.prisma.athlete.findFirst({
       where: {
-        id: athleteId,
+        id: rawAthleteId,
         eventId: { in: scope.allEventIds },
       },
       select: {
@@ -2351,7 +2753,8 @@ export class UserService {
         name: event.nome,
       },
       athlete: {
-        id: athlete.id,
+        id: routeAthleteId,
+        rawAthleteId,
         name: athlete.nameDisplay,
         shortName: toReducedName(athlete.nameDisplay),
       },
@@ -3425,6 +3828,249 @@ export class UserService {
       pesoPrata: config.pesoPrata,
       pesoBronze: config.pesoBronze,
     };
+  }
+
+  private buildEventAthleteKey(nameNormalized: string, clubNormalizedName: string | null): string {
+    const normalizedClub = normalizeText(clubNormalizedName ?? "") || "sem-clube";
+    return `${nameNormalized}|${normalizedClub}`;
+  }
+
+  private async ensureStableAthleteRouteIds(
+    rows: Array<{
+      eventId: number;
+      athleteId: number;
+      athleteName: string;
+      athleteNameNormalized: string;
+      clubNormalizedName: string | null;
+    }>,
+  ): Promise<Map<number, number>> {
+    const readLinks = (this.prisma as unknown as { eventAthleteLink: any }).eventAthleteLink;
+    const writeLinks = (this.prismaWrite as unknown as { eventAthleteLink: any }).eventAthleteLink;
+    const byAthleteId = new Map<number, number>();
+    if (rows.length === 0) {
+      return byAthleteId;
+    }
+
+    const eventIds = [...new Set(rows.map((row) => row.eventId))];
+    const athleteIds = rows.map((row) => row.athleteId);
+
+    const existing = await readLinks.findMany({
+      where: {
+        eventId: { in: eventIds },
+        athleteId: { in: athleteIds },
+      },
+      select: {
+        id: true,
+        athleteId: true,
+      },
+    });
+    for (const item of existing) {
+      if (typeof item.athleteId === "number") {
+        byAthleteId.set(item.athleteId, item.id);
+      }
+    }
+
+    const missing = rows.filter((row) => !byAthleteId.has(row.athleteId));
+    for (const row of missing) {
+      const athleteKey = this.buildEventAthleteKey(row.athleteNameNormalized, row.clubNormalizedName);
+      try {
+        await writeLinks.upsert({
+          where: {
+            eventId_athleteKey: {
+              eventId: row.eventId,
+              athleteKey,
+            },
+          },
+          create: {
+            eventId: row.eventId,
+            athleteId: row.athleteId,
+            athleteKey,
+            athleteName: row.athleteName,
+          },
+          update: {
+            athleteId: row.athleteId,
+            athleteName: row.athleteName,
+          },
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+          throw error;
+        }
+
+        await writeLinks.updateMany({
+          where: {
+            eventId: row.eventId,
+            athleteId: row.athleteId,
+          },
+          data: {
+            athleteId: null,
+          },
+        });
+
+        await writeLinks.upsert({
+          where: {
+            eventId_athleteKey: {
+              eventId: row.eventId,
+              athleteKey,
+            },
+          },
+          create: {
+            eventId: row.eventId,
+            athleteId: row.athleteId,
+            athleteKey,
+            athleteName: row.athleteName,
+          },
+          update: {
+            athleteId: row.athleteId,
+            athleteName: row.athleteName,
+          },
+        });
+      }
+    }
+
+    const hydrated = await readLinks.findMany({
+      where: {
+        eventId: { in: eventIds },
+        athleteId: { in: athleteIds },
+      },
+      select: {
+        id: true,
+        athleteId: true,
+      },
+    });
+    for (const item of hydrated) {
+      if (typeof item.athleteId === "number") {
+        byAthleteId.set(item.athleteId, item.id);
+      }
+    }
+
+    return byAthleteId;
+  }
+
+  private async resolveAthleteRouteContext(
+    scope: EventScope,
+    athleteRouteId: number,
+  ): Promise<ResolvedAthleteRouteContext> {
+    const readLinks = (this.prisma as unknown as { eventAthleteLink: any }).eventAthleteLink;
+    const writeLinks = (this.prismaWrite as unknown as { eventAthleteLink: any }).eventAthleteLink;
+
+    const link = await readLinks.findFirst({
+      where: {
+        id: athleteRouteId,
+        eventId: { in: scope.allEventIds },
+      },
+      select: {
+        id: true,
+        athleteId: true,
+        athleteKey: true,
+        eventId: true,
+      },
+    });
+
+    if (link?.athleteId) {
+      return {
+        routeAthleteId: link.id,
+        rawAthleteId: link.athleteId,
+      };
+    }
+
+    if (link && !link.athleteId) {
+      const [nameNormalized, clubNormalizedName] = String(link.athleteKey).split("|", 2);
+      const reboundAthlete = await this.prisma.athlete.findFirst({
+        where: {
+          eventId: link.eventId,
+          nameNormalized,
+          club: {
+            normalizedName: clubNormalizedName || "sem-clube",
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!reboundAthlete) {
+        throw new NotFoundException("Atleta nao encontrado");
+      }
+
+      await writeLinks.update({
+        where: {
+          id: link.id,
+        },
+        data: {
+          athleteId: reboundAthlete.id,
+        },
+      });
+
+      return {
+        routeAthleteId: link.id,
+        rawAthleteId: reboundAthlete.id,
+      };
+    }
+
+    const legacyAthlete = await this.prisma.athlete.findFirst({
+      where: {
+        id: athleteRouteId,
+        eventId: { in: scope.allEventIds },
+      },
+      select: {
+        id: true,
+        eventId: true,
+        nameDisplay: true,
+        nameNormalized: true,
+        club: {
+          select: {
+            normalizedName: true,
+          },
+        },
+      },
+    });
+
+    if (!legacyAthlete) {
+      throw new NotFoundException("Atleta nao encontrado");
+    }
+
+    await this.ensureStableAthleteRouteIds([
+      {
+        eventId: legacyAthlete.eventId,
+        athleteId: legacyAthlete.id,
+        athleteName: legacyAthlete.nameDisplay,
+        athleteNameNormalized: legacyAthlete.nameNormalized,
+        clubNormalizedName: legacyAthlete.club?.normalizedName ?? null,
+      },
+    ]);
+
+    return {
+      routeAthleteId: athleteRouteId,
+      rawAthleteId: legacyAthlete.id,
+    };
+  }
+
+  private buildReadModelKey(kind: string, eventId: number, athleteId?: number, variant?: string): string {
+    const keyParts = [kind, `event:${eventId}`];
+    if (typeof athleteId === "number") {
+      keyParts.push(`athlete:${athleteId}`);
+    }
+    if (variant) {
+      keyParts.push(`variant:${variant}`);
+    }
+    return keyParts.join("|");
+  }
+
+  private async getLatestReliableScrapeRunId(eventId: number): Promise<number | null> {
+    const latest = await this.prisma.scrapeRun.findFirst({
+      where: {
+        eventId,
+        status: { in: ["SUCCESS", "PARTIAL"] },
+        finishedAt: { not: null },
+      },
+      orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+      select: {
+        id: true,
+      },
+    });
+
+    return latest?.id ?? null;
   }
 
   private async ensureEvent(eventId: number) {

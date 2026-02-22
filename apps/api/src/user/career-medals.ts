@@ -53,7 +53,7 @@ export function buildCareerMedalTable(events: CareerEventForMedals[]): CareerMed
         table[event.nivel].ouro += 1;
       } else if (position === 2) {
         table[event.nivel].prata += 1;
-      } else if (position === 3) {
+      } else if (position === 3 || position === 4) {
         table[event.nivel].bronze += 1;
       }
     }

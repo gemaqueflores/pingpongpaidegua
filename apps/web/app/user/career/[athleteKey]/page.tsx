@@ -268,7 +268,7 @@ function formatMatchStage(match: CareerMatch): { phase: string; round: string } 
 function getClassificationRowClass(position: number | null | undefined): string {
   if (position === 1) return "classification-row-ouro";
   if (position === 2) return "classification-row-prata";
-  if (position === 3) return "classification-row-bronze";
+  if (position === 3 || position === 4) return "classification-row-bronze";
   return "classification-row-default";
 }
 
@@ -308,7 +308,7 @@ function computeMedalsByCompetition(events: CareerEvent[], fallback?: CareerResp
       classificationsCount += 1;
       if (pos === 1) matrix.ouro[competition] += 1;
       if (pos === 2) matrix.prata[competition] += 1;
-      if (pos === 3) matrix.bronze[competition] += 1;
+      if (pos === 3 || pos === 4) matrix.bronze[competition] += 1;
     }
   }
 
