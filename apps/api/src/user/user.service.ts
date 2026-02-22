@@ -3844,10 +3844,16 @@ export class UserService {
       clubNormalizedName: string | null;
     }>,
   ): Promise<Map<number, number>> {
-    const readLinks = (this.prisma as unknown as { eventAthleteLink: any }).eventAthleteLink;
-    const writeLinks = (this.prismaWrite as unknown as { eventAthleteLink: any }).eventAthleteLink;
     const byAthleteId = new Map<number, number>();
     if (rows.length === 0) {
+      return byAthleteId;
+    }
+    const readLinks = (this.prisma as unknown as { eventAthleteLink?: any }).eventAthleteLink;
+    const writeLinks = (this.prismaWrite as unknown as { eventAthleteLink?: any }).eventAthleteLink;
+    if (!readLinks || !writeLinks) {
+      for (const row of rows) {
+        byAthleteId.set(row.athleteId, row.athleteId);
+      }
       return byAthleteId;
     }
 
@@ -3951,8 +3957,28 @@ export class UserService {
     scope: EventScope,
     athleteRouteId: number,
   ): Promise<ResolvedAthleteRouteContext> {
-    const readLinks = (this.prisma as unknown as { eventAthleteLink: any }).eventAthleteLink;
-    const writeLinks = (this.prismaWrite as unknown as { eventAthleteLink: any }).eventAthleteLink;
+    const readLinks = (this.prisma as unknown as { eventAthleteLink?: any }).eventAthleteLink;
+    const writeLinks = (this.prismaWrite as unknown as { eventAthleteLink?: any }).eventAthleteLink;
+    if (!readLinks || !writeLinks) {
+      const legacyAthlete = await this.prisma.athlete.findFirst({
+        where: {
+          id: athleteRouteId,
+          eventId: { in: scope.allEventIds },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!legacyAthlete) {
+        throw new NotFoundException("Atleta nao encontrado");
+      }
+
+      return {
+        routeAthleteId: legacyAthlete.id,
+        rawAthleteId: legacyAthlete.id,
+      };
+    }
 
     const link = await readLinks.findFirst({
       where: {
