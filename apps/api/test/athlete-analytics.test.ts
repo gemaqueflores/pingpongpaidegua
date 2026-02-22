@@ -603,3 +603,73 @@ test("grupo unico ignora partidas pendentes para manter classificacao", () => {
   assert.equal(classification.mode, "grupo_unico");
   assert.equal(classification.position, 2);
 });
+
+test("grupo unico com mais de 5 atletas ignora eliminatoria BYE sem vencedor", () => {
+  const baseCategory = {
+    categoryId: 2099,
+    categoryName: "ABSOLUTO C FEM",
+  };
+  const matches: CategoryAnalyticsMatch[] = [
+    createMatch({
+      ...baseCategory,
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 11, name: "B" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      ...baseCategory,
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 12, name: "C" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      ...baseCategory,
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 13, name: "D" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      ...baseCategory,
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 14, name: "E" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      ...baseCategory,
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 15, name: "F" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      ...baseCategory,
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 16, name: "G" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      ...baseCategory,
+      phase: "ELIMINATORIA",
+      round: null,
+      players: [{ athleteId: null, name: "BYE" }, { athleteId: null, name: "BYE" }],
+      winnerIndex: null,
+      setsResult: null,
+      sets: [],
+    }),
+  ];
+
+  const classification = computeCategoryClassificationSummaries(matches, { athleteId: 10 })[0];
+  assert.equal(classification.mode, "grupo_unico");
+  assert.equal(classification.position, 1);
+});

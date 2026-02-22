@@ -623,7 +623,7 @@ export function computeCategoryClassificationSummaries(
 
       const participants = new Set<string>();
       const groupRounds = new Set<string>();
-      let hasEliminationData = false;
+      let hasDecisiveEliminationData = false;
 
       for (const match of categoryMatches) {
         const groupMatch = isGroupRoundMatch(match);
@@ -634,8 +634,14 @@ export function computeCategoryClassificationSummaries(
         } else {
           const phase = String(match.phase ?? "").toUpperCase();
           const roundStage = toRoundStage(match.round);
-          if (phase === "ELIMINATORIA" || roundStage !== "outro") {
-            hasEliminationData = true;
+          const hasRealPlayers = Boolean(
+            match.players[0]?.name ||
+              match.players[0]?.athleteId ||
+              match.players[1]?.name ||
+              match.players[1]?.athleteId,
+          );
+          if ((phase === "ELIMINATORIA" || roundStage !== "outro") && hasRealPlayers && match.winnerIndex !== null) {
+            hasDecisiveEliminationData = true;
           }
         }
       }
@@ -643,7 +649,7 @@ export function computeCategoryClassificationSummaries(
       const hasGroupData = groupRounds.size > 0;
       const isSingleGroup =
         hasGroupData &&
-        ((groupRounds.size === 1 && !hasEliminationData) ||
+        ((groupRounds.size === 1 && !hasDecisiveEliminationData) ||
           (participants.size > 0 && participants.size <= 5));
       if (!isSingleGroup && hasPendingMatches) {
         return {
