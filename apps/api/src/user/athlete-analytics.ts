@@ -416,7 +416,7 @@ function computeGroupSingleClassification(input: {
     return {
       position: null,
       reason: "grupo_sem_resultados_publicados",
-      tieTechnical: false,
+      tieTechnical: true,
     };
   }
 
@@ -609,14 +609,13 @@ export function computeCategoryClassificationSummaries(
       const parsedCategoryMatches = categoryMatches.map(toParsedMatch);
       const hasAnyMatch = parsedCategoryMatches.length > 0;
       const hasPendingMatches = parsedCategoryMatches.some((match) => match.winnerKey === null);
-      if (!hasAnyMatch || hasPendingMatches) {
+      const hasAnyDecisiveResult = parsedCategoryMatches.some((match) => match.winnerKey !== null);
+      if (!hasAnyMatch) {
         return {
           categoryId,
           categoryName: first.categoryName,
           position: null,
-          reason: !hasAnyMatch
-            ? "sem_confrontos_publicados"
-            : "classificacao_final_pendente_confrontos_nao_finalizados",
+          reason: "sem_confrontos_publicados",
           mode: "indefinido",
           tieTechnical: false,
         } satisfies CategoryClassificationSummary;
@@ -624,6 +623,7 @@ export function computeCategoryClassificationSummaries(
 
       const participants = new Set<string>();
       const groupRounds = new Set<string>();
+      let hasEliminationData = false;
 
       for (const match of categoryMatches) {
         const groupMatch = isGroupRoundMatch(match);
@@ -631,19 +631,42 @@ export function computeCategoryClassificationSummaries(
         participants.add(toStandingKey(match.players[1], 1));
         if (groupMatch) {
           groupRounds.add(extractGroupKeyFromRound(match.round));
+        } else {
+          const phase = String(match.phase ?? "").toUpperCase();
+          const roundStage = toRoundStage(match.round);
+          if (phase === "ELIMINATORIA" || roundStage !== "outro") {
+            hasEliminationData = true;
+          }
         }
       }
 
       const hasGroupData = groupRounds.size > 0;
-      const isSingleGroup = hasGroupData && participants.size > 0 && participants.size <= 5;
+      const isSingleGroup =
+        hasGroupData &&
+        ((groupRounds.size === 1 && !hasEliminationData) ||
+          (participants.size > 0 && participants.size <= 5));
+      if (!isSingleGroup && hasPendingMatches) {
+        return {
+          categoryId,
+          categoryName: first.categoryName,
+          position: null,
+          reason: "classificacao_final_pendente_confrontos_nao_finalizados",
+          mode: "indefinido",
+          tieTechnical: !hasAnyDecisiveResult,
+        } satisfies CategoryClassificationSummary;
+      }
+
+      const decisiveMatches = isSingleGroup
+        ? categoryMatches.filter((_, index) => parsedCategoryMatches[index]?.winnerKey !== null)
+        : categoryMatches;
       const result = isSingleGroup
         ? computeGroupSingleClassification({
             categoryId,
             categoryName: first.categoryName,
-            matches: categoryMatches,
+            matches: decisiveMatches,
             athlete,
           })
-        : computeEliminationClassification(categoryMatches, athlete);
+        : computeEliminationClassification(decisiveMatches, athlete);
 
       return {
         categoryId,

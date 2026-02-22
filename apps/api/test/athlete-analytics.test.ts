@@ -494,3 +494,112 @@ test("grupo unico reconhece rodada no formato Única 01", () => {
   assert.equal(classification.mode, "grupo_unico");
   assert.equal(classification.position, 2);
 });
+
+test("grupo unico com mais de 5 atletas ainda classifica por grupo", () => {
+  const matches: CategoryAnalyticsMatch[] = [
+    createMatch({
+      categoryId: 1086,
+      categoryName: "SUB-11 FEM",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 11, name: "B" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      categoryId: 1086,
+      categoryName: "SUB-11 FEM",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 12, name: "C" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      categoryId: 1086,
+      categoryName: "SUB-11 FEM",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 13, name: "D" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      categoryId: 1086,
+      categoryName: "SUB-11 FEM",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 14, name: "E" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      categoryId: 1086,
+      categoryName: "SUB-11 FEM",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 15, name: "F" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      categoryId: 1086,
+      categoryName: "SUB-11 FEM",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 16, name: "G" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+  ];
+
+  const classification = computeCategoryClassificationSummaries(matches, { athleteId: 10 })[0];
+  assert.equal(classification.mode, "grupo_unico");
+  assert.equal(classification.position, 1);
+});
+
+test("grupo unico ignora partidas pendentes para manter classificacao", () => {
+  const matches: CategoryAnalyticsMatch[] = [
+    createMatch({
+      categoryId: 1086,
+      categoryName: "SUB-11 FEM",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 11, name: "B" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      categoryId: 1086,
+      categoryName: "SUB-11 FEM",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 10, name: "ATLETA A" }, { athleteId: 12, name: "C" }],
+      winnerIndex: 1,
+      setsResult: { p1Sets: 1, p2Sets: 3 },
+    }),
+    createMatch({
+      categoryId: 1086,
+      categoryName: "SUB-11 FEM",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 11, name: "B" }, { athleteId: 12, name: "C" }],
+      winnerIndex: 1,
+      setsResult: { p1Sets: 0, p2Sets: 3 },
+    }),
+    createMatch({
+      categoryId: 1086,
+      categoryName: "SUB-11 FEM",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 14, name: "E" }, { athleteId: 15, name: "F" }],
+      winnerIndex: null,
+      setsResult: null,
+      sets: [],
+    }),
+  ];
+
+  const classification = computeCategoryClassificationSummaries(matches, { athleteId: 10 })[0];
+  assert.equal(classification.mode, "grupo_unico");
+  assert.equal(classification.position, 2);
+});
