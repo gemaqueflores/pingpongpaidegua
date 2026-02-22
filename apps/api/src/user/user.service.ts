@@ -576,7 +576,7 @@ export class UserService {
     const latestReliableRunId = await this.getLatestReliableScrapeRunId(scope.canonicalEventId);
     const cacheKey = this.buildReadModelKey("event-summary", scope.canonicalEventId);
 
-    const cached = await this.prisma.readModelCache.findUnique({
+    const cached = await (this.prisma as any).readModelCache.findUnique({
       where: { key: cacheKey },
       select: {
         sourceScrapeRunId: true,
@@ -751,7 +751,7 @@ export class UserService {
       }),
     };
 
-    await this.prismaWrite.readModelCache.upsert({
+    await (this.prismaWrite as any).readModelCache.upsert({
       where: { key: cacheKey },
       create: {
         key: cacheKey,
@@ -2102,7 +2102,7 @@ export class UserService {
       routeAthleteId,
       normalizedOrderBy,
     );
-    const cached = await this.prisma.readModelCache.findUnique({
+    const cached = await (this.prisma as any).readModelCache.findUnique({
       where: { key: cacheKey },
       select: {
         sourceScrapeRunId: true,
@@ -2380,7 +2380,7 @@ export class UserService {
       noDatetimeFallback: "Jogos sem horario ficam no final da fase/rodada e sao desempatados por mesa e match_key.",
     };
 
-    await this.prismaWrite.readModelCache.upsert({
+    await (this.prismaWrite as any).readModelCache.upsert({
       where: { key: cacheKey },
       create: {
         key: cacheKey,
