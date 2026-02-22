@@ -73,6 +73,8 @@ model Event {
   athleteMatchConflicts AthleteMatchConflict[]
   syncState     EventSyncState?
   syncRuns      EventSyncRun[]
+  readModelCaches ReadModelCache[]
+  athleteLinks   EventAthleteLink[]
   mergeAsPrimary EventMerge[] @relation("MergePrimaryEvent")
   mergeAsSecondary EventMerge[] @relation("MergeSecondaryEvent")
 
@@ -127,6 +129,7 @@ model Athlete {
   categories  AthleteCategory[]
   matches     MatchParticipant[]
   aliases     AthleteAlias[]
+  eventLinks  EventAthleteLink[]
   resolvedConflicts AthleteMatchConflict[] @relation("ResolvedConflictAthlete")
 
   @@unique([eventId, nameNormalized, clubId])
@@ -134,7 +137,27 @@ model Athlete {
   @@index([clubId])
   @@index([eventId, clubId])
   @@index([eventId, nameDisplay])
+  @@index([eventId, createdFromWarning, nameDisplay])
   @@map("athletes")
+}
+
+model EventAthleteLink {
+  id               Int      @id @default(autoincrement())
+  eventId          Int      @map("event_id")
+  athleteId        Int?     @map("athlete_id")
+  athleteKey       String   @map("athlete_key")
+  athleteName      String   @map("athlete_name")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  athlete Athlete? @relation(fields: [athleteId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, athleteKey])
+  @@unique([eventId, athleteId])
+  @@index([athleteId])
+  @@index([eventId, athleteId])
+  @@map("event_athlete_links")
 }
 
 model Category {
@@ -153,6 +176,7 @@ model Category {
   @@unique([eventId, normalizedName])
   @@unique([eventId, cbtmCategoryId])
   @@index([eventId])
+  @@index([eventId, cbtmCategoryId])
   @@map("categories")
 }
 
@@ -168,6 +192,7 @@ model AthleteCategory {
   category Category @relation(fields: [categoryId], references: [id])
 
   @@id([athleteId, categoryId])
+  @@index([categoryId, athleteId, registrationStatus])
   @@map("athlete_categories")
 }
 
@@ -202,8 +227,10 @@ model Match {
   @@index([eventId])
   @@index([categoryId])
   @@index([cbtmMatchId])
+  @@index([eventId, phase])
   @@index([matchDatetime])
   @@index([eventId, categoryId, matchDatetime])
+  @@index([eventId, categoryId, phase, matchDatetime])
   @@map("matches")
 }
 
@@ -216,7 +243,25 @@ model MatchParticipant {
   athlete Athlete @relation(fields: [athleteId], references: [id])
 
   @@id([matchId, athleteId])
+  @@index([athleteId, matchId])
   @@map("match_participants")
+}
+
+model ReadModelCache {
+  key              String   @id
+  kind             String
+  eventId          Int      @map("event_id")
+  athleteId        Int?     @map("athlete_id")
+  sourceScrapeRunId Int?    @map("source_scrape_run_id")
+  payload          Json
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, kind])
+  @@index([eventId, athleteId, kind])
+  @@map("read_model_caches")
 }
 
 model ScrapeRun {
@@ -236,6 +281,7 @@ model ScrapeRun {
 
   @@index([eventId])
   @@index([eventId, startedAt])
+  @@index([eventId, status, startedAt])
   @@map("scrape_runs")
 }
 

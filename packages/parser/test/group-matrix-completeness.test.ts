@@ -59,5 +59,16 @@ describe("group matrix completeness", () => {
     expect(result.matches.length).toBe(6);
     expect(result.warnings.length).toBe(0);
   });
-});
 
+  it("ignora sentinela de grupos indisponiveis sem gerar warning", () => {
+    const html = `
+      <div class="dxcvBreakpointsCard_MaterialCompact">
+        <div>Os grupos não estão disponíveis!</div>
+      </div>
+    `;
+
+    const result = __testables.parseGroupMatches(5368, html, "CAT-1", resolveHints);
+    expect(result.matches.length).toBe(0);
+    expect(result.warnings.length).toBe(0);
+  });
+});

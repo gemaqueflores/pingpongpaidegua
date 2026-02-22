@@ -1131,6 +1131,14 @@ function parseGroupMatches(
 
   for (const lines of cards) {
     const title = lines.find((line) => /grupo\s*\d+/i.test(line)) ?? lines[0] ?? "";
+    const normalizedTitle = normalizeText(title);
+    if (
+      normalizedTitle.includes("os grupos nao estao disponiveis") ||
+      normalizedTitle.includes("grupos nao estao disponiveis")
+    ) {
+      // Sentinela de indisponibilidade do site oficial: nao representa categoria real.
+      continue;
+    }
     const categoryName = compactWhitespace(title.split(" - ")[0] ?? "");
     const roundRaw = title.includes(" - ") ? compactWhitespace(title.split(" - ").slice(1).join(" - ")) : "Grupo";
     const round = normalizeRoundLabel(roundRaw) ?? "Grupo";

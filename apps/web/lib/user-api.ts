@@ -241,6 +241,15 @@ export async function apiGetEvents(): Promise<UserEventRow[]> {
   return handleResponse(response);
 }
 
+export async function apiGetEventSummary(eventId: number): Promise<UserEventRow> {
+  const response = await fetch(`${API_BASE}/events/${eventId}`, {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+
+  return handleResponse(response);
+}
+
 export async function apiGetAthletes(eventId: number, search: string) {
   const query = new URLSearchParams();
   if (search) {

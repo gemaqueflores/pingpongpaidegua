@@ -1,6 +1,7 @@
 import { parseDxPayloads } from "@cbtm/parser";
+import { createHash } from "node:crypto";
 import { buildEventScrapePolicy, computeEventSituation } from "@cbtm/shared";
-import { ScrapeStatus } from "@prisma/client";
+import { Prisma, ScrapeStatus } from "@prisma/client";
 import { config } from "../config";
 import { log } from "../logger";
 import { prisma } from "../prisma";
@@ -26,6 +27,23 @@ interface EventMatchesCleanupSummary {
   matches: number;
   conflicts: number;
   rawCaptures: number;
+}
+
+interface EventDataTotals {
+  athletes: number;
+  categories: number;
+  matches: number;
+}
+
+interface RegressionGuardrailStats {
+  processRegistrationsForcedOff: boolean;
+  reason: string | null;
+  observedRegistrationAthletes: number;
+  currentAthletesBefore: number;
+  dropRatio: number | null;
+  previousTotals?: EventDataTotals;
+  currentTotals: EventDataTotals;
+  flagged: boolean;
 }
 
 function resolveManualForceStage(reason?: string): ManualForceStage {
@@ -309,12 +327,117 @@ export class ScrapeProcessor {
         }),
       ]);
 
-      const dataset = parseDxPayloads(event.cbtmEventId, capture.payloads, {
+      const stageKey = this.resolveStageFingerprintKey(manualForceStage, scrapePolicy);
+      const latestCaptureState = await this.withDbRetry(
+        () => this.getLatestRunCaptureState(eventId, scrapeRun.id),
+        "scrapeRun.getLatestCaptureState",
+      );
+      const incrementalStage3Enabled =
+        !scrapePolicy.captureInscricoes && scrapePolicy.captureResultados && scrapePolicy.captureGrupos;
+      const stage3CategoryHashes = incrementalStage3Enabled
+        ? this.computeStage3CategoryHashes(capture.payloads, capture.eliminationPayloads)
+        : {};
+
+      let effectivePayloads = capture.payloads;
+      let effectiveEliminationPayloads = capture.eliminationPayloads;
+      let incrementalFilteredOutCategories: string[] = [];
+      if (incrementalStage3Enabled && latestCaptureState?.stage3CategoryHashes) {
+        const changedCategories = new Set<string>();
+        for (const [categoryId, hashValue] of Object.entries(stage3CategoryHashes)) {
+          if (latestCaptureState.stage3CategoryHashes[categoryId] !== hashValue) {
+            changedCategories.add(categoryId);
+          }
+        }
+        if (changedCategories.size > 0 && changedCategories.size < Object.keys(stage3CategoryHashes).length) {
+          incrementalFilteredOutCategories = Object.keys(stage3CategoryHashes).filter(
+            (categoryId) => !changedCategories.has(categoryId),
+          );
+          effectivePayloads = capture.payloads.filter(
+            (payload) => !payload.categoryId || changedCategories.has(payload.categoryId),
+          );
+          effectiveEliminationPayloads = capture.eliminationPayloads.filter((payload) =>
+            changedCategories.has(payload.categoryId),
+          );
+        }
+      }
+
+      const runFingerprint = this.computeRunFingerprint({
+        stageKey,
+        payloads: effectivePayloads,
+        eliminationPayloads: effectiveEliminationPayloads,
+      });
+      const isIdempotentRun =
+        latestCaptureState?.runFingerprint === runFingerprint && latestCaptureState?.stageKey === stageKey;
+
+      if (isIdempotentRun) {
+        const idempotentWarnings = [
+          `IDEMPOTENTE: run ignorado por fingerprint repetido (${stageKey}).`,
+          ...(incrementalFilteredOutCategories.length > 0
+            ? [
+                `INCREMENTAL_STAGE3: categorias sem mudança ignoradas (${incrementalFilteredOutCategories.length}).`,
+              ]
+            : []),
+          ...capture.warnings,
+        ];
+
+        await this.withDbRetry(
+          () =>
+            prisma.event.update({
+              where: { id: eventId },
+              data: {
+                lastScrapeAt: new Date(),
+              },
+            }),
+          "event.update:lastScrapeAt:idempotent",
+        );
+
+        await this.withDbRetry(
+          () =>
+            prisma.scrapeRun.update({
+              where: { id: scrapeRun.id },
+              data: {
+                finishedAt: new Date(),
+                status: "SUCCESS",
+                insertedCounts: {},
+                updatedCounts: {
+                  skippedByIdempotency: 1,
+                },
+                extractionStats: {
+                  capture: {
+                    source: capture.source,
+                    runFingerprint,
+                    stageKey,
+                    idempotent: true,
+                    categoriesFilteredOut: incrementalFilteredOutCategories,
+                    categoryDiagnostics: capture.categoryDiagnostics,
+                    stage3CategoryHashes,
+                    lastSuccessfulStage3At: latestCaptureState?.lastSuccessfulStage3At ?? null,
+                    lastSuccessfulStage3ByCategory:
+                      latestCaptureState?.lastSuccessfulStage3ByCategory ?? {},
+                  },
+                  eventSituation,
+                  scrapePolicy: { ...scrapePolicy },
+                } as unknown as Prisma.InputJsonValue,
+                warnings: idempotentWarnings,
+                errorMessage: null,
+              },
+            }),
+          "scrapeRun.update:idempotent",
+        );
+
+        await this.withDbRetry(
+          () => this.pruneOldScrapeRuns(eventId, ScrapeProcessor.SCRAPE_RUN_RETENTION_LIMIT),
+          "scrapeRun.prune:idempotent",
+        );
+        return;
+      }
+
+      const dataset = parseDxPayloads(event.cbtmEventId, effectivePayloads, {
         categoriesDiscovered: capture.categoriesDiscovered,
-        eliminationPayloads: capture.eliminationPayloads,
+        eliminationPayloads: effectiveEliminationPayloads,
       });
 
-      for (const payload of capture.payloads) {
+      for (const payload of effectivePayloads) {
         await prisma.rawCapture.create({
           data: {
             eventId,
@@ -327,7 +450,7 @@ export class ScrapeProcessor {
         });
       }
 
-      for (const eliminationPayload of capture.eliminationPayloads) {
+      for (const eliminationPayload of effectiveEliminationPayloads) {
         await prisma.rawCapture.create({
           data: {
             eventId,
@@ -340,12 +463,82 @@ export class ScrapeProcessor {
         });
       }
 
-      const processRegistrations = manualForceStage !== "stage-3-resultados";
-      const upsertResult = await this.upsertService.upsert(eventId, dataset, {
-        processRegistrations,
-      });
+      const currentTotalsBeforeUpsert = await this.withDbRetry(
+        () => this.collectEventDataTotals(eventId),
+        "event.collectTotals:beforeUpsert",
+      );
+      const observedRegistrationAthletes = new Set(
+        dataset.registrations.map(
+          (registration) => `${registration.athleteNormalizedName}|${registration.clubNormalizedName}`,
+        ),
+      ).size;
+      let processRegistrations = manualForceStage !== "stage-3-resultados";
+      let preUpsertGuardrailReason: string | null = null;
+      const registrationDropRatio =
+        currentTotalsBeforeUpsert.athletes > 0
+          ? observedRegistrationAthletes / currentTotalsBeforeUpsert.athletes
+          : null;
+      if (processRegistrations && scrapePolicy.captureInscricoes) {
+        const hasStrongCurrentBase = currentTotalsBeforeUpsert.athletes >= 100;
+        const looksPartialSnapshot =
+          observedRegistrationAthletes === 0 ||
+          (registrationDropRatio !== null && registrationDropRatio < 0.55);
+        if (hasStrongCurrentBase && looksPartialSnapshot) {
+          processRegistrations = false;
+          preUpsertGuardrailReason =
+            "guardrail-registration-drop: inscricoes observadas muito abaixo da base atual";
+        }
+      }
+      if (preUpsertGuardrailReason) {
+        capture.warnings.push(
+          `GUARDRAIL_REGISTRATION_DROP: sincronizacao destrutiva de inscricoes desativada neste run (${preUpsertGuardrailReason}, observados=${observedRegistrationAthletes}, base_atual=${currentTotalsBeforeUpsert.athletes}).`,
+        );
+      }
+
+      const upsertResult = await this.upsertService.upsert(eventId, dataset, { processRegistrations });
       const combinedWarnings = [...upsertResult.warnings, ...capture.warnings];
+      const httpDegradedResults = combinedWarnings.some((warning) =>
+        String(warning ?? "").includes("HTTP_DEGRADED_RESULTS"),
+      );
+      const currentTotalsAfterUpsert = await this.withDbRetry(
+        () => this.collectEventDataTotals(eventId),
+        "event.collectTotals:afterUpsert",
+      );
+      const previousTotals = await this.withDbRetry(
+        () => this.getLatestRunDataTotals(eventId, scrapeRun.id),
+        "scrapeRun.getLatestDataTotals",
+      );
+      const regressionFlagged = this.isRegressionGuardrailTriggered(previousTotals, currentTotalsAfterUpsert);
+      if (regressionFlagged) {
+        combinedWarnings.push(
+          `GUARDRAIL_REGRESSION: queda detectada nas contagens do evento (anterior=${JSON.stringify(
+            previousTotals,
+          )}, atual=${JSON.stringify(currentTotalsAfterUpsert)}).`,
+        );
+      }
+      const regressionGuardrailStats: RegressionGuardrailStats = {
+        processRegistrationsForcedOff: !processRegistrations && manualForceStage !== "stage-3-resultados",
+        reason: preUpsertGuardrailReason,
+        observedRegistrationAthletes,
+        currentAthletesBefore: currentTotalsBeforeUpsert.athletes,
+        dropRatio: registrationDropRatio,
+        previousTotals: previousTotals ?? undefined,
+        currentTotals: currentTotalsAfterUpsert,
+        flagged: regressionFlagged,
+      };
       const status: ScrapeStatus = combinedWarnings.length > 0 ? "PARTIAL" : "SUCCESS";
+      const stage3SuccessByCategory: Record<string, string> = {
+        ...(latestCaptureState?.lastSuccessfulStage3ByCategory ?? {}),
+      };
+      if (incrementalStage3Enabled && (status === "SUCCESS" || status === "PARTIAL")) {
+        const successAt = new Date().toISOString();
+        const filteredOut = new Set(incrementalFilteredOutCategories);
+        for (const categoryId of Object.keys(stage3CategoryHashes)) {
+          if (!filteredOut.has(categoryId)) {
+            stage3SuccessByCategory[categoryId] = successAt;
+          }
+        }
+      }
 
       await this.withDbRetry(
         () =>
@@ -371,14 +564,28 @@ export class ScrapeProcessor {
                 ...upsertResult.extractionStats,
                 capture: {
                   source: capture.source,
-                  payloadCount: capture.payloads.length,
-                  eliminationPayloadCount: capture.eliminationPayloads.length,
+                  runFingerprint,
+                  stageKey,
+                  idempotent: false,
+                  httpDegradedResults,
+                  payloadCount: effectivePayloads.length,
+                  eliminationPayloadCount: effectiveEliminationPayloads.length,
                   categoriesFound: capture.categoriesDiscovered.length,
                   categoriesValid: capture.categoriesDiscovered.filter((item) => item.valid).length,
                   categoriesVisited: capture.categoriesVisited,
                   tabsVisited: capture.tabsVisited,
                   paginationRequests: capture.paginationRequests,
+                  categoryDiagnostics: capture.categoryDiagnostics,
+                  stage3CategoryHashes,
+                  lastSuccessfulStage3At:
+                    incrementalStage3Enabled && (status === "SUCCESS" || status === "PARTIAL")
+                      ? new Date().toISOString()
+                      : latestCaptureState?.lastSuccessfulStage3At ?? null,
+                  lastSuccessfulStage3ByCategory: stage3SuccessByCategory,
+                  categoriesFilteredOut: incrementalFilteredOutCategories,
                 },
+                dataTotals: currentTotalsAfterUpsert,
+                guardrail: regressionGuardrailStats,
                 eventSituation,
                 scrapePolicy: { ...scrapePolicy },
                 stage2CleanupSummary: stage2CleanupSummary
@@ -389,7 +596,7 @@ export class ScrapeProcessor {
                       rawCaptures: stage2CleanupSummary.rawCaptures,
                     }
                   : undefined,
-              },
+              } as unknown as Prisma.InputJsonValue,
               warnings: combinedWarnings,
               errorMessage: null,
             },
@@ -407,7 +614,7 @@ export class ScrapeProcessor {
         scrapeRunId: scrapeRun.id,
         status,
         source: capture.source,
-        payloadCount: capture.payloads.length,
+        payloadCount: effectivePayloads.length,
         eventSituation,
         scrapePolicy,
         reason: reason ?? null,
@@ -593,6 +800,221 @@ export class ScrapeProcessor {
       kept: keep,
       deleted: idsToDelete.length,
     });
+  }
+
+  private async collectEventDataTotals(eventId: number): Promise<EventDataTotals> {
+    const [athletes, categories, matches] = await Promise.all([
+      prisma.athlete.count({
+        where: {
+          eventId,
+          createdFromWarning: false,
+        },
+      }),
+      prisma.category.count({
+        where: { eventId },
+      }),
+      prisma.match.count({
+        where: { eventId },
+      }),
+    ]);
+
+    return {
+      athletes,
+      categories,
+      matches,
+    };
+  }
+
+  private async getLatestRunDataTotals(eventId: number, currentScrapeRunId: number): Promise<EventDataTotals | null> {
+    const latest = await prisma.scrapeRun.findFirst({
+      where: {
+        eventId,
+        id: { not: currentScrapeRunId },
+        finishedAt: { not: null },
+      },
+      orderBy: { startedAt: "desc" },
+      select: { extractionStats: true },
+    });
+
+    if (!latest || !latest.extractionStats || typeof latest.extractionStats !== "object") {
+      return null;
+    }
+
+    const extraction = latest.extractionStats as Prisma.JsonObject;
+    const dataTotals = extraction.dataTotals as Prisma.JsonObject | undefined;
+    if (!dataTotals) {
+      return null;
+    }
+
+    const athletes = Number(dataTotals.athletes ?? 0);
+    const categories = Number(dataTotals.categories ?? 0);
+    const matches = Number(dataTotals.matches ?? 0);
+    if (!Number.isFinite(athletes) || !Number.isFinite(categories) || !Number.isFinite(matches)) {
+      return null;
+    }
+
+    return {
+      athletes,
+      categories,
+      matches,
+    };
+  }
+
+  private isRegressionGuardrailTriggered(previous: EventDataTotals | null, current: EventDataTotals): boolean {
+    if (!previous) {
+      return false;
+    }
+
+    const athleteDropRatio = previous.athletes > 0 ? current.athletes / previous.athletes : 1;
+    const categoryDropRatio = previous.categories > 0 ? current.categories / previous.categories : 1;
+    const matchDropRatio = previous.matches > 0 ? current.matches / previous.matches : 1;
+
+    if (previous.athletes >= 100 && athleteDropRatio < 0.7) {
+      return true;
+    }
+    if (previous.categories >= 30 && categoryDropRatio < 0.75) {
+      return true;
+    }
+    if (previous.matches >= 200 && matchDropRatio < 0.55) {
+      return true;
+    }
+    return false;
+  }
+
+  private resolveStageFingerprintKey(
+    manualForceStage: ManualForceStage,
+    scrapePolicy: {
+      captureInscricoes: boolean;
+      captureGrupos: boolean;
+      captureResultados: boolean;
+      fetchEliminatoria: boolean;
+    },
+  ): string {
+    return [
+      manualForceStage,
+      `i:${scrapePolicy.captureInscricoes ? 1 : 0}`,
+      `g:${scrapePolicy.captureGrupos ? 1 : 0}`,
+      `r:${scrapePolicy.captureResultados ? 1 : 0}`,
+      `e:${scrapePolicy.fetchEliminatoria ? 1 : 0}`,
+    ].join("|");
+  }
+
+  private computeRunFingerprint(input: {
+    stageKey: string;
+    payloads: Array<{ tab: string; categoryId?: string | null; rawLiteral: string }>;
+    eliminationPayloads: Array<{ categoryId: string; rawBody: string }>;
+  }): string {
+    const parts = [
+      ...input.payloads.map((payload) =>
+        `${payload.tab}|${payload.categoryId ?? "-"}|${createHash("sha1").update(payload.rawLiteral).digest("hex")}`,
+      ),
+      ...input.eliminationPayloads.map(
+        (payload) => `ELIMINATORIA|${payload.categoryId}|${createHash("sha1").update(payload.rawBody).digest("hex")}`,
+      ),
+    ].sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+
+    return createHash("sha1")
+      .update(`${input.stageKey}|${parts.join("||")}`)
+      .digest("hex");
+  }
+
+  private computeStage3CategoryHashes(
+    payloads: Array<{ tab: string; categoryId?: string | null; rawLiteral: string }>,
+    eliminationPayloads: Array<{ categoryId: string; rawBody: string }>,
+  ): Record<string, string> {
+    const bucket = new Map<string, string[]>();
+
+    for (const payload of payloads) {
+      const categoryId = String(payload.categoryId ?? "").trim();
+      if (!categoryId) {
+        continue;
+      }
+      if (payload.tab !== "GRUPOS" && payload.tab !== "RESULTADOS") {
+        continue;
+      }
+      const entries = bucket.get(categoryId) ?? [];
+      entries.push(`${payload.tab}:${createHash("sha1").update(payload.rawLiteral).digest("hex")}`);
+      bucket.set(categoryId, entries);
+    }
+
+    for (const payload of eliminationPayloads) {
+      const categoryId = String(payload.categoryId ?? "").trim();
+      if (!categoryId) {
+        continue;
+      }
+      const entries = bucket.get(categoryId) ?? [];
+      entries.push(`ELIMINATORIA:${createHash("sha1").update(payload.rawBody).digest("hex")}`);
+      bucket.set(categoryId, entries);
+    }
+
+    const hashes: Record<string, string> = {};
+    for (const [categoryId, entries] of bucket.entries()) {
+      hashes[categoryId] = createHash("sha1")
+        .update(entries.sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" })).join("|"))
+        .digest("hex");
+    }
+
+    return hashes;
+  }
+
+  private async getLatestRunCaptureState(
+    eventId: number,
+    currentScrapeRunId: number,
+  ): Promise<
+    | {
+        runFingerprint: string | null;
+        stageKey: string | null;
+        stage3CategoryHashes: Record<string, string> | null;
+        lastSuccessfulStage3At: string | null;
+        lastSuccessfulStage3ByCategory: Record<string, string> | null;
+      }
+    | null
+  > {
+    const latest = await prisma.scrapeRun.findFirst({
+      where: {
+        eventId,
+        id: { not: currentScrapeRunId },
+        finishedAt: { not: null },
+      },
+      orderBy: { startedAt: "desc" },
+      select: { extractionStats: true },
+    });
+
+    if (!latest || !latest.extractionStats || typeof latest.extractionStats !== "object") {
+      return null;
+    }
+
+    const extraction = latest.extractionStats as Prisma.JsonObject;
+    const capture = extraction.capture as Prisma.JsonObject | undefined;
+    if (!capture) {
+      return null;
+    }
+
+    const stage3CategoryHashesRaw = capture.stage3CategoryHashes as Prisma.JsonObject | undefined;
+    const stage3CategoryHashes: Record<string, string> | null = stage3CategoryHashesRaw
+      ? Object.fromEntries(
+          Object.entries(stage3CategoryHashesRaw)
+            .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+        )
+      : null;
+    const lastSuccessfulStage3ByCategoryRaw = capture.lastSuccessfulStage3ByCategory as
+      | Prisma.JsonObject
+      | undefined;
+    const lastSuccessfulStage3ByCategory: Record<string, string> | null = lastSuccessfulStage3ByCategoryRaw
+      ? Object.fromEntries(
+          Object.entries(lastSuccessfulStage3ByCategoryRaw)
+            .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+        )
+      : null;
+
+    return {
+      runFingerprint: typeof capture.runFingerprint === "string" ? capture.runFingerprint : null,
+      stageKey: typeof capture.stageKey === "string" ? capture.stageKey : null,
+      stage3CategoryHashes,
+      lastSuccessfulStage3At:
+        typeof capture.lastSuccessfulStage3At === "string" ? capture.lastSuccessfulStage3At : null,
+      lastSuccessfulStage3ByCategory,
+    };
   }
 
   private async clearEventData(eventId: number): Promise<EventDataCleanupSummary> {

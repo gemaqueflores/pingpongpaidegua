@@ -24,6 +24,15 @@ export interface CaptureResult {
   categoriesVisited: string[];
   tabsVisited: string[];
   paginationRequests: number;
+  categoryDiagnostics: Record<
+    string,
+    {
+      payloadsByTab: Record<string, number>;
+      dxResultErrorCount: number;
+      retriedByBrowser: boolean;
+      source: "http" | "browser" | "mixed";
+    }
+  >;
 }
 
 export interface CaptureOptions {
@@ -108,6 +117,23 @@ function hasDxServerError(rawLiteral: string): boolean {
 export class CaptureService {
   private readonly dxRequestBuilder = new DXRequestBuilder();
   private readonly liveHttpCaptureService = new LiveHttpCaptureService();
+  private readonly httpResultsDegradedUntilByEventId = new Map<number, number>();
+  private static readonly HTTP_DEGRADED_TTL_MS = 2 * 60 * 60 * 1000;
+
+  private shouldPreferBrowserForResults(eventId: number, options: CaptureOptionsResolved): boolean {
+    if (!options.captureResultados) {
+      return false;
+    }
+    const degradedUntil = this.httpResultsDegradedUntilByEventId.get(eventId) ?? 0;
+    return degradedUntil > Date.now();
+  }
+
+  private markHttpResultsDegraded(eventId: number): void {
+    this.httpResultsDegradedUntilByEventId.set(
+      eventId,
+      Date.now() + CaptureService.HTTP_DEGRADED_TTL_MS,
+    );
+  }
 
   async capture(eventId: number, options?: CaptureOptions): Promise<CaptureResult> {
     const resolvedOptions = resolveCaptureOptions(options);
@@ -157,6 +183,7 @@ export class CaptureService {
       categoriesVisited: [...new Set(payloads.map((item) => item.categoryId).filter(Boolean))] as string[],
       tabsVisited: [...new Set(payloads.map((item) => item.tab))],
       paginationRequests: 0,
+      categoryDiagnostics: {},
     };
   }
 
@@ -199,19 +226,107 @@ export class CaptureService {
   }
 
   private async captureLive(eventId: number, options: CaptureOptionsResolved): Promise<CaptureResult> {
+    if (this.shouldPreferBrowserForResults(eventId, options)) {
+      const browserFirst = await this.captureLiveBrowser(eventId, options);
+      browserFirst.warnings.unshift(
+        `HTTP_DEGRADED_RESULTS: evento ${eventId} em modo browser-first por degradacao recente da captura HTTP de RESULTADOS.`,
+      );
+      return browserFirst;
+    }
+
     try {
       const httpCapture = await this.liveHttpCaptureService.capture(eventId, options);
-      const categorizedPayloads = httpCapture.payloads.filter((payload) => Boolean(payload.categoryId)).length;
-      const previewDataset = parseDxPayloads(eventId, httpCapture.payloads, {
+      const httpWarnings = [...httpCapture.warnings];
+      const sanitizedPayloads = httpCapture.payloads.filter((payload) => {
+        if (payload.tab !== "RESULTADOS") {
+          return true;
+        }
+        if (!options.captureResultados) {
+          return true;
+        }
+        if (!hasDxServerError(payload.rawLiteral)) {
+          return true;
+        }
+        return false;
+      });
+      if (sanitizedPayloads.length < httpCapture.payloads.length) {
+        httpWarnings.push(
+          `Payloads DX invalidos de RESULTADOS foram ignorados (${httpCapture.payloads.length - sanitizedPayloads.length}).`,
+        );
+      }
+      const resultadosPayloads = httpCapture.payloads.filter((payload) => payload.tab === "RESULTADOS");
+      const resultadosWithServerError = resultadosPayloads.filter((payload) => hasDxServerError(payload.rawLiteral));
+      const erroredResultCategoryIds = new Set(
+        resultadosWithServerError.map((payload) => compactWhitespace(payload.categoryId ?? "")).filter(Boolean),
+      );
+      let mergedPayloads = [...sanitizedPayloads];
+      let mergedEliminationPayloads = [...httpCapture.eliminationPayloads];
+      let retriedByBrowserCategories: string[] = [];
+      const requiresResultValidation = options.captureResultados;
+      const diagnosticWarnings: string[] = [];
+
+      if (requiresResultValidation && erroredResultCategoryIds.size > 0) {
+        const categoryRetry = await this.captureLiveBrowser(
+          eventId,
+          {
+            captureInscricoes: false,
+            captureGrupos: false,
+            captureResultados: true,
+            fetchEliminatoria: options.fetchEliminatoria,
+          },
+          erroredResultCategoryIds,
+        );
+        retriedByBrowserCategories = [...erroredResultCategoryIds.values()];
+        diagnosticWarnings.push(
+          `Retry browser por categoria aplicado em RESULTADOS para ${retriedByBrowserCategories.length} categoria(s): ${retriedByBrowserCategories.join(", ")}.`,
+        );
+        diagnosticWarnings.push(...categoryRetry.warnings.map((warning) => `[retry-categoria] ${warning}`));
+
+        const retryResultPayloadsByCategory = new Map<string, DxPayload[]>();
+        for (const payload of categoryRetry.payloads) {
+          if (payload.tab !== "RESULTADOS" || !payload.categoryId) {
+            continue;
+          }
+          const bucket = retryResultPayloadsByCategory.get(payload.categoryId) ?? [];
+          bucket.push(payload);
+          retryResultPayloadsByCategory.set(payload.categoryId, bucket);
+        }
+
+        mergedPayloads = mergedPayloads.filter(
+          (payload) =>
+            payload.tab !== "RESULTADOS" ||
+            !payload.categoryId ||
+            !erroredResultCategoryIds.has(payload.categoryId),
+        );
+        for (const [categoryId, retryPayloads] of retryResultPayloadsByCategory.entries()) {
+          if (!erroredResultCategoryIds.has(categoryId)) {
+            continue;
+          }
+          mergedPayloads.push(...retryPayloads);
+        }
+
+        if (options.fetchEliminatoria) {
+          const existingElimByCategory = new Map<string, EliminationPayload>();
+          for (const payload of mergedEliminationPayloads) {
+            existingElimByCategory.set(payload.categoryId, payload);
+          }
+          for (const retryElimination of categoryRetry.eliminationPayloads) {
+            if (!erroredResultCategoryIds.has(retryElimination.categoryId)) {
+              continue;
+            }
+            existingElimByCategory.set(retryElimination.categoryId, retryElimination);
+          }
+          mergedEliminationPayloads = [...existingElimByCategory.values()];
+        }
+      }
+
+      const categorizedPayloads = mergedPayloads.filter((payload) => Boolean(payload.categoryId)).length;
+      const previewDataset = parseDxPayloads(eventId, mergedPayloads, {
         categoriesDiscovered: httpCapture.categoriesDiscovered,
-        eliminationPayloads: httpCapture.eliminationPayloads,
+        eliminationPayloads: mergedEliminationPayloads,
       });
       const resultadosCount = previewDataset.matches.filter((match) => match.phase === "RESULTADOS").length;
       const matchesWithSets = previewDataset.matches.filter((match) => (match.sets?.length ?? 0) > 0).length;
-      const resultadosPayloads = httpCapture.payloads.filter((payload) => payload.tab === "RESULTADOS");
-      const resultadosWithServerError = resultadosPayloads.filter((payload) => hasDxServerError(payload.rawLiteral));
-      const requiresResultValidation = options.captureResultados;
-      const diagnosticWarnings: string[] = [];
 
       if (requiresResultValidation && resultadosCount > 0) {
         const byCategory = new Map<
@@ -279,6 +394,7 @@ export class CaptureService {
       }
 
       if (requiresResultValidation && resultadosCount === 0 && resultadosWithServerError.length > 0) {
+        this.markHttpResultsDegraded(eventId);
         throw new Error(
           `Captura HTTP de RESULTADOS com erro DX (${resultadosWithServerError.length} payloads com erro e resultadosCount=${resultadosCount}).`,
         );
@@ -286,19 +402,37 @@ export class CaptureService {
 
       return {
         ...httpCapture,
-        warnings: [...httpCapture.warnings, ...diagnosticWarnings],
+        payloads: mergedPayloads,
+        eliminationPayloads: mergedEliminationPayloads,
+        warnings: [...httpWarnings, ...diagnosticWarnings],
         source: "live-http",
+        categoryDiagnostics: this.buildCategoryDiagnostics({
+          payloads: mergedPayloads,
+          resultadosWithServerError,
+          retriedByBrowserCategoryIds: new Set(retriedByBrowserCategories),
+          source: retriedByBrowserCategories.length > 0 ? "mixed" : "http",
+        }),
       };
     } catch (error) {
+      if (
+        String(error ?? "").includes("Captura HTTP de RESULTADOS com erro DX") ||
+        String(error ?? "").includes("Captura HTTP inconsistente")
+      ) {
+        this.markHttpResultsDegraded(eventId);
+      }
       const fallback = await this.captureLiveBrowser(eventId, options);
       fallback.warnings.unshift(
-        `Falha no scraping HTTP, fallback para browser: ${String(error)}`,
+        `HTTP_DEGRADED_RESULTS: Falha no scraping HTTP, fallback para browser: ${String(error)}`,
       );
       return fallback;
     }
   }
 
-  private async captureLiveBrowser(eventId: number, options: CaptureOptionsResolved): Promise<CaptureResult> {
+  private async captureLiveBrowser(
+    eventId: number,
+    options: CaptureOptionsResolved,
+    onlyCategoryIds?: Set<string>,
+  ): Promise<CaptureResult> {
     const browser = await chromium.launch({ headless: config.scraperHeadless });
     const context = await browser.newContext({
       extraHTTPHeaders: {
@@ -350,7 +484,9 @@ export class CaptureService {
 
       const ignoredCategoryIds = new Set(config.scraperExcludedCategoryIds);
       const discovered = await this.discoverCategories(page, ignoredCategoryIds);
-      const validCategories = discovered.filter((item) => item.valid);
+      const validCategories = discovered.filter(
+        (item) => item.valid && (!onlyCategoryIds || onlyCategoryIds.has(item.categoryId)),
+      );
 
       for (const category of validCategories) {
         const categoryContext: CategoryContext = {
@@ -411,11 +547,74 @@ export class CaptureService {
         categoriesVisited: [...categoriesVisited],
         tabsVisited: [...tabsVisited],
         paginationRequests,
+        categoryDiagnostics: this.buildCategoryDiagnostics({
+          payloads,
+          resultadosWithServerError: [],
+          retriedByBrowserCategoryIds: new Set(),
+          source: "browser",
+        }),
       };
     } finally {
       await context.close();
       await browser.close();
     }
+  }
+
+  private buildCategoryDiagnostics(input: {
+    payloads: DxPayload[];
+    resultadosWithServerError: DxPayload[];
+    retriedByBrowserCategoryIds: Set<string>;
+    source: "http" | "browser" | "mixed";
+  }): Record<
+    string,
+    {
+      payloadsByTab: Record<string, number>;
+      dxResultErrorCount: number;
+      retriedByBrowser: boolean;
+      source: "http" | "browser" | "mixed";
+    }
+  > {
+    const diagnostics: Record<
+      string,
+      {
+        payloadsByTab: Record<string, number>;
+        dxResultErrorCount: number;
+        retriedByBrowser: boolean;
+        source: "http" | "browser" | "mixed";
+      }
+    > = {};
+
+    for (const payload of input.payloads) {
+      const categoryId = compactWhitespace(payload.categoryId ?? "");
+      if (!categoryId) {
+        continue;
+      }
+      const existing = diagnostics[categoryId] ?? {
+        payloadsByTab: {},
+        dxResultErrorCount: 0,
+        retriedByBrowser: input.retriedByBrowserCategoryIds.has(categoryId),
+        source: input.source,
+      };
+      existing.payloadsByTab[payload.tab] = (existing.payloadsByTab[payload.tab] ?? 0) + 1;
+      diagnostics[categoryId] = existing;
+    }
+
+    for (const payload of input.resultadosWithServerError) {
+      const categoryId = compactWhitespace(payload.categoryId ?? "");
+      if (!categoryId) {
+        continue;
+      }
+      const existing = diagnostics[categoryId] ?? {
+        payloadsByTab: {},
+        dxResultErrorCount: 0,
+        retriedByBrowser: input.retriedByBrowserCategoryIds.has(categoryId),
+        source: input.source,
+      };
+      existing.dxResultErrorCount += 1;
+      diagnostics[categoryId] = existing;
+    }
+
+    return diagnostics;
   }
 
   private async discoverCategories(

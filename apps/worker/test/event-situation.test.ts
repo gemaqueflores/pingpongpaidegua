@@ -167,6 +167,26 @@ test("buildEventScrapePolicy aplica janela de inscricoes encerradas e definicao 
   assert.equal(groupFormation.reason, "formacao-de-grupos");
 });
 
+test("buildEventScrapePolicy usa janela pre-evento 16h-07h com intervalo de 90 minutos", () => {
+  const input = {
+    inicioInscricoes: dt("2026-03-01T00:00:00.000Z"),
+    fimInscricoes: dt("2026-03-10T23:59:59.000Z"),
+    inicioRealizacao: dt("2026-03-20T08:00:00.000Z"),
+    fimRealizacao: dt("2026-03-22T19:00:00.000Z"),
+  };
+
+  const inWindow = buildEventScrapePolicy(input, { now: dt("2026-03-19T20:00:00.000Z") });
+  assert.equal(inWindow.captureInscricoes, false);
+  assert.equal(inWindow.captureGrupos, true);
+  assert.equal(inWindow.captureResultados, true);
+  assert.equal(inWindow.fetchEliminatoria, true);
+  assert.equal(inWindow.recommendedIntervalMs, 90 * 60 * 1000);
+  assert.equal(inWindow.reason, "pre-evento-confrontos-90min");
+
+  const outOfWindow = buildEventScrapePolicy(input, { now: dt("2026-03-20T11:00:00.000Z") });
+  assert.notEqual(outOfWindow.reason, "pre-evento-confrontos-90min");
+});
+
 test("shouldRunEventAutoScrape aplica intervalo recomendado", () => {
   const policy = {
     autoSchedule: true,

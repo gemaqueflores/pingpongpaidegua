@@ -140,6 +140,7 @@ export async function apiScrapeNow(id: number, stage?: 1 | 2 | 3) {
     method: "POST",
     headers: getHeaders(),
     body: stage ? JSON.stringify({ stage }) : JSON.stringify({}),
+    keepalive: true,
   });
 
   return handleResponse(response);

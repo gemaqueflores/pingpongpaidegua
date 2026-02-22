@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   AthleteResolverCandidate,
   EventSituation,
@@ -7,6 +8,7 @@ import {
   compactWhitespace,
   computeEventSituation,
   normalizeRegistrationStatus,
+  normalizeAthleteName,
   normalizeText,
   resolveAthleteCandidate,
 } from "@cbtm/shared";
@@ -25,7 +27,9 @@ interface UpsertResult {
   inserted: Record<string, number>;
   updated: Record<string, number>;
   warnings: string[];
-  extractionStats: ParsedDataset["extractionStats"];
+  extractionStats: ParsedDataset["extractionStats"] & {
+    registrationSync?: RegistrationSyncExtractionStats;
+  };
 }
 
 interface UpsertOptions {
@@ -102,6 +106,7 @@ interface ResolveMatchAthleteInput {
   aliasToAthleteIds: Map<string, Set<number>>;
   conflictsByKey: Map<string, CachedConflict>;
   categoryAthleteIds: Set<number> | null;
+  categoryAliasHistoryCounts: Map<number, number> | null;
   participantRefType?: "REAL" | "GROUP_SLOT" | "WINNER_SLOT";
 }
 
@@ -112,6 +117,22 @@ interface ObservedRegistrationCategoryStats {
   preInscrito: number;
   outro: number;
   unknown: number;
+}
+
+interface RegistrationSyncExtractionStats {
+  categoryHashes: Record<string, string>;
+  categoryCoverage: Record<string, number>;
+  categoryGapTotals: Record<string, number>;
+  categoriesConfirmedForRemoval: string[];
+  categoriesBlockedByConfirmation: string[];
+  categoriesBlockedByCoverage: string[];
+}
+
+interface ObservedRegistrationPair {
+  athleteId: number;
+  categoryId: number;
+  categoryName: string;
+  registrationStatus: RegistrationStatus | null;
 }
 
 function inc(target: Record<string, number>, key: string): void {
@@ -297,6 +318,11 @@ function extractGameIdFromRound(round: string | null | undefined): string | null
   }
 
   return null;
+}
+
+function buildEventAthleteLinkKey(nameNormalized: string, clubNormalizedName: string | null): string {
+  const clubKey = normalizeText(clubNormalizedName ?? "") || "sem-clube";
+  return `${nameNormalized}|${clubKey}`;
 }
 
 function extractGameIdFromMetadata(match: ParsedMatch): string | null {
@@ -691,6 +717,9 @@ function deduplicateParsedMatches(matches: ParsedMatch[]): DedupedMatchesResult 
 }
 
 export class UpsertService {
+  private static readonly REGISTRATION_SYNC_MIN_CATEGORY_COVERAGE = 0.85;
+  private static readonly REGISTRATION_SYNC_PREVIOUS_RUN_LOOKBACK = 30;
+
   async upsert(eventId: number, dataset: ParsedDataset, options?: UpsertOptions): Promise<UpsertResult> {
     const processRegistrations = options?.processRegistrations ?? true;
     const inserted: Record<string, number> = {};
@@ -704,16 +733,7 @@ export class UpsertService {
     const aliasToAthleteIds = new Map<string, Set<number>>();
     const conflictsByKey = new Map<string, CachedConflict>();
     const federationWarningKeys = new Set<string>();
-    const registrationCategoriesByAthlete = new Map<number, Set<number>>();
-    const observedRegistrationPairs = new Map<
-      string,
-      {
-        athleteId: number;
-        categoryId: number;
-        categoryName: string;
-        registrationStatus: RegistrationStatus | null;
-      }
-    >();
+    const observedRegistrationPairs = new Map<string, ObservedRegistrationPair>();
 
     const event = await prisma.event.findUnique({
       where: { id: eventId },
@@ -870,9 +890,6 @@ export class UpsertService {
           },
         });
 
-        const observed = registrationCategoriesByAthlete.get(athlete.id) ?? new Set<number>();
-        observed.add(category.id);
-        registrationCategoriesByAthlete.set(athlete.id, observed);
         observedRegistrationPairs.set(`${athlete.id}|${category.id}`, {
           athleteId: athlete.id,
           categoryId: category.id,
@@ -906,6 +923,7 @@ export class UpsertService {
       observedRegistrationStatsByCategory.set(pair.categoryId, bucket);
     }
 
+    let registrationSyncStats: RegistrationSyncExtractionStats | undefined;
     if (
       processRegistrations &&
       shouldSyncRegistrationSnapshot({
@@ -914,9 +932,9 @@ export class UpsertService {
         registrationCount: dataset.registrations.length,
       })
     ) {
-      await this.syncMutableRegistrationCategories({
+      registrationSyncStats = await this.syncMutableRegistrationCategories({
         eventId,
-        registrationCategoriesByAthlete,
+        observedRegistrationPairs,
         updated,
         warnings,
       });
@@ -951,6 +969,7 @@ export class UpsertService {
       bucket.add(row.athleteId);
       athleteIdsByCategoryId.set(row.categoryId, bucket);
     }
+    const categoryAliasHistoryCounts = await this.buildCategoryAliasHistoryCounts(eventId, athletesById);
 
     const mergedMatches = mergeMatchesAcrossSources(eventId, dataset.matches);
     warnings.push(...mergedMatches.warnings);
@@ -1032,6 +1051,8 @@ export class UpsertService {
         aliasToAthleteIds,
         conflictsByKey,
         categoryAthleteIds: athleteIdsByCategoryId.get(category.id) ?? null,
+        categoryAliasHistoryCounts:
+          categoryAliasHistoryCounts.get(`${category.id}|${normalizeText(parsedMatch.athleteAName)}`) ?? null,
       });
 
       const athleteB = await this.resolveMatchAthlete({
@@ -1052,6 +1073,8 @@ export class UpsertService {
         aliasToAthleteIds,
         conflictsByKey,
         categoryAthleteIds: athleteIdsByCategoryId.get(category.id) ?? null,
+        categoryAliasHistoryCounts:
+          categoryAliasHistoryCounts.get(`${category.id}|${normalizeText(parsedMatch.athleteBName)}`) ?? null,
       });
 
       const existingMatch = await prisma.match.findUnique({
@@ -1327,12 +1350,101 @@ export class UpsertService {
       updated,
     });
 
+    await this.syncStableEventAthleteLinks({
+      eventId,
+      updated,
+      warnings,
+    });
+
     return {
       inserted,
       updated,
       warnings,
-      extractionStats: dataset.extractionStats,
+      extractionStats: {
+        ...dataset.extractionStats,
+        ...(registrationSyncStats ? { registrationSync: registrationSyncStats } : {}),
+      },
     };
+  }
+
+  private async syncStableEventAthleteLinks(input: {
+    eventId: number;
+    updated: Record<string, number>;
+    warnings: string[];
+  }): Promise<void> {
+    const eventAthleteLinks = (prisma as unknown as { eventAthleteLink: any }).eventAthleteLink;
+    const athletes = await prisma.athlete.findMany({
+      where: {
+        eventId: input.eventId,
+        createdFromWarning: false,
+      },
+      select: {
+        id: true,
+        nameDisplay: true,
+        nameNormalized: true,
+        club: {
+          select: {
+            normalizedName: true,
+          },
+        },
+      },
+    });
+
+    const seenKeys = new Map<string, number>();
+    const activeAthleteIds: number[] = [];
+
+    for (const athlete of athletes) {
+      const athleteKey = buildEventAthleteLinkKey(
+        athlete.nameNormalized,
+        athlete.club?.normalizedName ?? null,
+      );
+      const duplicateOwner = seenKeys.get(athleteKey);
+      if (typeof duplicateOwner === "number" && duplicateOwner !== athlete.id) {
+        input.warnings.push(
+          `Link estavel duplicado detectado no evento ${input.eventId} para chave '${athleteKey}' (#${duplicateOwner} e #${athlete.id}).`,
+        );
+      }
+      seenKeys.set(athleteKey, athlete.id);
+      activeAthleteIds.push(athlete.id);
+
+      await eventAthleteLinks.upsert({
+        where: {
+          eventId_athleteKey: {
+            eventId: input.eventId,
+            athleteKey,
+          },
+        },
+        create: {
+          eventId: input.eventId,
+          athleteId: athlete.id,
+          athleteKey,
+          athleteName: athlete.nameDisplay,
+        },
+        update: {
+          athleteId: athlete.id,
+          athleteName: athlete.nameDisplay,
+        },
+      });
+      inc(input.updated, "event_athlete_links_synced");
+    }
+
+    const unbound = await eventAthleteLinks.updateMany({
+      where: {
+        eventId: input.eventId,
+        athleteId:
+          activeAthleteIds.length > 0
+            ? { notIn: activeAthleteIds }
+            : { not: null },
+      },
+      data: {
+        athleteId: null,
+      },
+    });
+
+    if (unbound.count > 0) {
+      input.updated.event_athlete_links_unbound =
+        (input.updated.event_athlete_links_unbound ?? 0) + unbound.count;
+    }
   }
 
   private async preloadState(input: {
@@ -1497,19 +1609,45 @@ export class UpsertService {
 
   private async syncMutableRegistrationCategories(input: {
     eventId: number;
-    registrationCategoriesByAthlete: Map<number, Set<number>>;
+    observedRegistrationPairs: Map<string, ObservedRegistrationPair>;
     updated: Record<string, number>;
     warnings: string[];
-  }): Promise<void> {
-    if (input.registrationCategoriesByAthlete.size === 0) {
-      return;
+  }): Promise<RegistrationSyncExtractionStats> {
+    const extractionStats: RegistrationSyncExtractionStats = {
+      categoryHashes: {},
+      categoryCoverage: {},
+      categoryGapTotals: {},
+      categoriesConfirmedForRemoval: [],
+      categoriesBlockedByConfirmation: [],
+      categoriesBlockedByCoverage: [],
+    };
+
+    if (input.observedRegistrationPairs.size === 0) {
+      return extractionStats;
     }
 
-    const observedPairKeys = new Set<string>();
-    for (const [athleteId, categoryIds] of input.registrationCategoriesByAthlete.entries()) {
-      for (const categoryId of categoryIds) {
-        observedPairKeys.add(`${athleteId}|${categoryId}`);
+    const observedByCategory = new Map<
+      number,
+      {
+        categoryName: string;
+        observedPairKeys: Set<string>;
+        hashTokens: string[];
       }
+    >();
+    for (const pair of input.observedRegistrationPairs.values()) {
+      const bucket = observedByCategory.get(pair.categoryId) ?? {
+        categoryName: pair.categoryName,
+        observedPairKeys: new Set<string>(),
+        hashTokens: [],
+      };
+      bucket.observedPairKeys.add(`${pair.athleteId}|${pair.categoryId}`);
+      bucket.hashTokens.push(`${pair.athleteId}:${pair.registrationStatus ?? "NULL"}`);
+      observedByCategory.set(pair.categoryId, bucket);
+    }
+
+    for (const [categoryId, observed] of observedByCategory.entries()) {
+      const categoryKey = String(categoryId);
+      extractionStats.categoryHashes[categoryKey] = this.computeRegistrationCategoryHash(observed.hashTokens);
     }
 
     const existing = await prisma.athleteCategory.findMany({
@@ -1536,22 +1674,12 @@ export class UpsertService {
     });
 
     if (existing.length === 0) {
-      return;
+      return extractionStats;
     }
 
-    const precheck = shouldAllowDestructiveRegistrationSync({
-      existingPairCount: existing.length,
-      observedPairCount: observedPairKeys.size,
-    });
-    if (!precheck.allow) {
-      input.warnings.push(
-        `Sincronizacao de inscricoes ignorada no evento ${input.eventId} por snapshot parcial (coverage=${Math.round(
-          precheck.coverageRatio * 100,
-        )}%, observados=${observedPairKeys.size}, atuais=${existing.length}, motivo=${precheck.reason}).`,
-      );
-      input.updated.registration_sync_skipped_guard =
-        (input.updated.registration_sync_skipped_guard ?? 0) + 1;
-      return;
+    const existingTotalByCategory = new Map<number, number>();
+    for (const row of existing) {
+      existingTotalByCategory.set(row.categoryId, (existingTotalByCategory.get(row.categoryId) ?? 0) + 1);
     }
 
     const protectedCategoryIds = new Set<number>(
@@ -1560,45 +1688,103 @@ export class UpsertService {
         .map((row) => row.categoryId),
     );
 
-    const removablePairs = computeEventRegistrationPairRemovals({
-      currentPairs: existing.map((row) => ({
+    const currentPairsByCategory = new Map<
+      number,
+      Array<{
+        athleteId: number;
+        categoryId: number;
+        registrationStatus: RegistrationStatus | null;
+        athleteName: string;
+        categoryName: string;
+      }>
+    >();
+    for (const row of existing) {
+      if (row.registrationStatus === null) {
+        continue;
+      }
+      if (protectedCategoryIds.has(row.categoryId)) {
+        continue;
+      }
+
+      const bucket = currentPairsByCategory.get(row.categoryId) ?? [];
+      bucket.push({
         athleteId: row.athleteId,
         categoryId: row.categoryId,
         registrationStatus: row.registrationStatus,
-      })),
-      observedPairKeys,
-      protectedCategoryIds,
-    });
-
-    if (removablePairs.length === 0) {
-      return;
+        athleteName: row.athlete.nameDisplay,
+        categoryName: row.category.name,
+      });
+      currentPairsByCategory.set(row.categoryId, bucket);
     }
 
-    const removalGuard = shouldAllowDestructiveRegistrationSync({
-      existingPairCount: existing.length,
-      observedPairCount: observedPairKeys.size,
-      projectedRemovalCount: removablePairs.length,
-    });
-    if (!removalGuard.allow) {
-      input.warnings.push(
-        `Sincronizacao de inscricoes bloqueou remocao massiva no evento ${input.eventId} (remocoes=${removablePairs.length}, atuais=${existing.length}, coverage=${Math.round(
-          removalGuard.coverageRatio * 100,
-        )}%, motivo=${removalGuard.reason}).`,
-      );
-      input.updated.registration_sync_skipped_guard =
-        (input.updated.registration_sync_skipped_guard ?? 0) + 1;
-      return;
+    for (const [categoryId, observed] of observedByCategory.entries()) {
+      const categoryKey = String(categoryId);
+      const existingTotal = existingTotalByCategory.get(categoryId) ?? 0;
+      const observedTotal = observed.observedPairKeys.size;
+      extractionStats.categoryGapTotals[categoryKey] = existingTotal - observedTotal;
+      const existingMutableCount = currentPairsByCategory.get(categoryId)?.length ?? 0;
+      extractionStats.categoryCoverage[categoryKey] =
+        existingMutableCount === 0 ? 1 : observedTotal / existingMutableCount;
     }
 
-    const removableByAthlete = new Map<number, Set<number>>();
-    for (const pair of removablePairs) {
-      const bucket = removableByAthlete.get(pair.athleteId) ?? new Set<number>();
-      bucket.add(pair.categoryId);
-      removableByAthlete.set(pair.athleteId, bucket);
+    const previousCategoryHashes = await this.loadPreviousRegistrationSyncCategoryHashes(input.eventId);
+    const categoryRemovalsAllowed = new Map<number, { categoryName: string; removableKeys: Set<string> }>();
+
+    for (const [categoryId, currentPairs] of currentPairsByCategory.entries()) {
+      const observed = observedByCategory.get(categoryId);
+      if (!observed) {
+        continue;
+      }
+
+      const removablePairs = computeEventRegistrationPairRemovals({
+        currentPairs: currentPairs.map((pair) => ({
+          athleteId: pair.athleteId,
+          categoryId: pair.categoryId,
+          registrationStatus: pair.registrationStatus,
+        })),
+        observedPairKeys: observed.observedPairKeys,
+      });
+      if (removablePairs.length === 0) {
+        continue;
+      }
+
+      const categoryKey = String(categoryId);
+      const coverage = extractionStats.categoryCoverage[categoryKey] ?? 0;
+      const label = `${observed.categoryName}#${categoryId}`;
+
+      if (coverage < UpsertService.REGISTRATION_SYNC_MIN_CATEGORY_COVERAGE) {
+        extractionStats.categoriesBlockedByCoverage.push(label);
+        input.updated.registration_sync_skipped_guard =
+          (input.updated.registration_sync_skipped_guard ?? 0) + removablePairs.length;
+        input.warnings.push(
+          `Sincronizacao de inscricoes bloqueou remocoes em '${observed.categoryName}' no evento ${input.eventId} por baixa cobertura (coverage=${Math.round(
+            coverage * 100,
+          )}%, observados=${observed.observedPairKeys.size}, atuais=${currentPairs.length}, remocoes=${removablePairs.length}).`,
+        );
+        continue;
+      }
+
+      const previous = previousCategoryHashes.get(categoryKey);
+      const currentHash = extractionStats.categoryHashes[categoryKey] ?? "";
+      if (!previous || previous.hash !== currentHash || previous.coverage < UpsertService.REGISTRATION_SYNC_MIN_CATEGORY_COVERAGE) {
+        extractionStats.categoriesBlockedByConfirmation.push(label);
+        input.updated.registration_sync_skipped_confirmation =
+          (input.updated.registration_sync_skipped_confirmation ?? 0) + removablePairs.length;
+        input.warnings.push(
+          `Sincronizacao de inscricoes aguardando 2 runs consecutivos para '${observed.categoryName}' no evento ${input.eventId} (remocoes pendentes=${removablePairs.length}).`,
+        );
+        continue;
+      }
+
+      extractionStats.categoriesConfirmedForRemoval.push(label);
+      categoryRemovalsAllowed.set(categoryId, {
+        categoryName: observed.categoryName,
+        removableKeys: new Set(removablePairs.map((pair) => `${pair.athleteId}|${pair.categoryId}`)),
+      });
     }
 
-    if (removableByAthlete.size === 0) {
-      return;
+    if (categoryRemovalsAllowed.size === 0) {
+      return extractionStats;
     }
 
     const existingByAthlete = new Map<number, typeof existing>();
@@ -1606,6 +1792,28 @@ export class UpsertService {
       const bucket = existingByAthlete.get(row.athleteId) ?? [];
       bucket.push(row);
       existingByAthlete.set(row.athleteId, bucket);
+    }
+
+    const removableByAthlete = new Map<number, Set<number>>();
+    for (const rows of currentPairsByCategory.values()) {
+      for (const row of rows) {
+        const categoryGuard = categoryRemovalsAllowed.get(row.categoryId);
+        if (!categoryGuard) {
+          continue;
+        }
+        const key = `${row.athleteId}|${row.categoryId}`;
+        if (!categoryGuard.removableKeys.has(key)) {
+          continue;
+        }
+
+        const bucket = removableByAthlete.get(row.athleteId) ?? new Set<number>();
+        bucket.add(row.categoryId);
+        removableByAthlete.set(row.athleteId, bucket);
+      }
+    }
+
+    if (removableByAthlete.size === 0) {
+      return extractionStats;
     }
 
     let removedCount = 0;
@@ -1641,6 +1849,62 @@ export class UpsertService {
         `Sincronizacao de inscricoes removeu ${removedCount} vinculo(s) obsoleto(s) de atleta-categoria no evento ${input.eventId}.`,
       );
     }
+
+    return extractionStats;
+  }
+
+  private computeRegistrationCategoryHash(tokens: string[]): string {
+    return createHash("sha1")
+      .update(tokens.slice().sort().join("|"))
+      .digest("hex");
+  }
+
+  private async loadPreviousRegistrationSyncCategoryHashes(eventId: number): Promise<
+    Map<
+      string,
+      {
+        hash: string;
+        coverage: number;
+      }
+    >
+  > {
+    const runs = await prisma.scrapeRun.findMany({
+      where: { eventId },
+      select: {
+        extractionStats: true,
+      },
+      orderBy: { startedAt: "desc" },
+      take: UpsertService.REGISTRATION_SYNC_PREVIOUS_RUN_LOOKBACK,
+    });
+
+    const map = new Map<string, { hash: string; coverage: number }>();
+    for (const run of runs) {
+      const extractionStats = (run.extractionStats ?? {}) as Prisma.JsonObject;
+      const registrationSync = extractionStats.registrationSync as Prisma.JsonObject | undefined;
+      if (!registrationSync) {
+        continue;
+      }
+      const categoryHashes = registrationSync.categoryHashes as Prisma.JsonObject | undefined;
+      const categoryCoverage = registrationSync.categoryCoverage as Prisma.JsonObject | undefined;
+      if (!categoryHashes) {
+        continue;
+      }
+
+      for (const [categoryId, hashValue] of Object.entries(categoryHashes)) {
+        if (map.has(categoryId)) {
+          continue;
+        }
+        const hash = typeof hashValue === "string" ? hashValue : "";
+        if (!hash) {
+          continue;
+        }
+        const rawCoverage = categoryCoverage?.[categoryId];
+        const coverage = typeof rawCoverage === "number" ? rawCoverage : 0;
+        map.set(categoryId, { hash, coverage });
+      }
+    }
+
+    return map;
   }
 
   private async reportRegistrationSnapshotStats(input: {
@@ -2369,6 +2633,77 @@ export class UpsertService {
     return candidates;
   }
 
+  private async buildCategoryAliasHistoryCounts(
+    eventId: number,
+    athletesById: Map<number, CachedAthlete>,
+  ): Promise<Map<string, Map<number, number>>> {
+    const history = new Map<string, Map<number, number>>();
+    const matches = await prisma.match.findMany({
+      where: { eventId },
+      select: {
+        categoryId: true,
+        participants: {
+          select: {
+            athleteId: true,
+          },
+        },
+      },
+    });
+
+    for (const match of matches) {
+      for (const participant of match.participants) {
+        const athlete = athletesById.get(participant.athleteId);
+        if (!athlete || athlete.createdFromWarning || athlete.eventId !== eventId) {
+          continue;
+        }
+
+        const aliases = new Set<string>(athlete.aliases);
+        const reducedAlias = toReducedAliasNormalized(athlete.nameDisplay);
+        if (reducedAlias) {
+          aliases.add(reducedAlias);
+        }
+
+        for (const alias of aliases) {
+          if (!alias) {
+            continue;
+          }
+          const key = `${match.categoryId}|${alias}`;
+          const athleteCounts = history.get(key) ?? new Map<number, number>();
+          athleteCounts.set(athlete.id, (athleteCounts.get(athlete.id) ?? 0) + 1);
+          history.set(key, athleteCounts);
+        }
+      }
+    }
+
+    return history;
+  }
+
+  private resolveByCategoryHistory(
+    candidates: CachedAthlete[],
+    categoryAliasHistoryCounts: Map<number, number> | null,
+  ): CachedAthlete | null {
+    if (!categoryAliasHistoryCounts || candidates.length <= 1) {
+      return null;
+    }
+
+    const ranked = candidates
+      .map((candidate) => ({
+        candidate,
+        count: categoryAliasHistoryCounts.get(candidate.id) ?? 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const top = ranked[0];
+    const second = ranked[1];
+    if (!top || top.count <= 0) {
+      return null;
+    }
+    if (second && second.count === top.count) {
+      return null;
+    }
+    return top.candidate;
+  }
+
   private async resolveMatchAthlete(input: ResolveMatchAthleteInput): Promise<CachedAthlete | null> {
     const shortName = compactWhitespace(input.shortName);
     const shortNameNormalized = normalizeText(shortName);
@@ -2469,6 +2804,11 @@ export class UpsertService {
         }
       }
 
+      const byHistory = this.resolveByCategoryHistory(narrowed, input.categoryAliasHistoryCounts);
+      if (byHistory) {
+        return byHistory;
+      }
+
       eventAliasHomonymAmbiguous = true;
       return null;
     };
@@ -2551,6 +2891,12 @@ export class UpsertService {
         if (byRating.length > 1) {
           narrowed = byRating;
         }
+      }
+
+      const byHistory = this.resolveByCategoryHistory(narrowed, input.categoryAliasHistoryCounts);
+      if (byHistory) {
+        categoryAliasAmbiguous = false;
+        return byHistory;
       }
 
       return null;
@@ -2654,14 +3000,24 @@ export class UpsertService {
       observedRatingPoints: input.ratingPoints,
       observedClubNormalizedName: input.clubNormalizedName,
       strategy: decision.strategy,
-      candidates: decision.scoredCandidates.slice(0, 10).map((candidate) => ({
-        athleteId: candidate.athleteId,
-        nameDisplay: candidate.nameDisplay,
-        rankingPoints: candidate.rankingPoints,
-        ratingPoints: candidate.ratingPoints,
-        score: candidate.score,
-        reasons: candidate.reasons,
-      })),
+      candidates: (
+        decision.scoredCandidates.length > 0
+          ? decision.scoredCandidates.slice(0, 10).map((candidate) => ({
+              athleteId: candidate.athleteId,
+              nameDisplay: candidate.nameDisplay,
+              rankingPoints: candidate.rankingPoints,
+              ratingPoints: candidate.ratingPoints,
+              score: candidate.score,
+              reasons: candidate.reasons,
+            }))
+          : this.buildFallbackConflictCandidates({
+              shortNameNormalized,
+              resolverCandidates,
+              observedClubNormalizedName: input.clubNormalizedName,
+              observedRankingPoints: input.rankingPoints,
+              observedRatingPoints: input.ratingPoints,
+            })
+      ).slice(0, 10),
     };
 
     if (existingConflict) {
@@ -2698,6 +3054,90 @@ export class UpsertService {
     );
 
     return null;
+  }
+
+  private buildFallbackConflictCandidates(input: {
+    shortNameNormalized: string;
+    resolverCandidates: AthleteResolverCandidate[];
+    observedClubNormalizedName: string | null;
+    observedRankingPoints: number | null;
+    observedRatingPoints: number | null;
+  }): Array<{
+    athleteId: number;
+    nameDisplay: string;
+    rankingPoints: number | null;
+    ratingPoints: number | null;
+    score: number;
+    reasons: string[];
+  }> {
+    const shortTokens = input.shortNameNormalized.split(" ").filter(Boolean);
+    const first = shortTokens[0] ?? "";
+    const last = shortTokens[shortTokens.length - 1] ?? "";
+
+    const scored = input.resolverCandidates
+      .map((candidate) => {
+        let score = 0;
+        const reasons: string[] = [];
+        const candidateName = normalizeAthleteName(candidate.nameDisplay);
+        const candidateTokens = candidateName.split(" ").filter(Boolean);
+        const candidateFirst = candidateTokens[0] ?? "";
+        const candidateLast = candidateTokens[candidateTokens.length - 1] ?? "";
+
+        if (input.shortNameNormalized && candidateName === input.shortNameNormalized) {
+          score += 80;
+          reasons.push("nome exato");
+        } else if (
+          input.shortNameNormalized &&
+          (candidateName.includes(input.shortNameNormalized) ||
+            input.shortNameNormalized.includes(candidateName))
+        ) {
+          score += 55;
+          reasons.push("nome aproximado");
+        }
+
+        if (first && candidateFirst === first) {
+          score += 20;
+          reasons.push("primeiro nome");
+        }
+        if (last && candidateLast === last) {
+          score += 20;
+          reasons.push("sobrenome");
+        }
+        if (
+          input.observedClubNormalizedName &&
+          candidate.clubNormalizedName === input.observedClubNormalizedName
+        ) {
+          score += 10;
+          reasons.push("clube");
+        }
+        if (
+          Number.isInteger(input.observedRankingPoints) &&
+          candidate.rankingPoints === input.observedRankingPoints
+        ) {
+          score += 8;
+          reasons.push("ranking");
+        }
+        if (
+          Number.isInteger(input.observedRatingPoints) &&
+          candidate.ratingPoints === input.observedRatingPoints
+        ) {
+          score += 8;
+          reasons.push("rating");
+        }
+
+        return {
+          athleteId: candidate.athleteId,
+          nameDisplay: candidate.nameDisplay,
+          rankingPoints: candidate.rankingPoints,
+          ratingPoints: candidate.ratingPoints,
+          score,
+          reasons,
+        };
+      })
+      .filter((candidate) => candidate.score > 0)
+      .sort((a, b) => b.score - a.score || a.nameDisplay.localeCompare(b.nameDisplay, "pt-BR"));
+
+    return scored;
   }
 
   private async reconcileAthletePoints(

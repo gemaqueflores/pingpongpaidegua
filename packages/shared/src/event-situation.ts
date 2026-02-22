@@ -79,6 +79,29 @@ function classifyPostRegistrationWindow(now: Date, fimInscricoes: Date): "INSCRI
   return "DEFINICAO_CONFRONTOS";
 }
 
+function resolvePreEventConfrontWindow(inicioRealizacao: Date): { start: Date; end: Date } {
+  const year = inicioRealizacao.getUTCFullYear();
+  const month = inicioRealizacao.getUTCMonth();
+  const day = inicioRealizacao.getUTCDate();
+
+  const eventDayMidnightUtc = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+  const start = new Date(eventDayMidnightUtc.getTime());
+  start.setUTCDate(start.getUTCDate() - 1);
+  // 16:00 de Belem (-03:00) = 19:00 UTC
+  start.setUTCHours(19, 0, 0, 0);
+
+  const end = new Date(eventDayMidnightUtc.getTime());
+  // 07:00 de Belem (-03:00) = 10:00 UTC
+  end.setUTCHours(10, 0, 0, 0);
+
+  return { start, end };
+}
+
+function isWithinPreEventConfrontWindow(now: Date, inicioRealizacao: Date): boolean {
+  const window = resolvePreEventConfrontWindow(inicioRealizacao);
+  return now.getTime() >= window.start.getTime() && now.getTime() <= window.end.getTime();
+}
+
 function toDate(value: Date | string | null | undefined): Date | null {
   if (!value) {
     return null;
@@ -243,6 +266,17 @@ export function buildEventScrapePolicy(
         reason: "inscricoes-abertas",
       };
     case "POS_INSCRICOES_PRE_EVENTO":
+      if (timeline.inicioRealizacao && isWithinPreEventConfrontWindow(now, timeline.inicioRealizacao)) {
+        return {
+          autoSchedule: true,
+          captureInscricoes: false,
+          captureGrupos: true,
+          captureResultados: true,
+          fetchEliminatoria: true,
+          recommendedIntervalMs: 90 * 60 * 1000,
+          reason: "pre-evento-confrontos-90min",
+        };
+      }
       if (!timeline.fimInscricoes) {
         return {
           autoSchedule: true,
@@ -291,6 +325,17 @@ export function buildEventScrapePolicy(
           };
       }
     case "GRADES_PUBLICADAS_PRE_JOGO":
+      if (timeline.inicioRealizacao && isWithinPreEventConfrontWindow(now, timeline.inicioRealizacao)) {
+        return {
+          autoSchedule: true,
+          captureInscricoes: false,
+          captureGrupos: true,
+          captureResultados: true,
+          fetchEliminatoria: true,
+          recommendedIntervalMs: 90 * 60 * 1000,
+          reason: "pre-evento-confrontos-90min",
+        };
+      }
       return {
         autoSchedule: true,
         captureInscricoes: false,

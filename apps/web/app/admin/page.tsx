@@ -53,7 +53,17 @@ type ScrapeRunRow = {
   finishedAt: string | null;
   status: string;
   warnings: unknown;
+  extractionStats?: unknown;
   errorMessage: string | null;
+};
+
+type CategoryHealthRow = {
+  categoryId: string;
+  payloadsByTab: Record<string, number>;
+  dxResultErrorCount: number;
+  retriedByBrowser: boolean;
+  source: "http" | "browser" | "mixed";
+  status: "saudavel" | "atencao" | "critico";
 };
 
 type WarningSummary = {
@@ -169,6 +179,91 @@ function summarizeWarnings(warnings: string[]): WarningSummary[] {
     });
 }
 
+function parseCategoryDiagnostics(extractionStats: unknown): CategoryHealthRow[] {
+  if (!extractionStats || typeof extractionStats !== "object") {
+    return [];
+  }
+
+  const capture =
+    "capture" in (extractionStats as Record<string, unknown>)
+      ? (extractionStats as Record<string, unknown>).capture
+      : null;
+  if (!capture || typeof capture !== "object") {
+    return [];
+  }
+
+  const diagnostics =
+    "categoryDiagnostics" in (capture as Record<string, unknown>)
+      ? (capture as Record<string, unknown>).categoryDiagnostics
+      : null;
+  if (!diagnostics || typeof diagnostics !== "object") {
+    return [];
+  }
+
+  const rows: CategoryHealthRow[] = [];
+  for (const [categoryId, raw] of Object.entries(diagnostics as Record<string, unknown>)) {
+    if (!raw || typeof raw !== "object") {
+      continue;
+    }
+    const item = raw as Record<string, unknown>;
+    const payloadsRaw = item.payloadsByTab;
+    const payloadsByTab: Record<string, number> = {};
+    if (payloadsRaw && typeof payloadsRaw === "object") {
+      for (const [tab, value] of Object.entries(payloadsRaw as Record<string, unknown>)) {
+        const n = Number(value ?? 0);
+        if (Number.isFinite(n) && n > 0) {
+          payloadsByTab[tab] = n;
+        }
+      }
+    }
+    const dxResultErrorCount = Number(item.dxResultErrorCount ?? 0);
+    const retriedByBrowser = Boolean(item.retriedByBrowser);
+    const sourceRaw = String(item.source ?? "http").toLowerCase();
+    const source: "http" | "browser" | "mixed" =
+      sourceRaw === "browser" || sourceRaw === "mixed" ? (sourceRaw as "browser" | "mixed") : "http";
+
+    const totalPayloads = Object.values(payloadsByTab).reduce((sum, v) => sum + v, 0);
+    const status: "saudavel" | "atencao" | "critico" =
+      dxResultErrorCount >= 3 || (source !== "http" && totalPayloads === 0)
+        ? "critico"
+        : dxResultErrorCount > 0 || retriedByBrowser || source !== "http"
+          ? "atencao"
+          : "saudavel";
+
+    rows.push({
+      categoryId,
+      payloadsByTab,
+      dxResultErrorCount: Number.isFinite(dxResultErrorCount) ? dxResultErrorCount : 0,
+      retriedByBrowser,
+      source,
+      status,
+    });
+  }
+
+  return rows.sort((a, b) => {
+    const weight = (status: CategoryHealthRow["status"]) =>
+      status === "critico" ? 3 : status === "atencao" ? 2 : 1;
+    const delta = weight(b.status) - weight(a.status);
+    if (delta !== 0) {
+      return delta;
+    }
+    return a.categoryId.localeCompare(b.categoryId, "pt-BR", { sensitivity: "base" });
+  });
+}
+
+function scrapeHealthAlertSummary(warnings: string[]): {
+  registrationDrop: boolean;
+  regression: boolean;
+  httpDegradedResults: boolean;
+} {
+  const allWarnings = warnings.join("\n");
+  return {
+    registrationDrop: allWarnings.includes("GUARDRAIL_REGISTRATION_DROP"),
+    regression: allWarnings.includes("GUARDRAIL_REGRESSION"),
+    httpDegradedResults: allWarnings.includes("HTTP_DEGRADED_RESULTS"),
+  };
+}
+
 function situationLabel(situation: EventSituation | undefined): string {
   switch (situation) {
     case "PRE_INSCRICOES":
@@ -252,6 +347,28 @@ export default function AdminPage() {
     () => summarizeWarnings(selectedRunWarnings),
     [selectedRunWarnings],
   );
+  const selectedRunCategoryHealth = useMemo(
+    () => parseCategoryDiagnostics(selectedRun?.extractionStats),
+    [selectedRun?.extractionStats],
+  );
+  const selectedRunHealthAlerts = useMemo(
+    () => scrapeHealthAlertSummary(selectedRunWarnings),
+    [selectedRunWarnings],
+  );
+  const selectedRunHealthStatus = useMemo(() => {
+    if (
+      selectedRunHealthAlerts.registrationDrop ||
+      selectedRunHealthAlerts.regression ||
+      selectedRunHealthAlerts.httpDegradedResults ||
+      selectedRunCategoryHealth.some((row) => row.status === "critico")
+    ) {
+      return "critico";
+    }
+    if (selectedRunCategoryHealth.some((row) => row.status === "atencao")) {
+      return "atencao";
+    }
+    return "saudavel";
+  }, [selectedRunHealthAlerts, selectedRunCategoryHealth]);
 
   useEffect(() => {
     if (getUserRole() !== "ADMIN" || !getAuthToken()) {
@@ -262,6 +379,25 @@ export default function AdminPage() {
     void refreshEvents();
     void loadEfficiencyConfig();
   }, [router]);
+
+  useEffect(() => {
+    if (!selectedEventId) {
+      return;
+    }
+
+    const hasActiveLocalTracking = Object.values(scrapeProgressByEvent).some(
+      (item) => item.phase === "queued" || item.phase === "running",
+    );
+    const hasServerActiveRun = runs.some((run) => !run.finishedAt);
+    const fastPolling = hasActiveLocalTracking || hasServerActiveRun;
+    const intervalMs = fastPolling ? 4000 : 18000;
+
+    const timer = setInterval(() => {
+      void loadEventDetails(selectedEventId);
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [selectedEventId, scrapeProgressByEvent, runs]);
 
   function resetEventForm() {
     setEditingEventId(null);
@@ -356,7 +492,7 @@ export default function AdminPage() {
 
     setScrapeProgress(eventId, {
       phase: "error",
-      message: "Tempo de acompanhamento excedido. Veja os scrape runs.",
+      message: "Acompanhamento local excedido. O scrape continua no servidor; confira os scrape runs.",
     });
   }
 
@@ -1125,6 +1261,106 @@ export default function AdminPage() {
               </>
             )}
           </div>
+        ) : null}
+      </section>
+
+      <section className="card admin-card">
+        <h2>Saúde do scrape {selectedRun ? `- run #${selectedRun.id}` : ""}</h2>
+        {!selectedRun ? <p>Selecione um scrape run para visualizar o diagnóstico por categoria.</p> : null}
+        {selectedRun ? (
+          <>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+              <span
+                className="pill"
+                style={{
+                  background:
+                    selectedRunHealthStatus === "critico"
+                      ? "#ffe5df"
+                      : selectedRunHealthStatus === "atencao"
+                        ? "#fff3d6"
+                        : "#dff6eb",
+                  color:
+                    selectedRunHealthStatus === "critico"
+                      ? "#8a2b00"
+                      : selectedRunHealthStatus === "atencao"
+                        ? "#7a5b00"
+                        : "#0f5132",
+                }}
+              >
+                Status geral: {selectedRunHealthStatus === "critico" ? "Crítico" : selectedRunHealthStatus === "atencao" ? "Atenção" : "Saudável"}
+              </span>
+              <span className="pill">Categorias diagnosticadas: {selectedRunCategoryHealth.length}</span>
+            </div>
+
+            <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+              <span className="pill" style={{ background: selectedRunHealthAlerts.registrationDrop ? "#ffe5df" : "#eef3ff", color: selectedRunHealthAlerts.registrationDrop ? "#8a2b00" : "#1d3d8f" }}>
+                GUARDRAIL_REGISTRATION_DROP: {selectedRunHealthAlerts.registrationDrop ? "ativo" : "não"}
+              </span>
+              <span className="pill" style={{ background: selectedRunHealthAlerts.regression ? "#ffe5df" : "#eef3ff", color: selectedRunHealthAlerts.regression ? "#8a2b00" : "#1d3d8f" }}>
+                GUARDRAIL_REGRESSION: {selectedRunHealthAlerts.regression ? "ativo" : "não"}
+              </span>
+              <span className="pill" style={{ background: selectedRunHealthAlerts.httpDegradedResults ? "#fff3d6" : "#eef3ff", color: selectedRunHealthAlerts.httpDegradedResults ? "#7a5b00" : "#1d3d8f" }}>
+                HTTP_DEGRADED_RESULTS: {selectedRunHealthAlerts.httpDegradedResults ? "ativo" : "não"}
+              </span>
+            </div>
+
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Categoria</th>
+                    <th>Status</th>
+                    <th>Source</th>
+                    <th>DX error</th>
+                    <th>Retry browser</th>
+                    <th>Payloads por aba</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedRunCategoryHealth.length === 0 ? (
+                    <tr>
+                      <td colSpan={6}>Sem categoryDiagnostics neste run.</td>
+                    </tr>
+                  ) : (
+                    selectedRunCategoryHealth.map((row) => (
+                      <tr key={row.categoryId}>
+                        <td>{row.categoryId}</td>
+                        <td>
+                          <span
+                            className="pill"
+                            style={{
+                              background:
+                                row.status === "critico"
+                                  ? "#ffe5df"
+                                  : row.status === "atencao"
+                                    ? "#fff3d6"
+                                    : "#dff6eb",
+                              color:
+                                row.status === "critico"
+                                  ? "#8a2b00"
+                                  : row.status === "atencao"
+                                    ? "#7a5b00"
+                                    : "#0f5132",
+                            }}
+                          >
+                            {row.status === "critico" ? "Crítico" : row.status === "atencao" ? "Atenção" : "Saudável"}
+                          </span>
+                        </td>
+                        <td>{row.source}</td>
+                        <td>{row.dxResultErrorCount}</td>
+                        <td>{row.retriedByBrowser ? "sim" : "não"}</td>
+                        <td>
+                          {Object.entries(row.payloadsByTab)
+                            .map(([tab, count]) => `${tab}:${count}`)
+                            .join(" | ") || "-"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : null}
       </section>
 

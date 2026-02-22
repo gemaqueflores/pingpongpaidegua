@@ -46,4 +46,9 @@ export const config = {
   rawCaptureCleanupEveryMs: Number(process.env.RAW_CAPTURE_CLEANUP_EVERY_MS ?? "86400000"),
   dbRetryAttempts: Number(process.env.DB_RETRY_ATTEMPTS ?? "5"),
   dbRetryDelayMs: Number(process.env.DB_RETRY_DELAY_MS ?? "1000"),
+  readModelPrewarmEnabled: process.env.READ_MODEL_PREWARM_ENABLED !== "false",
+  readModelPrewarmApiBaseUrl: process.env.READ_MODEL_PREWARM_API_BASE_URL ?? "http://localhost:4000",
+  readModelPrewarmAthleteLimit: Number(process.env.READ_MODEL_PREWARM_ATHLETE_LIMIT ?? "120"),
+  readModelPrewarmConcurrency: Number(process.env.READ_MODEL_PREWARM_CONCURRENCY ?? "3"),
+  readModelPrewarmTimeoutMs: Number(process.env.READ_MODEL_PREWARM_TIMEOUT_MS ?? "10000"),
 };

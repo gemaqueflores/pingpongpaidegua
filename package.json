@@ -17,6 +17,7 @@
     "validate:update:local": "tsx scripts/validate-update.ts --target=local",
     "validate:update:prod": "tsx scripts/validate-update.ts --target=prod",
     "validate:update:both": "tsx scripts/validate-update.ts --target=both",
+    "perf:explain": "tsx scripts/explain-read-paths.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",

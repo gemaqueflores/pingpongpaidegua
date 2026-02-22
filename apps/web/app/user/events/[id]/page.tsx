@@ -8,7 +8,7 @@ import {
   apiGetClubAthletes,
   apiGetClubs,
   apiGetEventEfficiency,
-  apiGetEvents,
+  apiGetEventSummary,
   type EventEfficiencyResponse,
   type EventEfficiencyRow,
   type UserEventRow,
@@ -213,9 +213,12 @@ export default function EventDetailPage() {
   const [efficiencyMode, setEfficiencyMode] = useState<EfficiencyViewMode>("pontuacao");
 
   useEffect(() => {
-    void apiGetEvents()
-      .then((events) => {
-        setEvent((events as EventRow[]).find((item) => item.id === eventId) ?? null);
+    void apiGetEventSummary(eventId)
+      .then((item) => {
+        setEvent(item as EventRow);
+      })
+      .catch(() => {
+        setEvent(null);
       })
       .finally(() => setLoadingEvent(false));
   }, [eventId]);

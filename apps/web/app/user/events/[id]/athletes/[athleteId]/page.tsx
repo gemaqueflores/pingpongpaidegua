@@ -10,7 +10,7 @@ import { PerformanceBar } from "../../../../../../components/ui/PerformanceBar";
 import { PageHeader } from "../../../../../../components/ui/PageHeader";
 import { SegmentedControl } from "../../../../../../components/ui/SegmentedControl";
 
-type GroupMode = "category" | "schedule";
+type SortMode = "recent" | "oldest";
 
 type SummaryMatch = {
   id: number;
@@ -94,18 +94,6 @@ type MatchGroup = {
 
 type MatchTone = "win" | "lose" | "neutral";
 
-function formatDayLabel(value: string | null): string {
-  if (!value) {
-    return "Sem data definida";
-  }
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "America/Belem",
-  }).format(new Date(value));
-}
-
 function formatDatetime(value: string | null): string {
   if (!value) {
     return "-";
@@ -136,6 +124,38 @@ function formatScoreSets(match: SummaryMatch): string | null {
   }
 
   return null;
+}
+
+function hasMatchResult(match: SummaryMatch): boolean {
+  if (match.scoreFinal || match.setsResult) {
+    return true;
+  }
+  if (match.scoreSets.length > 0 || match.sets.length > 0) {
+    return true;
+  }
+
+  const raw = String(match.scoreRaw ?? "").trim();
+  if (!raw || raw === "-") {
+    return false;
+  }
+  if (/wo/i.test(raw)) {
+    return true;
+  }
+  return /\d+\s*[-xX]\s*\d+/.test(raw);
+}
+
+function resolveGameOrderId(match: SummaryMatch): number {
+  const direct = String(match.gameId ?? "").match(/\d+/)?.[0];
+  if (direct) {
+    return Number(direct);
+  }
+
+  const roundHint = String(match.round ?? "").match(/\b(?:jogo|fase|rodada)\s*0*(\d+)\b/i)?.[1];
+  if (roundHint) {
+    return Number(roundHint);
+  }
+
+  return match.id;
 }
 
 function toReducedName(name: string | null | undefined): string {
@@ -236,22 +256,39 @@ export default function AthleteSummaryPage() {
   const eventId = Number(params.id);
   const athleteId = Number(params.athleteId);
 
-  const [groupMode, setGroupMode] = useState<GroupMode>("category");
+  const [separateByCategory, setSeparateByCategory] = useState<boolean>(true);
+  const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
 
-  const orderBy = groupMode === "category" ? "category_phase_datetime" : "phase_hierarchy_datetime";
-
   useEffect(() => {
-    void apiGetAthleteSummary(eventId, athleteId, orderBy).then((payload) => setSummary(payload as SummaryResponse));
-  }, [eventId, athleteId, orderBy]);
+    void apiGetAthleteSummary(eventId, athleteId, "phase_hierarchy_datetime").then((payload) =>
+      setSummary(payload as SummaryResponse),
+    );
+  }, [eventId, athleteId]);
 
   const groups = useMemo<MatchGroup[]>(() => {
-    const matches = summary?.matches ?? [];
+    const baseMatches = summary?.matches ?? [];
+    const matches = [...baseMatches].sort((left, right) => {
+      const leftHasResult = hasMatchResult(left);
+      const rightHasResult = hasMatchResult(right);
+      if (leftHasResult !== rightHasResult) {
+        return leftHasResult ? 1 : -1;
+      }
+
+      const leftGameId = resolveGameOrderId(left);
+      const rightGameId = resolveGameOrderId(right);
+      if (leftGameId !== rightGameId) {
+        return sortMode === "recent" ? rightGameId - leftGameId : leftGameId - rightGameId;
+      }
+
+      return sortMode === "recent" ? right.id - left.id : left.id - right.id;
+    });
+
     if (matches.length === 0) {
       return [];
     }
 
-    if (groupMode === "category") {
+    if (separateByCategory) {
       const map = new Map<string, MatchGroup>();
       for (const match of matches) {
         const key = String(match.category.id);
@@ -268,37 +305,19 @@ export default function AthleteSummaryPage() {
         });
       }
 
-      return [...map.values()];
+      return [...map.values()].sort((left, right) =>
+        left.title.localeCompare(right.title, "pt-BR", { sensitivity: "base" }),
+      );
     }
 
-    const map = new Map<string, MatchGroup>();
-    for (const match of matches) {
-      const dayKey = match.matchDatetime ? new Date(match.matchDatetime).toISOString().slice(0, 10) : "sem-data";
-      const existing = map.get(dayKey);
-      if (existing) {
-        existing.matches.push(match);
-        continue;
-      }
-
-      map.set(dayKey, {
-        id: dayKey,
-        title: dayKey === "sem-data" ? "Sem data definida" : formatDayLabel(match.matchDatetime),
-        matches: [match],
-      });
-    }
-
-    return [...map.entries()]
-      .sort((a, b) => {
-        if (a[0] === "sem-data") {
-          return 1;
-        }
-        if (b[0] === "sem-data") {
-          return -1;
-        }
-        return a[0].localeCompare(b[0]);
-      })
-      .map((entry) => entry[1]);
-  }, [summary, groupMode]);
+    return [
+      {
+        id: "all-matches",
+        title: "Todos os jogos",
+        matches,
+      },
+    ];
+  }, [separateByCategory, sortMode, summary]);
 
   const athleteStats = useMemo(() => {
     if (!summary) {
@@ -393,17 +412,26 @@ export default function AthleteSummaryPage() {
             <div className="row" style={{ justifyContent: "space-between" }}>
               <h2>Jogos</h2>
               <SegmentedControl
-                label="Agrupar jogos"
-                value={groupMode}
-                onChange={(next) => setGroupMode(next as GroupMode)}
+                label="Separar por categoria"
+                value={separateByCategory ? "on" : "off"}
+                onChange={(next) => setSeparateByCategory(next === "on")}
                 items={[
-                  { value: "category", label: "Por categoria" },
-                  { value: "schedule", label: "Por horário" },
+                  { value: "on", label: "Por categoria" },
+                  { value: "off", label: "Todos" },
+                ]}
+              />
+              <SegmentedControl
+                label="Ordenação"
+                value={sortMode}
+                onChange={(next) => setSortMode(next as SortMode)}
+                items={[
+                  { value: "recent", label: "Mais recentes" },
+                  { value: "oldest", label: "Mais antigos" },
                 ]}
               />
             </div>
 
-            <p>{summary.noDatetimeFallback}</p>
+            <p>Jogos sem resultado aparecem sempre primeiro. A ordenação usa o ID do jogo (não o horário).</p>
 
             {groups.length === 0 ? <p>Nenhum jogo encontrado para este atleta.</p> : null}
 
@@ -417,7 +445,7 @@ export default function AthleteSummaryPage() {
                     return (
                       <MatchCard
                         key={match.matchKey}
-                        categoryName={groupMode === "schedule" ? match.category.name : group.title}
+                        categoryName={separateByCategory ? group.title : match.category.name}
                         phase={match.phase}
                         round={`${match.round ?? "-"} | Mesa ${match.tableNumber ?? "-"}`}
                         datetime={formatDatetime(match.matchDatetime)}
