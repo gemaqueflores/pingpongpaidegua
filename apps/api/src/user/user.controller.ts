@@ -1,9 +1,12 @@
-import { Body, Controller, Get, Header, Inject, Param, ParseIntPipe, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Header, Inject, Param, ParseIntPipe, Post, Query, UseInterceptors } from "@nestjs/common";
 import { UserService } from "./user.service";
 import { AthleteSummaryQueryDto } from "./dto/athlete-summary-query.dto";
 import { ReportProblemDto } from "./dto/report-problem.dto";
+import { PublicReadCacheInterceptor } from "../common/public-read-cache.interceptor";
+import { PublicCacheTtl } from "../common/public-cache.decorator";
 
 @Controller()
+@UseInterceptors(PublicReadCacheInterceptor)
 export class UserController {
   private readonly service: UserService;
 
@@ -12,11 +15,19 @@ export class UserController {
   }
 
   @Get("events")
+  @PublicCacheTtl(90)
   async listEvents() {
     return this.service.listEvents();
   }
 
+  @Get("events/:id")
+  @PublicCacheTtl(90)
+  async getEventSummary(@Param("id", ParseIntPipe) eventId: number) {
+    return this.service.getEventSummary(eventId);
+  }
+
   @Get("events/:id/athletes")
+  @PublicCacheTtl(45)
   async listAthletes(
     @Param("id", ParseIntPipe) eventId: number,
     @Query("search") search?: string,
@@ -85,6 +96,7 @@ export class UserController {
   }
 
   @Get("events/:id/athletes/:athleteId/summary")
+  @PublicCacheTtl(60)
   async athleteSummary(
     @Param("id", ParseIntPipe) eventId: number,
     @Param("athleteId", ParseIntPipe) athleteId: number,
