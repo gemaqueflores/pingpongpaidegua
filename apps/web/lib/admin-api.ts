@@ -4,6 +4,7 @@ const API_BASE = getApiBase();
 
 export type EventLevel = "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN";
 export type RatingMatchFormat = "RR_K1" | "K1";
+export type SeedCriteria = "AUTO" | "RANKING" | "RATING";
 export type EventSituation =
   | "DRAFT"
   | "PRE_INSCRICOES"
@@ -25,6 +26,11 @@ export interface AdminEventPayload {
   dataFim?: string | null;
   concluido?: boolean;
   ratingMatchFormat?: RatingMatchFormat;
+  seedCriteria?: SeedCriteria;
+  groupBestOfSets?: number | null;
+  eliminationBestOfSets?: number | null;
+  allowCobraAdjustments?: boolean;
+  allowByes?: boolean;
 }
 
 export interface AdminEventRow {
@@ -40,6 +46,11 @@ export interface AdminEventRow {
   dataFim: string | null;
   concluido: boolean;
   ratingMatchFormat: RatingMatchFormat;
+  seedCriteria: SeedCriteria;
+  groupBestOfSets: number | null;
+  eliminationBestOfSets: number | null;
+  allowCobraAdjustments: boolean;
+  allowByes: boolean;
   lastScrapeAt: string | null;
   situacaoComputada?: EventSituation;
   proximaMudanca?: string | null;

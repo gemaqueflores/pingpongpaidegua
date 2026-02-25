@@ -19,6 +19,7 @@ import {
   type EventLevel,
   type EventSituation,
   type RatingMatchFormat,
+  type SeedCriteria,
 } from "../../lib/admin-api";
 import { clearAuth, getAuthToken, getUserRole } from "../../lib/auth";
 
@@ -76,6 +77,11 @@ const EVENT_LEVELS: EventLevel[] = ["ESTADUAL", "COPA", "NACIONAL", "OPEN"];
 const RATING_MATCH_FORMATS: Array<{ value: RatingMatchFormat; label: string }> = [
   { value: "RR_K1", label: "RR+k1 (grupo + eliminatória)" },
   { value: "K1", label: "k1 (eliminatória simples)" },
+];
+const SEED_CRITERIA_OPTIONS: Array<{ value: SeedCriteria; label: string }> = [
+  { value: "AUTO", label: "Auto (conforme circular)" },
+  { value: "RANKING", label: "Ranking Nacional" },
+  { value: "RATING", label: "Rating Nacional" },
 ];
 const EVENT_TIME_ZONE = "America/Sao_Paulo";
 
@@ -337,6 +343,11 @@ export default function AdminPage() {
   const [fimRealizacao, setFimRealizacao] = useState("");
   const [concluidoForm, setConcluidoForm] = useState(false);
   const [ratingMatchFormat, setRatingMatchFormat] = useState<RatingMatchFormat>("RR_K1");
+  const [seedCriteria, setSeedCriteria] = useState<SeedCriteria>("AUTO");
+  const [groupBestOfSets, setGroupBestOfSets] = useState("");
+  const [eliminationBestOfSets, setEliminationBestOfSets] = useState("");
+  const [allowCobraAdjustments, setAllowCobraAdjustments] = useState(true);
+  const [allowByes, setAllowByes] = useState(true);
 
   const selectedEvent = useMemo(
     () => events.find((event) => event.id === selectedEventId) ?? null,
@@ -416,6 +427,11 @@ export default function AdminPage() {
     setFimRealizacao("");
     setConcluidoForm(false);
     setRatingMatchFormat("RR_K1");
+    setSeedCriteria("AUTO");
+    setGroupBestOfSets("");
+    setEliminationBestOfSets("");
+    setAllowCobraAdjustments(true);
+    setAllowByes(true);
   }
 
   function startEditEvent(event: EventRow) {
@@ -429,6 +445,11 @@ export default function AdminPage() {
     setFimRealizacao(formatDateInput(event.fimRealizacao ?? event.dataFim));
     setConcluidoForm(Boolean(event.concluido));
     setRatingMatchFormat(event.ratingMatchFormat ?? "RR_K1");
+    setSeedCriteria(event.seedCriteria ?? "AUTO");
+    setGroupBestOfSets(event.groupBestOfSets ? String(event.groupBestOfSets) : "");
+    setEliminationBestOfSets(event.eliminationBestOfSets ? String(event.eliminationBestOfSets) : "");
+    setAllowCobraAdjustments(Boolean(event.allowCobraAdjustments));
+    setAllowByes(Boolean(event.allowByes));
   }
 
   function setScrapeProgress(eventId: number, next: ScrapeProgressState | null) {
@@ -661,11 +682,35 @@ export default function AdminPage() {
 
     setSavingEvent(true);
     try {
+      const parsedGroupBestOfSets = groupBestOfSets.trim() ? Number(groupBestOfSets) : undefined;
+      const parsedEliminationBestOfSets = eliminationBestOfSets.trim() ? Number(eliminationBestOfSets) : undefined;
+
+      const invalidBestOf =
+        (parsedGroupBestOfSets !== undefined &&
+          (!Number.isInteger(parsedGroupBestOfSets) || parsedGroupBestOfSets < 1 || parsedGroupBestOfSets % 2 === 0)) ||
+        (parsedEliminationBestOfSets !== undefined &&
+          (!Number.isInteger(parsedEliminationBestOfSets) ||
+            parsedEliminationBestOfSets < 1 ||
+            parsedEliminationBestOfSets % 2 === 0));
+      if (invalidBestOf) {
+        setNotice({
+          type: "error",
+          text: "Melhor de sets deve ser inteiro ímpar (ex.: 3, 5, 7).",
+        });
+        setSavingEvent(false);
+        return;
+      }
+
       const payload = {
         nome: nome.trim(),
         cbtmEventId: parsedCbtmEventId,
         nivel: nivel || undefined,
         ratingMatchFormat,
+        seedCriteria,
+        groupBestOfSets: parsedGroupBestOfSets,
+        eliminationBestOfSets: parsedEliminationBestOfSets,
+        allowCobraAdjustments,
+        allowByes,
         inicioInscricoes: normalizedInicioInscricoes,
         fimInscricoes: normalizedFimInscricoes,
         inicioRealizacao: normalizedInicioRealizacao,
@@ -732,7 +777,7 @@ export default function AdminPage() {
       return "Etapa 2 (categorias e atletas)";
     }
     if (stage === 3) {
-      return "Etapa 3 (resultados e eliminatórias)";
+      return "Etapa 3 (grupos e resultados)";
     }
     return "Completo";
   }
@@ -999,6 +1044,66 @@ export default function AdminPage() {
           </label>
         </div>
 
+        <div className="admin-form-row admin-form-row-event-main">
+          <label className="admin-field admin-field-grid">
+            <span>Critério cabeças-de-chave</span>
+            <select
+              className="admin-input admin-input-level"
+              value={seedCriteria}
+              onChange={(event) => setSeedCriteria(event.target.value as SeedCriteria)}
+            >
+              {SEED_CRITERIA_OPTIONS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-field admin-field-grid">
+            <span>Melhor de sets (grupos)</span>
+            <input
+              className="admin-input"
+              type="number"
+              min={1}
+              step={2}
+              placeholder="ex.: 5"
+              value={groupBestOfSets}
+              onChange={(event) => setGroupBestOfSets(event.target.value)}
+            />
+          </label>
+          <label className="admin-field admin-field-grid">
+            <span>Melhor de sets (eliminatória)</span>
+            <input
+              className="admin-input"
+              type="number"
+              min={1}
+              step={2}
+              placeholder="ex.: 5"
+              value={eliminationBestOfSets}
+              onChange={(event) => setEliminationBestOfSets(event.target.value)}
+            />
+          </label>
+        </div>
+
+        <div className="admin-form-row admin-form-row-event-main">
+          <label className="admin-checkbox-row">
+            <input
+              type="checkbox"
+              checked={allowCobraAdjustments}
+              onChange={(event) => setAllowCobraAdjustments(event.target.checked)}
+            />
+            <span>Permitir ajustes COBRA</span>
+          </label>
+          <label className="admin-checkbox-row">
+            <input
+              type="checkbox"
+              checked={allowByes}
+              onChange={(event) => setAllowByes(event.target.checked)}
+            />
+            <span>Permitir byes</span>
+          </label>
+        </div>
+
         <div className="admin-form-row admin-form-row-event-dates">
           <label className="admin-field admin-field-grid">
             <span>Início inscrições</span>
@@ -1088,6 +1193,7 @@ export default function AdminPage() {
               <th>Situação</th>
               <th>Status</th>
               <th>Rating (R*)</th>
+              <th>Circular</th>
               <th>Ultimo scrape</th>
               <th>Contagens</th>
               <th>Andamento</th>
@@ -1117,6 +1223,12 @@ export default function AdminPage() {
                   <span className="pill">{event.concluido ? "Concluído" : "Ativo"}</span>
                 </td>
                 <td>{event.ratingMatchFormat === "K1" ? "k1" : "RR+k1"}</td>
+                <td>
+                  {event.seedCriteria}
+                  <br />
+                  {event.groupBestOfSets ? `G:${event.groupBestOfSets}` : "G:auto"} /{" "}
+                  {event.eliminationBestOfSets ? `E:${event.eliminationBestOfSets}` : "E:auto"}
+                </td>
                 <td>{event.lastScrapeAt ? formatDateTimeDisplay(event.lastScrapeAt) : "-"}</td>
                 <td>
                   A:{event._count?.athletes ?? 0} C:{event._count?.categories ?? 0} J:{event._count?.matches ?? 0}
@@ -1185,7 +1297,7 @@ export default function AdminPage() {
                       className="admin-btn-secondary"
                       onClick={() => scrapeNow(event, 3)}
                       disabled={busyScrapeEventId === event.id}
-                      title="Etapa 3: resultados e eliminatórias"
+                      title="Etapa 3: grupos e resultados"
                     >
                       {busyScrapeEventId === event.id && busyScrapeStage === 3
                         ? "Enfileirando..."

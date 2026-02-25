@@ -40,7 +40,9 @@ services:
       JWT_SECRET: changeme
       JWT_EXPIRES_IN: 8h
       ADMIN_USERNAME: mush1n-d0sh4
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/cbtm
+      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm}
+      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm}
+      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm}
       REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
@@ -61,7 +63,9 @@ services:
       dockerfile: docker/worker.Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/cbtm
+      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm}
+      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm}
+      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm}
       REDIS_URL: redis://redis:6379
       SCRAPER_MODE: live
       SCRAPER_EVENT_URL: https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID={EVENT_ID}

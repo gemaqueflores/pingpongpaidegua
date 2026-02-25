@@ -93,6 +93,7 @@ type MatchGroup = {
 };
 
 type MatchTone = "win" | "lose" | "neutral";
+const MATCHES_PAGE_SIZE = 40;
 
 function formatDatetime(value: string | null): string {
   if (!value) {
@@ -333,6 +334,7 @@ export default function AthleteSummaryPage() {
 
   const [separateByCategory, setSeparateByCategory] = useState<boolean>(true);
   const [sortMode, setSortMode] = useState<SortMode>("recent");
+  const [matchesVisible, setMatchesVisible] = useState<number>(MATCHES_PAGE_SIZE);
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
 
   useEffect(() => {
@@ -340,6 +342,10 @@ export default function AthleteSummaryPage() {
       setSummary(payload as SummaryResponse),
     );
   }, [eventId, athleteId]);
+
+  useEffect(() => {
+    setMatchesVisible(MATCHES_PAGE_SIZE);
+  }, [separateByCategory, sortMode, summary?.matches?.length]);
 
   const groups = useMemo<MatchGroup[]>(() => {
     const baseMatches = summary?.matches ?? [];
@@ -393,6 +399,31 @@ export default function AthleteSummaryPage() {
       },
     ];
   }, [separateByCategory, sortMode, summary]);
+
+  const totalMatchesCount = useMemo(
+    () => groups.reduce((sum, group) => sum + group.matches.length, 0),
+    [groups],
+  );
+
+  const visibleGroups = useMemo<MatchGroup[]>(() => {
+    let remaining = matchesVisible;
+    const next: MatchGroup[] = [];
+    for (const group of groups) {
+      if (remaining <= 0) {
+        break;
+      }
+      const slice = group.matches.slice(0, remaining);
+      if (slice.length === 0) {
+        continue;
+      }
+      next.push({
+        ...group,
+        matches: slice,
+      });
+      remaining -= slice.length;
+    }
+    return next;
+  }, [groups, matchesVisible]);
 
   const athleteStats = useMemo(() => {
     if (!summary) {
@@ -532,11 +563,9 @@ export default function AthleteSummaryPage() {
               />
             </div>
 
-            <p>Jogos sem resultado aparecem primeiro.</p>
-
             {groups.length === 0 ? <p>Nenhum jogo encontrado para este atleta.</p> : null}
 
-            {groups.map((group) => (
+            {visibleGroups.map((group) => (
               <div key={group.id} className="match-group">
                 <h3 className="match-group-title">{group.title}</h3>
                 <div className="match-card-grid">
@@ -560,6 +589,14 @@ export default function AthleteSummaryPage() {
                 </div>
               </div>
             ))}
+
+            {totalMatchesCount > matchesVisible ? (
+              <div className="row" style={{ justifyContent: "center" }}>
+                <button type="button" onClick={() => setMatchesVisible((current) => current + MATCHES_PAGE_SIZE)}>
+                  Carregar mais jogos
+                </button>
+              </div>
+            ) : null}
           </Card>
         </>
       )}

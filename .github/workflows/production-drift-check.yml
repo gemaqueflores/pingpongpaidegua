@@ -1,0 +1,70 @@
+name: Production Drift Check
+
+on:
+  schedule:
+    - cron: "15 * * * *"
+  workflow_dispatch:
+    inputs:
+      event_id:
+        description: "ID interno do evento para drift check"
+        required: false
+        default: ""
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configurar chave SSH da VM
+        env:
+          ORACLE_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${ORACLE_SSH_PRIVATE_KEY:-}" || { echo "ORACLE_SSH_PRIVATE_KEY ausente"; exit 1; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "$ORACLE_SSH_PRIVATE_KEY" > ~/.ssh/oracle_vm_key
+          chmod 600 ~/.ssh/oracle_vm_key
+
+      - name: Drift check (prod + VM + Vercel)
+        env:
+          DRIFT_EVENT_ID: ${{ github.event.inputs.event_id }}
+          DEFAULT_DRIFT_EVENT_ID: ${{ vars.DRIFT_EVENT_ID }}
+          ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
+          ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
+          PROD_API_URL: ${{ secrets.PROD_API_URL }}
+          VERCEL_BASE_URL: ${{ vars.VERCEL_BASE_URL }}
+        run: |
+          set -euo pipefail
+          EVENT_ID="${DRIFT_EVENT_ID:-}"
+          if [ -z "$EVENT_ID" ]; then
+            EVENT_ID="${DEFAULT_DRIFT_EVENT_ID:-43}"
+          fi
+          VM_TARGET="${ORACLE_SSH_USER}@${ORACLE_SSH_HOST}"
+          PROD_BASE="${PROD_API_URL:-https://api-pingpongpaidegua.duckdns.org}"
+          VERCEL_BASE="${VERCEL_BASE_URL:-https://pingpongpaidegua.vercel.app}"
+
+          npm run drift:check -- \
+            --eventId "$EVENT_ID" \
+            --prodApiBase "$PROD_BASE" \
+            --vercelBase "$VERCEL_BASE" \
+            --skipLocalApi \
+            --skipLocalWeb \
+            --skipVmWeb \
+            --vmSshTarget "$VM_TARGET" \
+            --vmSshKey "$HOME/.ssh/oracle_vm_key" \
+            --vmSshNoHostKeyCheck \
+            --strict
+

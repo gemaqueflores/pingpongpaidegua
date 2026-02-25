@@ -31,3 +31,7 @@ _archive/
 
 # Local temporary audit outputs
 tmp_eff*.json
+tmp_*.json
+tmp_*.html
+tmp_*.py
+tmp_*.txt

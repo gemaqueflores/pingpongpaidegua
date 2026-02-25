@@ -46,7 +46,7 @@ jobs:
           key: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
           port: ${{ secrets.ORACLE_SSH_PORT || 22 }}
           command_timeout: 45m
-          script_stop: false
+          script_stop: true
           envs: SCRAPE_EVENT_IDS
           script: |
             set -eo pipefail
@@ -114,3 +114,38 @@ jobs:
               echo "Falha no run-once remoto. Veja logs acima."
               exit "$RUN_ONCE_EXIT"
             fi
+
+      - name: Diagnostico rapido de saude (VM)
+        if: always()
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ORACLE_SSH_HOST }}
+          username: ${{ secrets.ORACLE_SSH_USER }}
+          key: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.ORACLE_SSH_PORT || 22 }}
+          command_timeout: 10m
+          script_stop: false
+          script: |
+            set +e
+            APP_DIR="${{ secrets.ORACLE_APP_DIR }}"
+            if [ -z "$APP_DIR" ]; then
+              APP_DIR="$HOME/pingpongpaidegua"
+            fi
+            cd "$APP_DIR"
+            if command -v docker-compose >/dev/null 2>&1; then
+              COMPOSE_BIN="docker-compose"
+            elif docker compose version >/dev/null 2>&1; then
+              COMPOSE_BIN="docker compose"
+            else
+              echo "Compose indisponivel no diagnostico."
+              exit 0
+            fi
+            $COMPOSE_BIN ps || true
+            curl -fsS http://localhost:4000/health || true
+
+      - name: Falha da automacao de scrape
+        if: failure()
+        run: |
+          echo "Workflow de scrape falhou."
+          echo "Revise logs do passo SSH e do diagnostico de saude."
+          exit 1

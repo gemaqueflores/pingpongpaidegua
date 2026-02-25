@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,7 +59,7 @@ describe("matching com fixture real", () => {
     }
   });
 
-  it("gera conflito quando h� ambiguidade sem pontos", () => {
+  it("gera conflito quando há ambiguidade sem pontos", () => {
     const candidates = [
       {
         athleteId: 100,
@@ -74,8 +74,8 @@ describe("matching com fixture real", () => {
       {
         athleteId: 101,
         eventId: 5246,
-        nameDisplay: "JOAO PAULO SILVA SANTOS",
-        nameNormalized: "joao paulo silva santos",
+        nameDisplay: "JOAO PAULO DE SOUSA CARDOSO",
+        nameNormalized: "JOAO PAULO DE SOUSA CARDOSO",
         rankingPoints: null,
         ratingPoints: null,
         clubNormalizedName: "clube b",
@@ -85,7 +85,7 @@ describe("matching com fixture real", () => {
 
     const resolved = resolveAthleteCandidate({
       eventId: 5246,
-      shortName: "joao",
+      shortName: "joao cardoso",
       candidates,
     });
 

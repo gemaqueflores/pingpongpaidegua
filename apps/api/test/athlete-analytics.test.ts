@@ -73,6 +73,23 @@ test("detecta duplo WO com placar 0-0 e parciais 0-0", () => {
   assert.deepEqual([...collectWalkoverLoserAthleteIds([match])].sort((a, b) => a - b), [300, 400]);
 });
 
+test("detecta duplo WO quando scoreRaw explicita 0x0 mesmo sem setsResult", () => {
+  const match = createMatch({
+    players: [{ athleteId: 300, name: "Ausente A" }, { athleteId: 400, name: "Ausente B" }],
+    winnerIndex: null,
+    setsResult: null,
+    scoreRaw: "0x0 (0/0,0/0,0/0)",
+    sets: [
+      { p1: 0, p2: 0 },
+      { p1: 0, p2: 0 },
+      { p1: 0, p2: 0 },
+    ],
+  });
+
+  assert.equal(isWalkoverMatch(match), true);
+  assert.deepEqual([...collectWalkoverLoserAthleteIds([match])].sort((a, b) => a - b), [300, 400]);
+});
+
 test("performance por categoria soma pontos apenas da categoria", () => {
   const matches: CategoryAnalyticsMatch[] = [
     createMatch({
@@ -184,6 +201,52 @@ test("classificacao de categoria com ate 5 atletas usa grupo unico", () => {
   const classification = computeCategoryClassificationSummaries(matches, { athleteId: 10 })[0];
   assert.equal(classification.mode, "grupo_unico");
   assert.equal(classification.position, 3);
+});
+
+test("WO na fase de grupos anula confrontos anteriores do atleta para desempate/classificacao", () => {
+  const matches: CategoryAnalyticsMatch[] = [
+    createMatch({
+      phase: "GRUPOS",
+      round: "Grupo 01",
+      players: [{ athleteId: 10, name: "A" }, { athleteId: 11, name: "B" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+      sets: [
+        { p1: 11, p2: 7 },
+        { p1: 11, p2: 8 },
+        { p1: 11, p2: 9 },
+      ],
+    }),
+    createMatch({
+      phase: "GRUPOS",
+      round: "Grupo 01",
+      players: [{ athleteId: 12, name: "C" }, { athleteId: 11, name: "B" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+      sets: [
+        { p1: 11, p2: 5 },
+        { p1: 11, p2: 6 },
+        { p1: 11, p2: 7 },
+      ],
+    }),
+    createMatch({
+      phase: "GRUPOS",
+      round: "Grupo 01",
+      players: [{ athleteId: 10, name: "A" }, { athleteId: 12, name: "C" }],
+      winnerIndex: 1,
+      scoreRaw: "0x3 (0-11, 0-11, 0-11)",
+      setsResult: { p1Sets: 0, p2Sets: 3 },
+      sets: [
+        { p1: 0, p2: 11 },
+        { p1: 0, p2: 11 },
+        { p1: 0, p2: 11 },
+      ],
+    }),
+  ];
+
+  const classificationB = computeCategoryClassificationSummaries(matches, { athleteId: 11 })[0];
+  assert.equal(classificationB.mode, "grupo_unico");
+  assert.equal(classificationB.position, 2);
 });
 
 test("categoria com 5 atletas em unica 01 usa grupo unico e pode gerar 1º lugar", () => {

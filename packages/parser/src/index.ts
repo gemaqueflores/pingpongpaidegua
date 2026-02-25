@@ -17,6 +17,7 @@ import {
 } from "@cbtm/shared";
 
 export type DxTab = "INSCRICOES" | "GRUPOS" | "RESULTADOS" | "ELIMINATORIA" | "UNKNOWN";
+const ELIMINATORIA_ENABLED = false;
 
 export interface DxPayload {
   rawLiteral: string;
@@ -1717,15 +1718,21 @@ export function parseDxPayloads(
     }
 
     if (payload.tab === "ELIMINATORIA") {
-      const parsed = parseCardBasedMatches(
-        eventId,
-        payload.html,
-        payloadCategoryId,
-        "ELIMINATORIA",
-        athleteHintResolver,
-      );
-      matches.push(...parsed);
-      tabItemCounts.ELIMINATORIA += parsed.length;
+      if (ELIMINATORIA_ENABLED) {
+        const parsed = parseCardBasedMatches(
+          eventId,
+          payload.html,
+          payloadCategoryId,
+          "ELIMINATORIA",
+          athleteHintResolver,
+        );
+        matches.push(...parsed);
+        tabItemCounts.ELIMINATORIA += parsed.length;
+      } else {
+        warnings.push(
+          `Payload de ELIMINATORIA ignorado para categoryId=${payloadCategoryId ?? "desconhecido"} (hard-disabled).`,
+        );
+      }
       continue;
     }
 
@@ -1752,17 +1759,23 @@ export function parseDxPayloads(
     );
   }
 
-  for (const eliminationPayload of options.eliminationPayloads ?? []) {
-    if (isIgnoredCategoryId(eliminationPayload.categoryId)) {
-      continue;
+  if (ELIMINATORIA_ENABLED) {
+    for (const eliminationPayload of options.eliminationPayloads ?? []) {
+      if (isIgnoredCategoryId(eliminationPayload.categoryId)) {
+        continue;
+      }
+      const parsed = parseEliminationMatches(
+        eventId,
+        eliminationPayload,
+        athleteHintResolver,
+      );
+      matches.push(...parsed);
+      tabItemCounts.ELIMINATORIA += parsed.length;
     }
-    const parsed = parseEliminationMatches(
-      eventId,
-      eliminationPayload,
-      athleteHintResolver,
+  } else if ((options.eliminationPayloads?.length ?? 0) > 0) {
+    warnings.push(
+      `Payloads auxiliares de ELIMINATORIA ignorados (${options.eliminationPayloads?.length ?? 0}) por politica oficial.`,
     );
-    matches.push(...parsed);
-    tabItemCounts.ELIMINATORIA += parsed.length;
   }
 
   const dedupRegistrationsMap = new Map<string, ParsedRegistration>();

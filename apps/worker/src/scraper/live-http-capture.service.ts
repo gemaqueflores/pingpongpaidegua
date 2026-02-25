@@ -391,10 +391,11 @@ export class LiveHttpCaptureService {
     const payloads: DxPayload[] = [];
     const discoveredCategoryIds = new Set(snapshot.categories.map((item) => item.categoryId));
     const ignoredCategoryIds = new Set(config.scraperExcludedCategoryIds);
-    const mismatchedCategoryIds = new Map<string, number>();
+    const droppedMismatchedCategoryIds = new Map<string, number>();
     for (const rawBody of responses) {
       const fallbackCategoryId = responseCategoryByBody.get(rawBody) ?? null;
-      const extracted = extractDxPayloads(rawBody).map((payload) => {
+      const extracted = extractDxPayloads(rawBody)
+        .map((payload) => {
         const payloadCategoryId = compactWhitespace(payload.categoryId ?? "");
         if (!fallbackCategoryId) {
           return payload;
@@ -404,27 +405,36 @@ export class LiveHttpCaptureService {
           discoveredCategoryIds.has(payloadCategoryId) &&
           !ignoredCategoryIds.has(payloadCategoryId);
 
-        // Categoria do request HTTP (callbackparam) e a fonte de verdade.
-        // O payload DX pode retornar categoryId defasado mesmo quando "valido".
+        // Payload com categoryId valido e divergente do callback da requisicao tende
+        // a ser resposta defasada. Nao re-rotular; descartar para evitar contaminacao
+        // entre categorias.
         if (payloadCategoryIsValid && payloadCategoryId !== fallbackCategoryId) {
           const mismatchKey = `${payload.tab}:${payloadCategoryId}->${fallbackCategoryId}`;
-          mismatchedCategoryIds.set(mismatchKey, (mismatchedCategoryIds.get(mismatchKey) ?? 0) + 1);
+          droppedMismatchedCategoryIds.set(
+            mismatchKey,
+            (droppedMismatchedCategoryIds.get(mismatchKey) ?? 0) + 1,
+          );
+          return null;
+        }
+        if (payloadCategoryIsValid) {
+          return payload;
         }
         return {
           ...payload,
           categoryId: fallbackCategoryId,
         };
-      });
+        })
+        .filter((payload): payload is DxPayload => Boolean(payload));
       payloads.push(...extracted);
     }
 
-    if (mismatchedCategoryIds.size > 0) {
-      const samples = [...mismatchedCategoryIds.entries()]
+    if (droppedMismatchedCategoryIds.size > 0) {
+      const samples = [...droppedMismatchedCategoryIds.entries()]
         .slice(0, 5)
         .map(([key, count]) => `${key} (${count}x)`)
         .join(", ");
       warnings.push(
-        `Capture HTTP corrigiu categoryId inconsistente em ${mismatchedCategoryIds.size} combinacao(oes): ${samples}.`,
+        `Capture HTTP descartou payload com categoryId inconsistente em ${droppedMismatchedCategoryIds.size} combinacao(oes): ${samples}.`,
       );
     }
 

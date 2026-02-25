@@ -130,6 +130,10 @@ export class AdminEventsService {
       inicioRealizacao,
       fimRealizacao,
     });
+    this.validateCircularRulesConfig({
+      groupBestOfSets: dto.groupBestOfSets,
+      eliminationBestOfSets: dto.eliminationBestOfSets,
+    });
 
     const event = await this.prisma.event.create({
       data: {
@@ -137,6 +141,11 @@ export class AdminEventsService {
         nome: dto.nome,
         nivel: dto.nivel ?? null,
         ratingMatchFormat: dto.ratingMatchFormat ?? "RR_K1",
+        seedCriteria: dto.seedCriteria ?? "AUTO",
+        groupBestOfSets: dto.groupBestOfSets ?? null,
+        eliminationBestOfSets: dto.eliminationBestOfSets ?? null,
+        allowCobraAdjustments: dto.allowCobraAdjustments ?? true,
+        allowByes: dto.allowByes ?? true,
         inicioInscricoes,
         fimInscricoes,
         inicioRealizacao,
@@ -319,6 +328,10 @@ export class AdminEventsService {
       inicioRealizacao: nextInicioRealizacao,
       fimRealizacao: nextFimRealizacao,
     });
+    this.validateCircularRulesConfig({
+      groupBestOfSets: dto.groupBestOfSets,
+      eliminationBestOfSets: dto.eliminationBestOfSets,
+    });
 
     const event = await this.prisma.event.update({
       where: { id },
@@ -327,6 +340,11 @@ export class AdminEventsService {
         nome: dto.nome,
         nivel: dto.nivel,
         ratingMatchFormat: dto.ratingMatchFormat,
+        seedCriteria: dto.seedCriteria,
+        groupBestOfSets: dto.groupBestOfSets,
+        eliminationBestOfSets: dto.eliminationBestOfSets,
+        allowCobraAdjustments: dto.allowCobraAdjustments,
+        allowByes: dto.allowByes,
         inicioInscricoes: nextInicioInscricoes,
         fimInscricoes: nextFimInscricoes,
         inicioRealizacao: nextInicioRealizacao,
@@ -880,6 +898,28 @@ export class AdminEventsService {
 
     if (input.inicioInscricoes && input.fimRealizacao && input.inicioInscricoes > input.fimRealizacao) {
       throw new BadRequestException("Datas invalidas: inicio de inscricoes apos fim de realizacao.");
+    }
+  }
+
+  private validateCircularRulesConfig(input: {
+    groupBestOfSets?: number | null;
+    eliminationBestOfSets?: number | null;
+  }) {
+    const entries: Array<{ label: string; value: number | null | undefined }> = [
+      { label: "groupBestOfSets", value: input.groupBestOfSets },
+      { label: "eliminationBestOfSets", value: input.eliminationBestOfSets },
+    ];
+
+    for (const entry of entries) {
+      if (entry.value === null || entry.value === undefined) {
+        continue;
+      }
+      if (!Number.isInteger(entry.value) || entry.value < 1) {
+        throw new BadRequestException(`${entry.label} deve ser inteiro positivo.`);
+      }
+      if (entry.value % 2 === 0) {
+        throw new BadRequestException(`${entry.label} deve ser ímpar conforme regulamento.`);
+      }
     }
   }
 }

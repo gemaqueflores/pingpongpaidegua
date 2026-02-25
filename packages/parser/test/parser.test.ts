@@ -15,7 +15,7 @@ describe("parser DX", () => {
     expect(payloads.length).toBeGreaterThan(0);
     expect(payloads.some((p) => p.tab === "INSCRICOES")).toBe(true);
     expect(payloads.some((p) => p.tab === "GRUPOS")).toBe(true);
-    expect(payloads.some((p) => p.tab === "RESULTADOS" || p.tab === "ELIMINATORIA")).toBe(true);
+    expect(payloads.some((p) => p.tab === "RESULTADOS")).toBe(true);
   });
 
   it("deve gerar dataset normalizado sem duplicar match_key", () => {
@@ -38,7 +38,7 @@ describe("parser DX", () => {
     expect(dataset.extractionStats.totalCategoriesValid).toBeGreaterThan(0);
     expect(dataset.extractionStats.categoriesScanned).toBeGreaterThan(0);
     expect(dataset.extractionStats.tabPayloadCounts.INSCRICOES).toBeGreaterThan(0);
-    expect(dataset.matches.some((m) => m.phase === "ELIMINATORIA")).toBe(true);
+    expect(dataset.matches.some((m) => m.phase === "RESULTADOS")).toBe(true);
   });
 
   it("deve manter match_key deterministico", () => {

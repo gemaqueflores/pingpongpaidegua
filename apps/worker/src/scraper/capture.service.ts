@@ -594,7 +594,7 @@ export class CaptureService {
 
       const payloads: DxPayload[] = [];
       const discoveredCategoryIds = new Set(discovered.map((item) => item.categoryId));
-      const mismatchedCategoryIds = new Map<string, number>();
+      const droppedMismatchedCategoryIds = new Map<string, number>();
       for (const responseEntry of responses) {
         const { rawBody, fallbackCategoryId, requestCategoryId, tabLabel } = responseEntry;
         const extracted = extractDxPayloads(rawBody)
@@ -622,20 +622,38 @@ export class CaptureService {
             discoveredCategoryIds.has(fallbackCategoryIdNorm) &&
             !ignoredCategoryIds.has(fallbackCategoryIdNorm);
 
-          // Browser flow: contexto da requisicao (categoria selecionada) e mais confiavel
-          // que categoryId reportado dentro do payload DX, que pode vir defasado.
+          // Quando payload e contexto da requisicao trazem categoryId validos e divergentes,
+          // trata-se de resposta defasada. Nao re-rotular para evitar poluicao entre categorias.
+          if (payloadIsValid && requestIsValid && payloadCategoryId !== requestCategoryIdNorm) {
+            const mismatchKey = `${tabLabel ?? payload.tab}:${payloadCategoryId}->${requestCategoryIdNorm}`;
+            droppedMismatchedCategoryIds.set(
+              mismatchKey,
+              (droppedMismatchedCategoryIds.get(mismatchKey) ?? 0) + 1,
+            );
+            return null;
+          }
+
+          if (
+            payloadIsValid &&
+            !requestIsValid &&
+            fallbackIsValid &&
+            payloadCategoryId !== fallbackCategoryIdNorm
+          ) {
+            const mismatchKey = `${tabLabel ?? payload.tab}:${payloadCategoryId}->${fallbackCategoryIdNorm}`;
+            droppedMismatchedCategoryIds.set(
+              mismatchKey,
+              (droppedMismatchedCategoryIds.get(mismatchKey) ?? 0) + 1,
+            );
+            return null;
+          }
+
           let chosenCategoryId = "";
-          if (requestIsValid) {
+          if (payloadIsValid) {
+            chosenCategoryId = payloadCategoryId;
+          } else if (requestIsValid) {
             chosenCategoryId = requestCategoryIdNorm;
           } else if (fallbackIsValid) {
             chosenCategoryId = fallbackCategoryIdNorm;
-          } else if (payloadIsValid) {
-            chosenCategoryId = payloadCategoryId;
-          }
-
-          if (payloadCategoryId && chosenCategoryId && payloadCategoryId !== chosenCategoryId) {
-            const mismatchKey = `${tabLabel ?? payload.tab}:${payloadCategoryId}->${chosenCategoryId}`;
-            mismatchedCategoryIds.set(mismatchKey, (mismatchedCategoryIds.get(mismatchKey) ?? 0) + 1);
           }
 
           if (!chosenCategoryId) {
@@ -650,13 +668,13 @@ export class CaptureService {
         payloads.push(...extracted);
       }
 
-      if (mismatchedCategoryIds.size > 0) {
-        const samples = [...mismatchedCategoryIds.entries()]
+      if (droppedMismatchedCategoryIds.size > 0) {
+        const samples = [...droppedMismatchedCategoryIds.entries()]
           .slice(0, 5)
           .map(([key, count]) => `${key} (${count}x)`)
           .join(", ");
         warnings.push(
-          `Capture browser corrigiu categoryId inconsistente em ${mismatchedCategoryIds.size} combinacao(oes): ${samples}.`,
+          `Capture browser descartou payload com categoryId inconsistente em ${droppedMismatchedCategoryIds.size} combinacao(oes): ${samples}.`,
         );
       }
 

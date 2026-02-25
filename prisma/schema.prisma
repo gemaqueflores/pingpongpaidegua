@@ -37,6 +37,12 @@ enum RatingMatchFormat {
   K1
 }
 
+enum SeedCriteria {
+  AUTO
+  RANKING
+  RATING
+}
+
 enum RegistrationStatus {
   INSCRITO
   PRE_INSCRITO
@@ -59,6 +65,11 @@ model Event {
   nome         String
   nivel        EventLevel?
   ratingMatchFormat RatingMatchFormat @default(RR_K1) @map("rating_match_format")
+  seedCriteria SeedCriteria @default(AUTO) @map("seed_criteria")
+  groupBestOfSets Int? @map("group_best_of_sets")
+  eliminationBestOfSets Int? @map("elimination_best_of_sets")
+  allowCobraAdjustments Boolean @default(true) @map("allow_cobra_adjustments")
+  allowByes Boolean @default(true) @map("allow_byes")
   dataInicio   DateTime?   @map("data_inicio")
   dataFim      DateTime?   @map("data_fim")
   inicioInscricoes DateTime? @map("inicio_inscricoes")

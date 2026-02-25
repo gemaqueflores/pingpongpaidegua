@@ -52,6 +52,7 @@ type ParsedMatch = {
   p2Key: string;
   winnerKey: string | null;
   walkover: boolean;
+  doubleWalkover: boolean;
   setsP1: number;
   setsP2: number;
   pointsP1: number;
@@ -223,7 +224,13 @@ function toParsedMatch(match: CategoryAnalyticsMatch): ParsedMatch {
   const p1Key = toStandingKey(match.players[0], 0);
   const p2Key = toStandingKey(match.players[1], 1);
   const winnerKey = match.winnerIndex === 0 ? p1Key : match.winnerIndex === 1 ? p2Key : null;
-  const walkover = isWalkoverMatch(match);
+  const walkoverDetection = detectWalkover({
+    sets: match.sets,
+    p1Sets: match.setsResult?.p1Sets ?? null,
+    p2Sets: match.setsResult?.p2Sets ?? null,
+    scoreRaw: match.scoreRaw ?? null,
+  });
+  const walkover = walkoverDetection.isWalkover;
 
   const setsResult = inferSetsResult(match);
   const setsP1 = setsResult?.p1Sets ?? 0;
@@ -249,11 +256,49 @@ function toParsedMatch(match: CategoryAnalyticsMatch): ParsedMatch {
     p2Key,
     winnerKey,
     walkover,
+    doubleWalkover: walkoverDetection.isDoubleWalkover,
     setsP1,
     setsP2,
     pointsP1,
     pointsP2,
   };
+}
+
+function collectGroupWalkoverLoserKeys(input: {
+  matches: CategoryAnalyticsMatch[];
+  parsedMatches: ParsedMatch[];
+}): Set<string> {
+  const losers = new Set<string>();
+
+  input.matches.forEach((match, index) => {
+    if (!isGroupRoundMatch(match)) {
+      return;
+    }
+    const parsed = input.parsedMatches[index];
+    if (!parsed || !parsed.walkover) {
+      return;
+    }
+
+    if (parsed.doubleWalkover) {
+      losers.add(parsed.p1Key);
+      losers.add(parsed.p2Key);
+      return;
+    }
+
+    if (parsed.winnerKey === parsed.p1Key) {
+      losers.add(parsed.p2Key);
+      return;
+    }
+    if (parsed.winnerKey === parsed.p2Key) {
+      losers.add(parsed.p1Key);
+      return;
+    }
+
+    losers.add(parsed.p1Key);
+    losers.add(parsed.p2Key);
+  });
+
+  return losers;
 }
 
 function buildStatLine(keys: string[], parsedMatches: ParsedMatch[]): Map<string, StatLine> {
@@ -662,9 +707,26 @@ export function computeCategoryClassificationSummaries(
     .map(([categoryId, categoryMatches]) => {
       const first = categoryMatches[0];
       const parsedCategoryMatches = categoryMatches.map(toParsedMatch);
-      const hasAnyMatch = parsedCategoryMatches.length > 0;
-      const hasPendingMatches = parsedCategoryMatches.some((match) => match.winnerKey === null);
-      const hasAnyDecisiveResult = parsedCategoryMatches.some((match) => match.winnerKey !== null);
+      const walkoverLosersInGroups = collectGroupWalkoverLoserKeys({
+        matches: categoryMatches,
+        parsedMatches: parsedCategoryMatches,
+      });
+
+      const effectiveCategoryMatches = categoryMatches.filter((match, index) => {
+        if (!isGroupRoundMatch(match)) {
+          return true;
+        }
+        const parsed = parsedCategoryMatches[index];
+        if (!parsed) {
+          return true;
+        }
+        return !walkoverLosersInGroups.has(parsed.p1Key) && !walkoverLosersInGroups.has(parsed.p2Key);
+      });
+      const effectiveParsedMatches = effectiveCategoryMatches.map(toParsedMatch);
+
+      const hasAnyMatch = effectiveParsedMatches.length > 0;
+      const hasPendingMatches = effectiveParsedMatches.some((match) => match.winnerKey === null);
+      const hasAnyDecisiveResult = effectiveParsedMatches.some((match) => match.winnerKey !== null);
       if (!hasAnyMatch) {
         return {
           categoryId,
@@ -680,7 +742,7 @@ export function computeCategoryClassificationSummaries(
       const groupRounds = new Set<string>();
       let hasDecisiveEliminationData = false;
 
-      for (const match of categoryMatches) {
+      for (const match of effectiveCategoryMatches) {
         const groupMatch = isGroupRoundMatch(match);
         participants.add(toStandingKey(match.players[0], 0));
         participants.add(toStandingKey(match.players[1], 1));
@@ -717,8 +779,8 @@ export function computeCategoryClassificationSummaries(
       }
 
       const decisiveMatches = isSingleGroup
-        ? categoryMatches.filter((_, index) => parsedCategoryMatches[index]?.winnerKey !== null)
-        : categoryMatches;
+        ? effectiveCategoryMatches.filter((_, index) => effectiveParsedMatches[index]?.winnerKey !== null)
+        : effectiveCategoryMatches;
       const result = isSingleGroup
         ? computeGroupSingleClassification({
             categoryId,
