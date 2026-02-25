@@ -1,4 +1,10 @@
-﻿import { AthletePerformanceInput, calculateAthletePointPerformance, normalizeAthleteName, resolveAthleteIndexInMatch } from "@cbtm/shared";
+import {
+  AthletePerformanceInput,
+  calculateAthletePointPerformance,
+  detectWalkover,
+  normalizeAthleteName,
+  resolveAthleteIndexInMatch,
+} from "@cbtm/shared";
 
 export interface CategoryAnalyticsPlayer {
   athleteId: number | null;
@@ -10,6 +16,7 @@ export interface CategoryAnalyticsMatch {
   categoryName: string;
   phase: string;
   round: string | null;
+  scoreRaw?: string | null;
   players: [CategoryAnalyticsPlayer | null, CategoryAnalyticsPlayer | null];
   sets: Array<{ p1: number; p2: number }>;
   setsResult: { p1Sets: number; p2Sets: number } | null;
@@ -153,38 +160,13 @@ function inferSetsResult(match: CategoryAnalyticsMatch): { p1Sets: number; p2Set
 }
 
 export function isWalkoverMatch(match: CategoryAnalyticsMatch): boolean {
-  const isDoubleWalkover =
-    match.sets.length > 0 &&
-    match.sets.every((set) => set.p1 === 0 && set.p2 === 0) &&
-    ((match.setsResult?.p1Sets ?? 0) === 0 && (match.setsResult?.p2Sets ?? 0) === 0);
-  if (isDoubleWalkover) {
-    return true;
-  }
-
   const setsResult = inferSetsResult(match);
-  if (!setsResult) {
-    return false;
-  }
-
-  const isStraightWin =
-    (setsResult.p1Sets === 3 && setsResult.p2Sets === 0) ||
-    (setsResult.p1Sets === 0 && setsResult.p2Sets === 3);
-  if (!isStraightWin) {
-    return false;
-  }
-
-  if (match.winnerIndex !== 0 && match.winnerIndex !== 1) {
-    return false;
-  }
-
-  if (match.sets.length !== 3) {
-    return false;
-  }
-
-  const winnerIsP1 = match.winnerIndex === 0;
-  return match.sets.every((set) =>
-    winnerIsP1 ? set.p1 === 11 && set.p2 === 0 : set.p2 === 11 && set.p1 === 0,
-  );
+  return detectWalkover({
+    sets: match.sets,
+    p1Sets: setsResult?.p1Sets ?? null,
+    p2Sets: setsResult?.p2Sets ?? null,
+    scoreRaw: match.scoreRaw ?? null,
+  }).isWalkover;
 }
 
 export function collectWalkoverLoserAthleteIds(matches: CategoryAnalyticsMatch[]): Set<number> {
@@ -194,10 +176,13 @@ export function collectWalkoverLoserAthleteIds(matches: CategoryAnalyticsMatch[]
       continue;
     }
 
-    const isDoubleWalkover =
-      match.sets.length > 0 &&
-      match.sets.every((set) => set.p1 === 0 && set.p2 === 0) &&
-      ((match.setsResult?.p1Sets ?? 0) === 0 && (match.setsResult?.p2Sets ?? 0) === 0);
+    const detection = detectWalkover({
+      sets: match.sets,
+      p1Sets: match.setsResult?.p1Sets ?? null,
+      p2Sets: match.setsResult?.p2Sets ?? null,
+      scoreRaw: match.scoreRaw ?? null,
+    });
+    const isDoubleWalkover = detection.isDoubleWalkover;
     if (isDoubleWalkover) {
       for (const player of match.players) {
         const athleteId = player?.athleteId ?? null;

@@ -173,6 +173,18 @@ export interface OfficialCategoryMatchesOptions {
   ratingMatchFormat?: "RR_K1" | "K1" | null;
 }
 
+export interface WalkoverDetectionInput {
+  sets?: Array<{ p1: number | null | undefined; p2: number | null | undefined }> | null;
+  p1Sets?: number | null;
+  p2Sets?: number | null;
+  scoreRaw?: string | null;
+}
+
+export interface WalkoverDetectionResult {
+  isWalkover: boolean;
+  isDoubleWalkover: boolean;
+}
+
 const RATING_SIMPLE_ELIMINATION_EFFECTIVE_DATE = "2026-02-24";
 
 function isRatingCategoryName(categoryName: string | null | undefined): boolean {
@@ -196,6 +208,76 @@ function isOnOrAfterEffectiveDate(dateValue: Date | string | null | undefined): 
   const dd = String(date.getUTCDate()).padStart(2, "0");
   const isoDate = `${yyyy}-${mm}-${dd}`;
   return isoDate >= RATING_SIMPLE_ELIMINATION_EFFECTIVE_DATE;
+}
+
+function normalizeInteger(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (!Number.isFinite(Number(value))) {
+    return null;
+  }
+  return Math.trunc(Number(value));
+}
+
+function normalizeScoreRaw(value: string | null | undefined): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+function normalizeSets(
+  sets: Array<{ p1: number | null | undefined; p2: number | null | undefined }> | null | undefined,
+): Array<{ p1: number; p2: number }> {
+  if (!Array.isArray(sets)) {
+    return [];
+  }
+  const out: Array<{ p1: number; p2: number }> = [];
+  for (const set of sets) {
+    const p1 = normalizeInteger(set?.p1 ?? null);
+    const p2 = normalizeInteger(set?.p2 ?? null);
+    if (p1 === null || p2 === null) {
+      continue;
+    }
+    out.push({ p1, p2 });
+  }
+  return out;
+}
+
+export function detectWalkover(input: WalkoverDetectionInput): WalkoverDetectionResult {
+  const scoreRaw = normalizeScoreRaw(input.scoreRaw);
+  const p1Sets = normalizeInteger(input.p1Sets ?? null);
+  const p2Sets = normalizeInteger(input.p2Sets ?? null);
+  const sets = normalizeSets(input.sets ?? []);
+
+  if (scoreRaw.includes("wo")) {
+    return { isWalkover: true, isDoubleWalkover: false };
+  }
+
+  const allZeroSets = sets.length > 0 && sets.every((set) => set.p1 === 0 && set.p2 === 0);
+  if (allZeroSets) {
+    const explicitZeroFinal =
+      (p1Sets === 0 && p2Sets === 0) || scoreRaw.includes("0x0") || scoreRaw.includes("0-0");
+    if (explicitZeroFinal) {
+      return { isWalkover: true, isDoubleWalkover: true };
+    }
+    return { isWalkover: false, isDoubleWalkover: false };
+  }
+
+  if (sets.length === 3) {
+    const p1Straight = sets.every((set) => set.p1 === 11 && set.p2 === 0);
+    const p2Straight = sets.every((set) => set.p2 === 11 && set.p1 === 0);
+    if (p1Straight || p2Straight) {
+      const matchesResult =
+        (p1Straight && (p1Sets === null || p2Sets === null || (p1Sets === 3 && p2Sets === 0))) ||
+        (p2Straight && (p1Sets === null || p2Sets === null || (p1Sets === 0 && p2Sets === 3)));
+      if (matchesResult) {
+        return { isWalkover: true, isDoubleWalkover: false };
+      }
+    }
+  }
+
+  return { isWalkover: false, isDoubleWalkover: false };
 }
 
 export function computeOfficialCategoryMatchesCount(
