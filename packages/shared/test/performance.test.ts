@@ -70,6 +70,41 @@ describe("calculateAthletePointPerformance", () => {
     expect(result.pointsWon).toBe(11);
     expect(result.pointsPlayed).toBe(20);
   });
+
+  it("ignora pontos de WO simples e duplo WO na carreira", () => {
+    const matches = [
+      {
+        players: [
+          { athleteId: 10, name: "ATLETA A" },
+          { athleteId: 20, name: "ATLETA B" },
+        ],
+        winnerIndex: 0 as const,
+        sets: [
+          { p1: 11, p2: 0 },
+          { p1: 11, p2: 0 },
+          { p1: 11, p2: 0 },
+        ],
+      },
+      {
+        players: [
+          { athleteId: 10, name: "ATLETA A" },
+          { athleteId: 30, name: "ATLETA C" },
+        ],
+        winnerIndex: null,
+        sets: [
+          { p1: 0, p2: 0 },
+          { p1: 0, p2: 0 },
+          { p1: 0, p2: 0 },
+        ],
+      },
+    ];
+
+    const result = calculateAthletePointPerformance(matches, { athleteId: 10 });
+    expect(result.pointsWon).toBe(0);
+    expect(result.pointsPlayed).toBe(0);
+    expect(result.setsUsed).toBe(0);
+    expect(result.ignoredSets).toBe(6);
+  });
 });
 
 describe("winner consistency (Davi vs Domini fixture)", () => {

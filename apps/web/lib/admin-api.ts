@@ -1,8 +1,9 @@
-import { getApiBase, getHeaders, handleResponse } from "./auth";
+import { fetchWithRecovery, getApiBase, getHeaders, handleResponse } from "./auth";
 
 const API_BASE = getApiBase();
 
 export type EventLevel = "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN";
+export type RatingMatchFormat = "RR_K1" | "K1";
 export type EventSituation =
   | "DRAFT"
   | "PRE_INSCRICOES"
@@ -23,6 +24,7 @@ export interface AdminEventPayload {
   dataInicio?: string | null;
   dataFim?: string | null;
   concluido?: boolean;
+  ratingMatchFormat?: RatingMatchFormat;
 }
 
 export interface AdminEventRow {
@@ -37,6 +39,7 @@ export interface AdminEventRow {
   dataInicio: string | null;
   dataFim: string | null;
   concluido: boolean;
+  ratingMatchFormat: RatingMatchFormat;
   lastScrapeAt: string | null;
   situacaoComputada?: EventSituation;
   proximaMudanca?: string | null;
@@ -57,7 +60,7 @@ export interface EfficiencyConfig {
 }
 
 export async function apiLogin(username: string, password: string) {
-  const response = await fetch(`${API_BASE}/auth/login`, {
+  const response = await fetchWithRecovery(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -69,7 +72,7 @@ export async function apiLogin(username: string, password: string) {
 }
 
 export async function apiForgotPassword(username?: string) {
-  const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+  const response = await fetchWithRecovery(`${API_BASE}/auth/forgot-password`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -81,7 +84,7 @@ export async function apiForgotPassword(username?: string) {
 }
 
 export async function apiResetPassword(token: string, password: string) {
-  const response = await fetch(`${API_BASE}/auth/reset-password`, {
+  const response = await fetchWithRecovery(`${API_BASE}/auth/reset-password`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -93,7 +96,7 @@ export async function apiResetPassword(token: string, password: string) {
 }
 
 export async function apiGetAdminEvents(): Promise<AdminEventRow[]> {
-  const response = await fetch(`${API_BASE}/admin/events`, {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -102,7 +105,7 @@ export async function apiGetAdminEvents(): Promise<AdminEventRow[]> {
 }
 
 export async function apiCreateEvent(payload: AdminEventPayload): Promise<AdminEventRow> {
-  const response = await fetch(`${API_BASE}/admin/events`, {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events`, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify(payload),
@@ -112,7 +115,7 @@ export async function apiCreateEvent(payload: AdminEventPayload): Promise<AdminE
 }
 
 export async function apiUpdateEvent(id: number, payload: Partial<AdminEventPayload>): Promise<AdminEventRow> {
-  const response = await fetch(`${API_BASE}/admin/events/${id}`, {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events/${id}`, {
     method: "PUT",
     headers: getHeaders(),
     body: JSON.stringify(payload),
@@ -122,7 +125,7 @@ export async function apiUpdateEvent(id: number, payload: Partial<AdminEventPayl
 }
 
 export async function apiMarkCompleted(id: number) {
-  const response = await fetch(`${API_BASE}/admin/events/${id}/mark-completed`, {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events/${id}/mark-completed`, {
     method: "POST",
     headers: getHeaders(),
   });
@@ -136,7 +139,7 @@ export async function apiScrapeNow(id: number, stage?: 1 | 2 | 3) {
     url.searchParams.set("stage", String(stage));
   }
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithRecovery(url.toString(), {
     method: "POST",
     headers: getHeaders(),
     body: stage ? JSON.stringify({ stage }) : JSON.stringify({}),
@@ -147,7 +150,7 @@ export async function apiScrapeNow(id: number, stage?: 1 | 2 | 3) {
 }
 
 export async function apiDeleteEvent(id: number) {
-  const response = await fetch(`${API_BASE}/admin/events/${id}`, {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events/${id}`, {
     method: "DELETE",
     headers: getHeaders(),
   });
@@ -157,7 +160,7 @@ export async function apiDeleteEvent(id: number) {
 
 export async function apiGetScrapeRuns(id: number) {
   const cacheBust = Date.now();
-  const response = await fetch(`${API_BASE}/admin/events/${id}/scrape-runs?_ts=${cacheBust}`, {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events/${id}/scrape-runs?_ts=${cacheBust}`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -167,7 +170,7 @@ export async function apiGetScrapeRuns(id: number) {
 
 export async function apiGetAthleteConflicts(id: number) {
   const cacheBust = Date.now();
-  const response = await fetch(`${API_BASE}/admin/events/${id}/athlete-conflicts?_ts=${cacheBust}`, {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events/${id}/athlete-conflicts?_ts=${cacheBust}`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -176,7 +179,7 @@ export async function apiGetAthleteConflicts(id: number) {
 }
 
 export async function apiResolveAthleteConflict(eventId: number, conflictId: number, athleteId: number) {
-  const response = await fetch(`${API_BASE}/admin/events/${eventId}/athlete-conflicts/${conflictId}/resolve`, {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events/${eventId}/athlete-conflicts/${conflictId}/resolve`, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify({ athleteId }),
@@ -186,7 +189,7 @@ export async function apiResolveAthleteConflict(eventId: number, conflictId: num
 }
 
 export async function apiGetEfficiencyConfig(): Promise<EfficiencyConfig> {
-  const response = await fetch(`${API_BASE}/admin/events/efficiency-config`, {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events/efficiency-config`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -199,7 +202,7 @@ export async function apiUpdateEfficiencyConfig(payload: {
   pesoPrata: number;
   pesoBronze: number;
 }): Promise<EfficiencyConfig> {
-  const response = await fetch(`${API_BASE}/admin/events/efficiency-config`, {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events/efficiency-config`, {
     method: "PUT",
     headers: getHeaders(),
     body: JSON.stringify(payload),
@@ -207,3 +210,4 @@ export async function apiUpdateEfficiencyConfig(payload: {
 
   return handleResponse(response);
 }
+

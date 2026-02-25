@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   apiGetAthletes,
+  apiGetEventCategoryMedalists,
   apiGetClubAthletes,
   apiGetClubs,
   apiGetEventEfficiency,
   apiGetEventSummary,
+  type EventCategoryMedalistsResponse,
   type EventEfficiencyResponse,
   type EventEfficiencyRow,
   type UserEventRow,
@@ -210,6 +212,8 @@ export default function EventDetailPage() {
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [efficiencyData, setEfficiencyData] = useState<EventEfficiencyResponse | null>(null);
   const [efficiencyLoading, setEfficiencyLoading] = useState(false);
+  const [medalistsData, setMedalistsData] = useState<EventCategoryMedalistsResponse | null>(null);
+  const [medalistsLoading, setMedalistsLoading] = useState(false);
   const [efficiencyMode, setEfficiencyMode] = useState<EfficiencyViewMode>("pontuacao");
 
   useEffect(() => {
@@ -246,7 +250,7 @@ export default function EventDetailPage() {
   }, [event]);
 
   useEffect(() => {
-    if (activeTab !== "eficiencia" || efficiencyData) {
+    if (activeTab !== "eficiencia") {
       return;
     }
 
@@ -254,7 +258,18 @@ export default function EventDetailPage() {
     void apiGetEventEfficiency(eventId)
       .then((response) => setEfficiencyData(response))
       .finally(() => setEfficiencyLoading(false));
-  }, [activeTab, efficiencyData, eventId]);
+  }, [activeTab, eventId, event?.lastScrapeAt]);
+
+  useEffect(() => {
+    if (activeTab !== "eficiencia") {
+      return;
+    }
+
+    setMedalistsLoading(true);
+    void apiGetEventCategoryMedalists(eventId)
+      .then((response) => setMedalistsData(response))
+      .finally(() => setMedalistsLoading(false));
+  }, [activeTab, eventId, event?.lastScrapeAt]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -428,7 +443,7 @@ export default function EventDetailPage() {
     <main className="container grid user-page">
       <Hero
         title={event ? event.nome : `Evento ${eventId}`}
-        subtitle="Tênis de Mesa / Table Tennis"
+        subtitle={`Período: ${formatDate(event?.dataInicio ?? null)} até ${formatDate(event?.dataFim ?? null)}`}
         className="event-page-hero"
         actions={
           <Link className="event-back-button" href="/">← Voltar</Link>
@@ -466,13 +481,13 @@ export default function EventDetailPage() {
           <div className="row event-last-update-row">
             <Badge tone="default">Última atualização: {formatDateTime(event?.lastScrapeAt ?? null)}</Badge>
           </div>
-          <p>
-            Período: <strong>{formatDate(event?.dataInicio ?? null)} até {formatDate(event?.dataFim ?? null)}</strong>
-          </p>
           <div className="event-metrics">
-            <span><small>Inscritos</small><strong>{String(event?.totalInscritos ?? 0)}</strong></span>
-            <span><small>Categorias</small><strong>{String(event?.totalCategorias ?? 0)}</strong></span>
-            <span><small>Técnicos</small><strong>{String(event?.totalTecnicos ?? 0)}</strong></span>
+            <span className="event-metric-card"><small>Atletas</small><strong>{String(event?.totalInscritos ?? 0)}</strong></span>
+            <span className="event-metric-card"><small>Categorias</small><strong>{String(event?.totalCategorias ?? 0)}</strong></span>
+            <span className="event-metric-card"><small>Inscrições</small><strong>{String(event?.inscricoesTotaisOficiais ?? event?.totalInscritos ?? 0)}</strong></span>
+            <span className="event-metric-card"><small>Partidas Previstas</small><strong>{String(event?.totalPartidasCalculadas ?? event?.totalPartidas ?? 0)}</strong></span>
+            <span className="event-metric-card"><small>Partidas</small><strong>{String(event?.totalPartidasJogadas ?? event?.totalPartidas ?? 0)}</strong></span>
+            <span className="event-metric-card"><small>WO</small><strong>{String(event?.totalPartidasWo ?? 0)}</strong></span>
           </div>
           <div className="event-tabs-shell">
             <SegmentedControl
@@ -727,9 +742,9 @@ export default function EventDetailPage() {
                 { key: "rank", header: "#", render: (_, index) => index + 1 },
                 { key: "clube", header: "Clube", render: (row) => <Link href={`/eficiencia/${row.clubId}`}>{row.clubName}</Link> },
                 { key: "atletas", header: "Atletas", render: (row) => row.athleteCount },
-                { key: "ouro", header: "Ouro", render: (row) => valueForMode(row, "ouro") },
-                { key: "prata", header: "Prata", render: (row) => valueForMode(row, "prata") },
-                { key: "bronze", header: "Bronze", render: (row) => valueForMode(row, "bronze") },
+                { key: "ouro", header: "🥇", render: (row) => valueForMode(row, "ouro") },
+                { key: "prata", header: "🥈", render: (row) => valueForMode(row, "prata") },
+                { key: "bronze", header: "🥉", render: (row) => valueForMode(row, "bronze") },
                 { key: "total", header: "Total", render: (row) => <strong>{valueForMode(row, "total")}</strong> },
               ]}
               mobileCard={(_, __) => null}
@@ -755,6 +770,63 @@ export default function EventDetailPage() {
               })}
             </div>
           ) : null}
+
+          <section className="grid" style={{ gap: "10px" }}>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <h3 style={{ margin: 0 }}>Medalhistas por categoria</h3>
+              {!medalistsLoading ? (
+                <Badge tone="default">
+                  {String(medalistsData?.categories?.filter((item) => item.medalists.length > 0).length ?? 0)} categorias com pódio
+                </Badge>
+              ) : null}
+            </div>
+            {medalistsLoading ? <p className="arena-muted">Carregando medalhistas...</p> : null}
+            {!medalistsLoading && (medalistsData?.categories?.length ?? 0) === 0 ? (
+              <p className="arena-muted">Sem categorias com atletas vinculados para auditoria.</p>
+            ) : null}
+            {!medalistsLoading && (medalistsData?.categories?.length ?? 0) > 0 ? (
+              <div className="grid" style={{ gap: "10px" }}>
+                {medalistsData!.categories.map((category) => {
+                  const displayedRegisteredCount =
+                    Number.isFinite(category.officialRegisteredCount as number) &&
+                    Number(category.officialRegisteredCount) >= 0
+                      ? Number(category.officialRegisteredCount)
+                      : category.athleteCount;
+                  return (
+                    <article key={category.categoryId} className="athlete-list-card">
+                    <div className="row" style={{ justifyContent: "space-between" }}>
+                      <strong>{category.categoryName}</strong>
+                      <span className="arena-muted">{displayedRegisteredCount} inscritos</span>
+                    </div>
+                    <p className="arena-muted" style={{ margin: "6px 0 0" }}>
+                      Medalhistas esperados: {String(category.expectedMedalists ?? "-")}
+                      {" · "}
+                      Confrontos calculados: {String(category.calculatedMatchesCount ?? category.publishedMatchesCount ?? 0)}
+                      {" · "}
+                      WO: {String(category.walkoverMatchesCount ?? 0)}
+                      {" · "}
+                      Confrontos jogados: {String(category.playedMatchesCount ?? category.publishedMatchesCount ?? 0)}
+                    </p>
+                    {category.medalists.length === 0 ? (
+                      <p className="arena-muted" style={{ margin: "6px 0 0" }}>Pódio ainda não definido.</p>
+                    ) : (
+                      <ul style={{ margin: "8px 0 0", paddingLeft: "18px" }}>
+                        {category.medalists.map((medalist) => (
+                          <li key={`${category.categoryId}-${medalist.athleteId}-${medalist.position}-${medalist.medalha}`}>
+                            {medalist.medalha === "ouro" ? "🥇" : medalist.medalha === "prata" ? "🥈" : "🥉"}{" "}
+                            {medalist.athleteName}
+                            {medalist.clubName ? ` · ${medalist.clubName}` : ""}
+                            {` · ${medalist.position}º`}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : null}
+          </section>
         </Card>
       ) : null}
     </main>

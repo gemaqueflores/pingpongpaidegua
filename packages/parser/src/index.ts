@@ -38,6 +38,10 @@ export interface DiscoveredCategory {
   categoryId: string;
   categoryName: string;
   valid: boolean;
+  registeredCount?: number | null;
+  preRegisteredCount?: number | null;
+  totalListedCount?: number | null;
+  officialMatchesCount?: number | null;
 }
 
 export interface EliminationPayload {
@@ -135,7 +139,12 @@ function isIgnoredCategoryId(categoryId: string | null | undefined): boolean {
 }
 
 function cleanCategoryDisplayName(value: string): string {
-  return compactWhitespace(value.replace(/\s+\d+\s+inscrito\(s\).*$/i, ""));
+  return compactWhitespace(
+    value.replace(
+      /\s+\d+\s+(?:pr[eé][-\s]?inscrito(?:\(s\)|s)?|inscrito(?:\(s\)|s)?)(?:[\s\S]*)$/i,
+      "",
+    ),
+  );
 }
 
 function isLikelyCategoryName(value: string | null | undefined): boolean {
@@ -504,7 +513,7 @@ function getCategoryNameFromPayloadHtml(html: string): string | null {
     if (!title || !title.includes(" - ")) {
       continue;
     }
-    const categoryName = compactWhitespace(title.split(" - ")[0] ?? "");
+    const categoryName = cleanCategoryDisplayName(compactWhitespace(title.split(" - ")[0] ?? ""));
     if (isLikelyCategoryName(categoryName)) {
       return cleanCategoryDisplayName(categoryName);
     }
@@ -991,7 +1000,7 @@ function parseCardBasedMatches(
     const title = lines[0] ?? "";
     const metaLine = lines.find((line) => /jogo\s*\d+/i.test(line)) ?? "";
     const dateLine = lines.find((line) => /^\d{2}\/\d{2}\/\d{4}$/.test(line)) ?? "";
-    const categoryName = compactWhitespace(title.split(" - ")[0] ?? "");
+    const categoryName = cleanCategoryDisplayName(compactWhitespace(title.split(" - ")[0] ?? ""));
     const roundRaw = title.includes(" - ") ? compactWhitespace(title.split(" - ").slice(1).join(" - ")) : null;
     const round = normalizeRoundLabel(roundRaw);
     const resolvedPhase =
@@ -1464,6 +1473,13 @@ function phasePreference(phase: ParsedMatch["phase"]): number {
   return 10;
 }
 
+function buildScopedParserDedupKey(match: ParsedMatch): string {
+  const categoryScope = match.categoryId
+    ? `cat:id:${String(match.categoryId).trim()}`
+    : `cat:name:${normalizeText(match.categoryNormalizedName) || "desconhecida"}`;
+  return `${categoryScope}|${String(match.matchKey ?? "").trim()}`;
+}
+
 function getMatchDedupWeight(match: ParsedMatch): number {
   const setsCount = match.sets?.length ?? 0;
   const hasSetsResult = Boolean(match.setsResult);
@@ -1759,9 +1775,10 @@ export function parseDxPayloads(
   let dedupMatchCollisions = 0;
   let dedupMatchReplacements = 0;
   for (const match of matches) {
-    const current = dedupMatchesMap.get(match.matchKey);
+    const dedupKey = buildScopedParserDedupKey(match);
+    const current = dedupMatchesMap.get(dedupKey);
     if (!current) {
-      dedupMatchesMap.set(match.matchKey, match);
+      dedupMatchesMap.set(dedupKey, match);
       continue;
     }
 
@@ -1770,7 +1787,7 @@ export function parseDxPayloads(
     if (preferred !== current) {
       dedupMatchReplacements += 1;
     }
-    dedupMatchesMap.set(match.matchKey, preferred);
+    dedupMatchesMap.set(dedupKey, preferred);
   }
 
   if (dedupMatchCollisions > 0) {

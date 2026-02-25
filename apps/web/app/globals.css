@@ -1577,6 +1577,13 @@ a {
   min-width: 0;
 }
 
+.event-metrics > .event-metric-card {
+  padding: 10px 12px;
+  border: 1px solid rgba(124, 168, 255, 0.25);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(6, 24, 67, 0.72) 0%, rgba(5, 18, 49, 0.82) 100%);
+}
+
 .event-metrics > span small {
   font-size: 0.75rem;
   letter-spacing: 0.03em;

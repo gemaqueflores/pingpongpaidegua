@@ -58,4 +58,22 @@ export const config = {
   readModelPrewarmAthleteLimit: Number(process.env.READ_MODEL_PREWARM_ATHLETE_LIMIT ?? "120"),
   readModelPrewarmConcurrency: Number(process.env.READ_MODEL_PREWARM_CONCURRENCY ?? "3"),
   readModelPrewarmTimeoutMs: Number(process.env.READ_MODEL_PREWARM_TIMEOUT_MS ?? "10000"),
+  conflictAutoCreateWarningAthleteEnabled:
+    process.env.CONFLICT_AUTO_CREATE_WARNING_ATHLETE_ENABLED !== "false",
+  postScrapeConflictAutofixEnabled:
+    process.env.POST_SCRAPE_CONFLICT_AUTOFIX_ENABLED !== "false",
+  postScrapeConflictAutofixMaxPerRun: Number(
+    process.env.POST_SCRAPE_CONFLICT_AUTOFIX_MAX_PER_RUN ?? "200",
+  ),
+  postScrapeConflictAutofixScanMultiplier: Number(
+    process.env.POST_SCRAPE_CONFLICT_SCAN_MULTIPLIER ?? "4",
+  ),
+  scrapeStrictQualityGateEnabled:
+    process.env.SCRAPE_STRICT_QUALITY_GATE_ENABLED === "true",
+  scrapeStrictRequireZeroPendingConflicts:
+    process.env.SCRAPE_STRICT_REQUIRE_ZERO_PENDING_CONFLICTS !== "false",
+  scrapeStrictRequireZeroNoCandidateConflicts:
+    process.env.SCRAPE_STRICT_REQUIRE_ZERO_NO_CANDIDATE_CONFLICTS !== "false",
+  scrapeStrictRequireConformance:
+    process.env.SCRAPE_STRICT_REQUIRE_CONFORMANCE !== "false",
 };

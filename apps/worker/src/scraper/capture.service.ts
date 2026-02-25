@@ -9,7 +9,7 @@ import {
   extractDxPayloads,
   parseDxPayloads,
 } from "@cbtm/parser";
-import { compactWhitespace } from "@cbtm/shared";
+import { compactWhitespace, computeOfficialCategoryMatchesCount } from "@cbtm/shared";
 import { config } from "../config";
 import { CategoryContext, DXRequestBuilder } from "./dx-request-builder";
 import { LiveHttpCaptureService } from "./live-http-capture.service";
@@ -40,9 +40,18 @@ export interface CaptureOptions {
   captureGrupos?: boolean;
   captureResultados?: boolean;
   fetchEliminatoria?: boolean;
+  eventStartDate?: Date | string | null;
+  ratingMatchFormat?: "RR_K1" | "K1" | null;
 }
 
-type CaptureOptionsResolved = Required<CaptureOptions>;
+type CaptureOptionsResolved = {
+  captureInscricoes: boolean;
+  captureGrupos: boolean;
+  captureResultados: boolean;
+  fetchEliminatoria: boolean;
+  eventStartDate: Date | string | null;
+  ratingMatchFormat: "RR_K1" | "K1" | null;
+};
 
 const TAB_CONFIG: Array<{ tabName: string; controlVar: string; tabLabel: string }> = [
   { tabName: "INSCRICOESTAB", controlVar: "CardViewInscricoes", tabLabel: "INSCRICOES" },
@@ -50,16 +59,14 @@ const TAB_CONFIG: Array<{ tabName: string; controlVar: string; tabLabel: string 
   { tabName: "RESULTADOSTAB", controlVar: "CardViewResultado", tabLabel: "RESULTADOS" },
 ];
 
-function categoryDisplayName(raw: string): string {
-  return compactWhitespace(raw.replace(/\s+\d+\s+inscrito\(s\).*$/i, ""));
-}
-
 function resolveCaptureOptions(options: CaptureOptions | undefined): CaptureOptionsResolved {
   return {
     captureInscricoes: options?.captureInscricoes ?? true,
     captureGrupos: options?.captureGrupos ?? true,
     captureResultados: options?.captureResultados ?? true,
-    fetchEliminatoria: options?.fetchEliminatoria ?? true,
+    fetchEliminatoria: false,
+    eventStartDate: options?.eventStartDate ?? null,
+    ratingMatchFormat: options?.ratingMatchFormat ?? null,
   };
 }
 
@@ -74,7 +81,7 @@ function shouldIncludePayloadByTab(tab: DxTab, options: CaptureOptionsResolved):
     return options.captureResultados;
   }
   if (tab === "ELIMINATORIA") {
-    return options.captureResultados || options.fetchEliminatoria;
+    return options.fetchEliminatoria;
   }
   return true;
 }
@@ -124,8 +131,7 @@ export class CaptureService {
     if (!options.captureResultados) {
       return false;
     }
-    const degradedUntil = this.httpResultsDegradedUntilByEventId.get(eventId) ?? 0;
-    return degradedUntil > Date.now();
+    return true;
   }
 
   private markHttpResultsDegraded(eventId: number): void {
@@ -273,6 +279,8 @@ export class CaptureService {
             captureGrupos: false,
             captureResultados: true,
             fetchEliminatoria: options.fetchEliminatoria,
+            eventStartDate: options.eventStartDate,
+            ratingMatchFormat: options.ratingMatchFormat,
           },
           erroredResultCategoryIds,
         );
@@ -305,19 +313,7 @@ export class CaptureService {
           mergedPayloads.push(...retryPayloads);
         }
 
-        if (options.fetchEliminatoria) {
-          const existingElimByCategory = new Map<string, EliminationPayload>();
-          for (const payload of mergedEliminationPayloads) {
-            existingElimByCategory.set(payload.categoryId, payload);
-          }
-          for (const retryElimination of categoryRetry.eliminationPayloads) {
-            if (!erroredResultCategoryIds.has(retryElimination.categoryId)) {
-              continue;
-            }
-            existingElimByCategory.set(retryElimination.categoryId, retryElimination);
-          }
-          mergedEliminationPayloads = [...existingElimByCategory.values()];
-        }
+        mergedEliminationPayloads = [];
       }
 
       const categorizedPayloads = mergedPayloads.filter((payload) => Boolean(payload.categoryId)).length;
@@ -327,6 +323,11 @@ export class CaptureService {
       });
       const resultadosCount = previewDataset.matches.filter((match) => match.phase === "RESULTADOS").length;
       const matchesWithSets = previewDataset.matches.filter((match) => (match.sets?.length ?? 0) > 0).length;
+      if (options.captureInscricoes) {
+        diagnosticWarnings.push(
+          ...this.buildRegistrationCoverageWarnings(previewDataset.registrations, httpCapture.categoriesDiscovered),
+        );
+      }
 
       if (requiresResultValidation && resultadosCount > 0) {
         const byCategory = new Map<
@@ -442,16 +443,47 @@ export class CaptureService {
     const page = await context.newPage();
 
     const warnings: string[] = [];
-    const responses: string[] = [];
+    const responses: Array<{
+      rawBody: string;
+      fallbackCategoryId: string | null;
+      requestCategoryId: string | null;
+      tabLabel: string | null;
+    }> = [];
     const seen = new Set<string>();
+    const requestContext = new WeakMap<
+      object,
+      { fallbackCategoryId: string | null; requestCategoryId: string | null; tabLabel: string | null }
+    >();
     const tabsVisited = new Set<string>();
     const categoriesVisited = new Set<string>();
     const eliminationPayloads: EliminationPayload[] = [];
     let paginationRequests = 0;
+    let activeCategoryId: string | null = null;
+    let activeTabLabel: string | null = null;
+
+    page.on("request", (request) => {
+      try {
+        if (request.method() !== "POST") {
+          return;
+        }
+        if (!request.url().includes(`/IUI/App/Evento?EVE_Evento_ID=${eventId}`)) {
+          return;
+        }
+        const requestCategoryId = this.extractCategoryIdFromDxRequest(request.postData());
+        requestContext.set(request as unknown as object, {
+          fallbackCategoryId: activeCategoryId,
+          requestCategoryId,
+          tabLabel: activeTabLabel,
+        });
+      } catch {
+        // Melhor esforco para associar request e response.
+      }
+    });
 
     page.on("response", async (response) => {
       try {
-        if (response.request().method() !== "POST") {
+        const request = response.request();
+        if (request.method() !== "POST") {
           return;
         }
 
@@ -464,9 +496,22 @@ export class CaptureService {
           return;
         }
 
-        if (!seen.has(text)) {
-          seen.add(text);
-          responses.push(text);
+        const requestCtx = requestContext.get(request as unknown as object);
+        const tabLabel = requestCtx?.tabLabel ?? null;
+        if (!tabLabel) {
+          return;
+        }
+        const requestCategoryId = compactWhitespace(requestCtx?.requestCategoryId ?? "");
+        const fallbackCategoryId = compactWhitespace(requestCtx?.fallbackCategoryId ?? "");
+        const dedupeKey = `${requestCategoryId || fallbackCategoryId || "sem_categoria"}|${tabLabel}|${text}`;
+        if (!seen.has(dedupeKey)) {
+          seen.add(dedupeKey);
+          responses.push({
+            rawBody: text,
+            fallbackCategoryId: fallbackCategoryId || null,
+            requestCategoryId: requestCategoryId || null,
+            tabLabel,
+          });
         }
       } catch (error) {
         const message = String(error ?? "");
@@ -479,16 +524,33 @@ export class CaptureService {
 
     try {
       const eventUrl = config.scraperEventUrl.replace("{EVENT_ID}", String(eventId));
-      await page.goto(eventUrl, { waitUntil: "networkidle", timeout: 120000 });
-      await page.waitForTimeout(1500);
+      let navigated = false;
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        const waitUntil = attempt === 1 ? "domcontentloaded" : "networkidle";
+        const timeout = attempt === 1 ? 90000 : 120000;
+        try {
+          await page.goto(eventUrl, { waitUntil, timeout });
+          await page.waitForTimeout(1500);
+          navigated = true;
+          break;
+        } catch (error) {
+          warnings.push(
+            `Falha ao abrir pagina do evento (tentativa ${attempt}/2, waitUntil=${waitUntil}): ${String(error ?? "")}`,
+          );
+        }
+      }
+      if (!navigated) {
+        throw new Error(`Nao foi possivel abrir a pagina do evento ${eventId} no browser fallback.`);
+      }
 
       const ignoredCategoryIds = new Set(config.scraperExcludedCategoryIds);
-      const discovered = await this.discoverCategories(page, ignoredCategoryIds);
+      const discovered = await this.discoverCategories(page, ignoredCategoryIds, options);
       const validCategories = discovered.filter(
         (item) => item.valid && (!onlyCategoryIds || onlyCategoryIds.has(item.categoryId)),
       );
 
       for (const category of validCategories) {
+        activeCategoryId = category.categoryId;
         const categoryContext: CategoryContext = {
           categoryId: category.categoryId,
           categoryName: category.categoryName,
@@ -511,35 +573,96 @@ export class CaptureService {
           }
 
           tabsVisited.add(tab.tabLabel);
+          activeTabLabel = tab.tabLabel;
           const loaded = await this.loadTab(page, tab.tabName);
           if (!loaded) {
             warnings.push(
               `Aba não carregada para categoria ${category.categoryId}: ${tab.tabLabel}`,
             );
+            activeTabLabel = null;
             continue;
           }
 
           const requested = await this.paginateCardView(page, tab.controlVar);
           paginationRequests += requested;
+          activeTabLabel = null;
         }
 
-        if (options.fetchEliminatoria) {
-          tabsVisited.add("ELIMINATORIA");
-          const elimination = await this.fetchElimination(context, eventId, category);
-          if (elimination) {
-            eliminationPayloads.push(elimination);
-          }
-        }
+        activeCategoryId = null;
+        activeTabLabel = null;
       }
 
       const payloads: DxPayload[] = [];
-      for (const rawBody of responses) {
-        payloads.push(...extractDxPayloads(rawBody));
+      const discoveredCategoryIds = new Set(discovered.map((item) => item.categoryId));
+      const mismatchedCategoryIds = new Map<string, number>();
+      for (const responseEntry of responses) {
+        const { rawBody, fallbackCategoryId, requestCategoryId, tabLabel } = responseEntry;
+        const extracted = extractDxPayloads(rawBody)
+          .map((payload) => {
+          const payloadCategoryId = compactWhitespace(payload.categoryId ?? "");
+          const requestCategoryIdNorm = compactWhitespace(requestCategoryId ?? "");
+          const fallbackCategoryIdNorm = compactWhitespace(fallbackCategoryId ?? "");
+
+          // Em RESULTADOS, so descarta quando nao ha nenhum contexto de categoria.
+          // Isso preserva volume de jogos sem aceitar payload totalmente "solto".
+          if (payload.tab === "RESULTADOS" && !requestCategoryIdNorm && !fallbackCategoryIdNorm) {
+            return null;
+          }
+
+          const payloadIsValid =
+            Boolean(payloadCategoryId) &&
+            discoveredCategoryIds.has(payloadCategoryId) &&
+            !ignoredCategoryIds.has(payloadCategoryId);
+          const requestIsValid =
+            Boolean(requestCategoryIdNorm) &&
+            discoveredCategoryIds.has(requestCategoryIdNorm) &&
+            !ignoredCategoryIds.has(requestCategoryIdNorm);
+          const fallbackIsValid =
+            Boolean(fallbackCategoryIdNorm) &&
+            discoveredCategoryIds.has(fallbackCategoryIdNorm) &&
+            !ignoredCategoryIds.has(fallbackCategoryIdNorm);
+
+          // Browser flow: contexto da requisicao (categoria selecionada) e mais confiavel
+          // que categoryId reportado dentro do payload DX, que pode vir defasado.
+          let chosenCategoryId = "";
+          if (requestIsValid) {
+            chosenCategoryId = requestCategoryIdNorm;
+          } else if (fallbackIsValid) {
+            chosenCategoryId = fallbackCategoryIdNorm;
+          } else if (payloadIsValid) {
+            chosenCategoryId = payloadCategoryId;
+          }
+
+          if (payloadCategoryId && chosenCategoryId && payloadCategoryId !== chosenCategoryId) {
+            const mismatchKey = `${tabLabel ?? payload.tab}:${payloadCategoryId}->${chosenCategoryId}`;
+            mismatchedCategoryIds.set(mismatchKey, (mismatchedCategoryIds.get(mismatchKey) ?? 0) + 1);
+          }
+
+          if (!chosenCategoryId) {
+            return payload;
+          }
+          return {
+            ...payload,
+            categoryId: chosenCategoryId,
+          };
+          })
+          .filter((payload): payload is DxPayload => Boolean(payload));
+        payloads.push(...extracted);
+      }
+
+      if (mismatchedCategoryIds.size > 0) {
+        const samples = [...mismatchedCategoryIds.entries()]
+          .slice(0, 5)
+          .map(([key, count]) => `${key} (${count}x)`)
+          .join(", ");
+        warnings.push(
+          `Capture browser corrigiu categoryId inconsistente em ${mismatchedCategoryIds.size} combinacao(oes): ${samples}.`,
+        );
       }
 
       return {
         payloads,
-        rawBodies: responses,
+        rawBodies: responses.map((entry) => entry.rawBody),
         eliminationPayloads,
         source: "live-browser",
         warnings,
@@ -617,11 +740,116 @@ export class CaptureService {
     return diagnostics;
   }
 
+  private extractCategoryIdFromDxRequest(postData: string | null | undefined): string | null {
+    const raw = String(postData ?? "");
+    if (!raw) {
+      return null;
+    }
+
+    const decoded = (() => {
+      try {
+        return decodeURIComponent(raw);
+      } catch {
+        return raw;
+      }
+    })();
+
+    const candidates = [raw, decoded];
+    for (const candidate of candidates) {
+      const params = new URLSearchParams(candidate);
+      const callbackParam = params.get("__CALLBACKPARAM") ?? "";
+      const payload = `${candidate}\n${callbackParam}`;
+
+      const customCallbackMatch = payload.match(/CUSTOMCALLBACK3\|(\d+)\s*;/i);
+      if (customCallbackMatch?.[1]) {
+        return customCallbackMatch[1];
+      }
+
+      const categorySelectMatch = payload.match(/(?:^|[|;:,])c0:(\d+)(?:[|;:,]|$)/i);
+      if (categorySelectMatch?.[1]) {
+        return categorySelectMatch[1];
+      }
+    }
+
+    return null;
+  }
+
+  private buildRegistrationCoverageWarnings(
+    registrations: Array<{ categoryId?: string | null }>,
+    categoriesDiscovered: DiscoveredCategory[],
+  ): string[] {
+    const validCategoriesWithCounters = categoriesDiscovered.filter(
+      (category) => category.valid && Number(category.totalListedCount ?? 0) > 0,
+    );
+    if (validCategoriesWithCounters.length === 0) {
+      return [];
+    }
+
+    const expectedTotal = validCategoriesWithCounters.reduce(
+      (sum, category) => sum + Number(category.totalListedCount ?? 0),
+      0,
+    );
+
+    const actualByCategoryId = new Map<string, number>();
+    for (const registration of registrations) {
+      const categoryId = compactWhitespace(registration.categoryId ?? "");
+      if (!categoryId) {
+        continue;
+      }
+      actualByCategoryId.set(categoryId, (actualByCategoryId.get(categoryId) ?? 0) + 1);
+    }
+
+    const actualTotal = validCategoriesWithCounters.reduce(
+      (sum, category) => sum + (actualByCategoryId.get(category.categoryId) ?? 0),
+      0,
+    );
+
+    const warnings: string[] = [];
+    const ratio = expectedTotal > 0 ? actualTotal / expectedTotal : 1;
+    warnings.push(
+      `INSCRICOES reconciliacao: esperado_combo=${expectedTotal}, extraido_parser=${actualTotal}, cobertura=${(ratio * 100).toFixed(1)}%.`,
+    );
+
+    if (ratio >= 0.97) {
+      return warnings;
+    }
+
+    const largestGaps = validCategoriesWithCounters
+      .map((category) => {
+        const expected = Number(category.totalListedCount ?? 0);
+        const actual = actualByCategoryId.get(category.categoryId) ?? 0;
+        return {
+          categoryId: category.categoryId,
+          categoryName: category.categoryName,
+          expected,
+          actual,
+          gap: expected - actual,
+        };
+      })
+      .filter((entry) => entry.gap > 0)
+      .sort((a, b) => b.gap - a.gap)
+      .slice(0, 10);
+
+    if (largestGaps.length > 0) {
+      warnings.push(
+        `INSCRICOES gaps top10: ${largestGaps
+          .map(
+            (entry) =>
+              `${entry.categoryName}(${entry.categoryId}) esperado=${entry.expected} extraido=${entry.actual} gap=${entry.gap}`,
+          )
+          .join(" | ")}`,
+      );
+    }
+
+    return warnings;
+  }
+
   private async discoverCategories(
     page: import("playwright").Page,
     ignoredCategoryIds: Set<string>,
+    options: CaptureOptionsResolved,
   ): Promise<DiscoveredCategory[]> {
-    return page.evaluate((ignored) => {
+    const discoveredRaw = await page.evaluate((ignored) => {
       const combo = (window as any).cmbCategoria;
       if (!combo || typeof combo.GetItemCount !== "function" || typeof combo.GetItem !== "function") {
         return [];
@@ -639,7 +867,22 @@ export class CaptureService {
 
         const categoryId = String(item.value ?? "").trim();
         const rawText = String(item.text ?? "").replace(/\s+/g, " ").trim();
-        const categoryName = rawText.replace(/\s+\d+\s+inscrito\(s\).*$/i, "").trim();
+        const preMatches = [...rawText.matchAll(/(\d+)\s+pr[^\s]*inscrito(?:\(s\)|s)?/gi)];
+        const registeredMatches = [...rawText.matchAll(/(\d+)\s+inscrito(?:\(s\)|s)?/gi)];
+        const preRegisteredCount =
+          preMatches.reduce((sum, match) => sum + Number(match[1] ?? 0), 0) || null;
+        const registeredCount =
+          registeredMatches.reduce((sum, match) => sum + Number(match[1] ?? 0), 0) || null;
+        const totalListedCount =
+          (registeredCount ?? 0) + (preRegisteredCount ?? 0) > 0
+            ? (registeredCount ?? 0) + (preRegisteredCount ?? 0)
+            : null;
+        const categoryName = rawText
+          .replace(
+            /\s+\d+\s+(?:pr[eé][-\s]?inscrito(?:\(s\)|s)?|inscrito(?:\(s\)|s)?)(?:[\s\S]*)$/i,
+            "",
+          )
+          .trim();
         if (!categoryId || !categoryName || seen.has(categoryId)) {
           continue;
         }
@@ -649,11 +892,27 @@ export class CaptureService {
           categoryId,
           categoryName,
           valid: !ignoredSet.has(categoryId),
+          registeredCount,
+          preRegisteredCount,
+          totalListedCount,
+          officialMatchesCount: null,
         });
       }
 
       return values;
     }, [...ignoredCategoryIds]);
+
+    return discoveredRaw.map((category) => {
+      const officialMatchesCount = computeOfficialCategoryMatchesCount(category.registeredCount, {
+        categoryName: category.categoryName,
+        eventStartDate: options.eventStartDate,
+        ratingMatchFormat: options.ratingMatchFormat,
+      });
+      return {
+        ...category,
+        officialMatchesCount: officialMatchesCount > 0 ? officialMatchesCount : null,
+      };
+    });
   }
 
   private async selectCategory(page: import("playwright").Page, context: CategoryContext): Promise<boolean> {
@@ -803,32 +1062,5 @@ export class CaptureService {
     }
 
     return requests;
-  }
-
-  private async fetchElimination(
-    context: import("playwright").BrowserContext,
-    eventId: number,
-    category: DiscoveredCategory,
-  ): Promise<EliminationPayload | null> {
-    const url = `https://app.cbtm.org.br/api/GameResult/${eventId}/${category.categoryId}`;
-    try {
-      const response = await context.request.get(url);
-      if (!response.ok()) {
-        return null;
-      }
-
-      const rawBody = compactWhitespace(await response.text());
-      if (!rawBody || rawBody === "\"\"" || rawBody === "null") {
-        return null;
-      }
-
-      return {
-        categoryId: category.categoryId,
-        categoryName: categoryDisplayName(category.categoryName),
-        rawBody,
-      };
-    } catch {
-      return null;
-    }
   }
 }

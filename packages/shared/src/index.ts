@@ -167,6 +167,84 @@ export interface AthletePointPerformance {
   matchesConsidered: number;
 }
 
+export interface OfficialCategoryMatchesOptions {
+  categoryName?: string | null;
+  eventStartDate?: Date | string | null;
+  ratingMatchFormat?: "RR_K1" | "K1" | null;
+}
+
+const RATING_SIMPLE_ELIMINATION_EFFECTIVE_DATE = "2026-02-24";
+
+function isRatingCategoryName(categoryName: string | null | undefined): boolean {
+  const normalized = normalizeText(String(categoryName ?? ""))
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+  return /^R[A-Z]/.test(normalized);
+}
+
+function isOnOrAfterEffectiveDate(dateValue: Date | string | null | undefined): boolean {
+  if (!dateValue) {
+    return false;
+  }
+  const date = dateValue instanceof Date ? dateValue : new Date(String(dateValue));
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  const isoDate = `${yyyy}-${mm}-${dd}`;
+  return isoDate >= RATING_SIMPLE_ELIMINATION_EFFECTIVE_DATE;
+}
+
+export function computeOfficialCategoryMatchesCount(
+  registeredCount: number | null | undefined,
+  options?: OfficialCategoryMatchesOptions,
+): number {
+  const n = Number(registeredCount ?? 0);
+  if (!Number.isFinite(n) || n <= 1) {
+    return 0;
+  }
+
+  if (isRatingCategoryName(options?.categoryName)) {
+    if (options?.ratingMatchFormat === "K1") {
+      return n - 1;
+    }
+    if (
+      options?.ratingMatchFormat !== "RR_K1" &&
+      isOnOrAfterEffectiveDate(options?.eventStartDate)
+    ) {
+      return n - 1;
+    }
+  }
+
+  if (n <= 5) {
+    return (n * (n - 1)) / 2;
+  }
+
+  // Acima de 5 atletas: grupos de 3, com excedentes distribuídos nos dois últimos grupos (até 4 atletas).
+  // Classificam 2 por grupo e a fase final é eliminatória simples.
+  const groupCount = Math.floor(n / 3);
+  if (groupCount <= 0) {
+    return 0;
+  }
+
+  const remainder = n % 3;
+  const groupSizes = Array.from({ length: groupCount }, () => 3);
+  for (let index = 0; index < remainder; index += 1) {
+    const target = groupCount - 1 - index;
+    if (target >= 0) {
+      groupSizes[target] += 1;
+    }
+  }
+
+  const groupMatches = groupSizes.reduce((sum, size) => sum + (size * (size - 1)) / 2, 0);
+  const qualifiers = groupCount * 2;
+  const eliminationMatches = qualifiers > 0 ? qualifiers - 1 : 0;
+  return groupMatches + eliminationMatches;
+}
+
 function tokenizeNormalizedName(value: string): string[] {
   return normalizeText(value)
     .replace(/[^a-z0-9]+/g, " ")
@@ -645,6 +723,27 @@ export function calculateAthletePointPerformance(
   matches: MatchPerformanceInput[],
   athlete: AthletePerformanceInput,
 ): AthletePointPerformance {
+  const isWalkoverPerformanceMatch = (match: MatchPerformanceInput): boolean => {
+    const sets = Array.isArray(match.sets) ? match.sets : [];
+    if (sets.length !== 3) {
+      return false;
+    }
+
+    if (sets.every((set) => Number(set?.p1) === 0 && Number(set?.p2) === 0)) {
+      return true;
+    }
+
+    if (sets.every((set) => Number(set?.p1) === 11 && Number(set?.p2) === 0)) {
+      return true;
+    }
+
+    if (sets.every((set) => Number(set?.p1) === 0 && Number(set?.p2) === 11)) {
+      return true;
+    }
+
+    return false;
+  };
+
   let pointsWon = 0;
   let pointsPlayed = 0;
   let setsUsed = 0;
@@ -658,6 +757,11 @@ export function calculateAthletePointPerformance(
     }
 
     matchesConsidered += 1;
+
+    if (isWalkoverPerformanceMatch(match)) {
+      ignoredSets += (match.sets ?? []).length;
+      continue;
+    }
 
     for (const set of match.sets ?? []) {
       const p1 = Number(set?.p1);

@@ -55,9 +55,6 @@ export function computeEventRegistrationPairRemovals(input: {
   const removals: RegistrationCategoryPair[] = [];
 
   for (const pair of input.currentPairs) {
-    if (pair.registrationStatus === null) {
-      continue;
-    }
     if (protectedIds.has(pair.categoryId)) {
       continue;
     }

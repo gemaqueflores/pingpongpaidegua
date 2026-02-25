@@ -5,6 +5,9 @@ const ADMIN_TOKEN_KEY = "cbtm_admin_token";
 const ADMIN_ROLE_KEY = "cbtm_admin_role";
 const LEGACY_TOKEN_KEY = "cbtm_token";
 const LEGACY_ROLE_KEY = "cbtm_role";
+const DEFAULT_FETCH_TIMEOUT_MS = 15000;
+const DEFAULT_FETCH_RETRIES = 2;
+const DEFAULT_FETCH_BACKOFF_MS = 500;
 
 export type AuthRole = "ADMIN";
 
@@ -118,4 +121,99 @@ export async function handleResponse(response: Response) {
   }
 
   return response.json();
+}
+
+export interface FetchRecoveryOptions {
+  timeoutMs?: number;
+  retries?: number;
+  retryDelayMs?: number;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function isTransientStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function isNetworkError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const message = "message" in error ? String(error.message ?? "") : "";
+  const name = "name" in error ? String(error.name ?? "") : "";
+  if (name === "AbortError") {
+    return true;
+  }
+
+  return message.toLowerCase().includes("failed to fetch") || message.toLowerCase().includes("network");
+}
+
+function isSafeMethod(method: string | undefined): boolean {
+  const normalized = String(method ?? "GET").trim().toUpperCase();
+  return normalized === "GET" || normalized === "HEAD" || normalized === "OPTIONS";
+}
+
+export async function fetchWithRecovery(
+  input: string | URL,
+  init?: RequestInit,
+  options?: FetchRecoveryOptions,
+): Promise<Response> {
+  const timeoutMs = Math.max(1000, options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS);
+  const retries = Math.max(0, options?.retries ?? DEFAULT_FETCH_RETRIES);
+  const retryDelayMs = Math.max(100, options?.retryDelayMs ?? DEFAULT_FETCH_BACKOFF_MS);
+  const method = String(init?.method ?? "GET").trim().toUpperCase();
+  const retryUnsafeRequests = !isSafeMethod(method);
+
+  let lastError: unknown = null;
+  let lastResponse: Response | null = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const abortController = new AbortController();
+    const timer = setTimeout(() => {
+      abortController.abort();
+    }, timeoutMs);
+
+    try {
+      const response = await fetch(input, {
+        ...init,
+        signal: abortController.signal,
+      });
+      clearTimeout(timer);
+
+      if (!response.ok && isTransientStatus(response.status) && attempt < retries && !retryUnsafeRequests) {
+        await sleep(retryDelayMs * (attempt + 1));
+        continue;
+      }
+
+      if (!response.ok && isTransientStatus(response.status) && attempt < retries && retryUnsafeRequests) {
+        lastResponse = response;
+        break;
+      }
+
+      return response;
+    } catch (error) {
+      clearTimeout(timer);
+      lastError = error;
+      if (!isNetworkError(error)) {
+        throw error;
+      }
+
+      if (attempt >= retries || retryUnsafeRequests) {
+        break;
+      }
+
+      await sleep(retryDelayMs * (attempt + 1));
+    }
+  }
+
+  if (lastResponse) {
+    return lastResponse;
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Falha de conexao com a API.");
 }

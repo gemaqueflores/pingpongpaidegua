@@ -44,6 +44,7 @@ type ParsedMatch = {
   p1Key: string;
   p2Key: string;
   winnerKey: string | null;
+  walkover: boolean;
   setsP1: number;
   setsP2: number;
   pointsP1: number;
@@ -151,6 +152,71 @@ function inferSetsResult(match: CategoryAnalyticsMatch): { p1Sets: number; p2Set
   return { p1Sets, p2Sets };
 }
 
+export function isWalkoverMatch(match: CategoryAnalyticsMatch): boolean {
+  const isDoubleWalkover =
+    match.sets.length > 0 &&
+    match.sets.every((set) => set.p1 === 0 && set.p2 === 0) &&
+    ((match.setsResult?.p1Sets ?? 0) === 0 && (match.setsResult?.p2Sets ?? 0) === 0);
+  if (isDoubleWalkover) {
+    return true;
+  }
+
+  const setsResult = inferSetsResult(match);
+  if (!setsResult) {
+    return false;
+  }
+
+  const isStraightWin =
+    (setsResult.p1Sets === 3 && setsResult.p2Sets === 0) ||
+    (setsResult.p1Sets === 0 && setsResult.p2Sets === 3);
+  if (!isStraightWin) {
+    return false;
+  }
+
+  if (match.winnerIndex !== 0 && match.winnerIndex !== 1) {
+    return false;
+  }
+
+  if (match.sets.length !== 3) {
+    return false;
+  }
+
+  const winnerIsP1 = match.winnerIndex === 0;
+  return match.sets.every((set) =>
+    winnerIsP1 ? set.p1 === 11 && set.p2 === 0 : set.p2 === 11 && set.p1 === 0,
+  );
+}
+
+export function collectWalkoverLoserAthleteIds(matches: CategoryAnalyticsMatch[]): Set<number> {
+  const loserIds = new Set<number>();
+  for (const match of matches) {
+    if (!isWalkoverMatch(match)) {
+      continue;
+    }
+
+    const isDoubleWalkover =
+      match.sets.length > 0 &&
+      match.sets.every((set) => set.p1 === 0 && set.p2 === 0) &&
+      ((match.setsResult?.p1Sets ?? 0) === 0 && (match.setsResult?.p2Sets ?? 0) === 0);
+    if (isDoubleWalkover) {
+      for (const player of match.players) {
+        const athleteId = player?.athleteId ?? null;
+        if (typeof athleteId === "number" && athleteId > 0) {
+          loserIds.add(athleteId);
+        }
+      }
+      continue;
+    }
+
+    const loserIndex = match.winnerIndex === 0 ? 1 : 0;
+    const loserId = match.players[loserIndex]?.athleteId ?? null;
+    if (typeof loserId === "number" && loserId > 0) {
+      loserIds.add(loserId);
+    }
+  }
+  return loserIds;
+}
+
 function toStandingKey(player: CategoryAnalyticsPlayer | null, fallbackIndex: number): string {
   if (player?.athleteId) {
     return `id:${player.athleteId}`;
@@ -172,6 +238,7 @@ function toParsedMatch(match: CategoryAnalyticsMatch): ParsedMatch {
   const p1Key = toStandingKey(match.players[0], 0);
   const p2Key = toStandingKey(match.players[1], 1);
   const winnerKey = match.winnerIndex === 0 ? p1Key : match.winnerIndex === 1 ? p2Key : null;
+  const walkover = isWalkoverMatch(match);
 
   const setsResult = inferSetsResult(match);
   const setsP1 = setsResult?.p1Sets ?? 0;
@@ -196,6 +263,7 @@ function toParsedMatch(match: CategoryAnalyticsMatch): ParsedMatch {
     p1Key,
     p2Key,
     winnerKey,
+    walkover,
     setsP1,
     setsP2,
     pointsP1,
@@ -238,15 +306,18 @@ function buildStatLine(keys: string[], parsedMatches: ParsedMatch[]): Map<string
       p1.losses += 1;
     }
 
-    p1.setsWon += match.setsP1;
-    p1.setsLost += match.setsP2;
-    p2.setsWon += match.setsP2;
-    p2.setsLost += match.setsP1;
+    // WO nao contabiliza sets/pontos como disputados na carreira.
+    if (!match.walkover) {
+      p1.setsWon += match.setsP1;
+      p1.setsLost += match.setsP2;
+      p2.setsWon += match.setsP2;
+      p2.setsLost += match.setsP1;
 
-    p1.pointsWon += match.pointsP1;
-    p1.pointsLost += match.pointsP2;
-    p2.pointsWon += match.pointsP2;
-    p2.pointsLost += match.pointsP1;
+      p1.pointsWon += match.pointsP1;
+      p1.pointsLost += match.pointsP2;
+      p2.pointsWon += match.pointsP2;
+      p2.pointsLost += match.pointsP1;
+    }
   }
 
   return stats;
@@ -481,11 +552,10 @@ function computeEliminationClassification(
 
   for (const match of matches) {
     const stage = toRoundStage(match.round);
-    const phase = String(match.phase ?? "").toUpperCase();
     if (isGroupRoundMatch(match)) {
       hasGroupMatch = true;
     }
-    if (stage === "outro" && phase !== "ELIMINATORIA") {
+    if (stage === "outro") {
       continue;
     }
     hasEliminationRound = true;
@@ -632,7 +702,6 @@ export function computeCategoryClassificationSummaries(
         if (groupMatch) {
           groupRounds.add(extractGroupKeyFromRound(match.round));
         } else {
-          const phase = String(match.phase ?? "").toUpperCase();
           const roundStage = toRoundStage(match.round);
           const hasRealPlayers = Boolean(
             match.players[0]?.name ||
@@ -640,7 +709,7 @@ export function computeCategoryClassificationSummaries(
               match.players[1]?.name ||
               match.players[1]?.athleteId,
           );
-          if ((phase === "ELIMINATORIA" || roundStage !== "outro") && hasRealPlayers && match.winnerIndex !== null) {
+          if (roundStage !== "outro" && hasRealPlayers && match.winnerIndex !== null) {
             hasDecisiveEliminationData = true;
           }
         }
@@ -651,7 +720,7 @@ export function computeCategoryClassificationSummaries(
         hasGroupData &&
         ((groupRounds.size === 1 && !hasDecisiveEliminationData) ||
           (participants.size > 0 && participants.size <= 5));
-      if (!isSingleGroup && hasPendingMatches) {
+      if (!isSingleGroup && hasPendingMatches && !hasDecisiveEliminationData) {
         return {
           categoryId,
           categoryName: first.categoryName,

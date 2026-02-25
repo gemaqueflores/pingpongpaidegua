@@ -28,3 +28,6 @@ raw/
 _archive/
 
 .vercel
+
+# Local temporary audit outputs
+tmp_eff*.json

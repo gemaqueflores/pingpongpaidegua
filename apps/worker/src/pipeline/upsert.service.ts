@@ -13,6 +13,7 @@ import {
   resolveAthleteCandidate,
 } from "@cbtm/shared";
 import { AliasSource, Athlete, EventLevel, MatchPhase, Prisma, RegistrationStatus } from "@prisma/client";
+import { config } from "../config";
 import { prisma } from "../prisma";
 import { inferAthleteFederationFromClub } from "./athlete-federation";
 import { mergeMatchesAcrossSources } from "./match-merge";
@@ -102,12 +103,21 @@ interface ResolveMatchAthleteInput {
   inserted: Record<string, number>;
   updated: Record<string, number>;
   warnings: string[];
+  clubsByNormalized: Map<string, CachedClub>;
   athletesById: Map<number, CachedAthlete>;
   aliasToAthleteIds: Map<string, Set<number>>;
   conflictsByKey: Map<string, CachedConflict>;
   categoryAthleteIds: Set<number> | null;
   categoryAliasHistoryCounts: Map<number, number> | null;
+  autoCreateWarningAthlete: boolean;
+  globalAliasHintsByAlias: Map<string, string[]>;
   participantRefType?: "REAL" | "GROUP_SLOT" | "WINNER_SLOT";
+}
+
+interface CategoryIdentityRow {
+  id: number;
+  normalizedName: string;
+  cbtmCategoryId: string | null;
 }
 
 interface ObservedRegistrationCategoryStats {
@@ -223,6 +233,44 @@ function toReducedAliasNormalized(nameDisplay: string): string {
   return normalizeText(`${tokens[0]} ${tokens[tokens.length - 1]}`);
 }
 
+function mergeAthleteIdSets(sets: Array<Set<number> | undefined | null>): Set<number> {
+  const merged = new Set<number>();
+  for (const set of sets) {
+    if (!set || set.size === 0) {
+      continue;
+    }
+    for (const athleteId of set) {
+      merged.add(athleteId);
+    }
+  }
+  return merged;
+}
+
+function tokenizeReducedName(nameNormalized: string): string[] {
+  return normalizeAthleteName(nameNormalized)
+    .split(" ")
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function athleteNameContainsAllReducedTokens(
+  shortNameNormalized: string,
+  athleteNameDisplay: string,
+): boolean {
+  const shortTokens = tokenizeReducedName(shortNameNormalized);
+  if (shortTokens.length === 0) {
+    return false;
+  }
+  const athleteTokens = new Set(
+    normalizeAthleteName(athleteNameDisplay)
+      .split(" ")
+      .map((token) => token.trim())
+      .filter(Boolean),
+  );
+
+  return shortTokens.every((token) => athleteTokens.has(token));
+}
+
 function isBracketReferenceToken(value: string): boolean {
   const normalized = compactWhitespace(value ?? "");
   if (!normalized) {
@@ -243,11 +291,57 @@ interface DedupedMatchesResult {
   droppedMatchKeys: string[];
 }
 
+function extractCrossCategoryHash(matchKey: string): string {
+  const normalized = String(matchKey ?? "").trim();
+  const scoped = normalized.match(/^cat:[^|]+\|(.+)$/);
+  return scoped?.[1] ?? normalized;
+}
+
 function getMatchCategoryKey(match: ParsedMatch): string {
   if (match.categoryId) {
     return `id:${match.categoryId}`;
   }
   return `name:${match.categoryNormalizedName}`;
+}
+
+function withCategoryScopedMatchKey(match: ParsedMatch): ParsedMatch {
+  const categoryScope = match.categoryId
+    ? `cat:id:${String(match.categoryId).trim()}`
+    : `cat:name:${normalizeText(match.categoryNormalizedName) || "desconhecida"}`;
+  const currentKey = String(match.matchKey ?? "").trim();
+  return {
+    ...match,
+    matchKey: currentKey.startsWith(`${categoryScope}|`) ? currentKey : `${categoryScope}|${currentKey}`,
+  };
+}
+
+function getCategoryAthletePool(input: {
+  category: CachedCategory;
+  athleteIdsByCategoryId: Map<number, Set<number>>;
+  athleteIdsByCategoryCbtmId: Map<string, Set<number>>;
+  athleteIdsByCategoryNormalizedName: Map<string, Set<number>>;
+}): Set<number> | null {
+  const byId = input.athleteIdsByCategoryId.get(input.category.id);
+  if (byId && byId.size > 0) {
+    return byId;
+  }
+
+  const cbtmKey = String(input.category.cbtmCategoryId ?? "").trim();
+  const byCbtmId = cbtmKey ? input.athleteIdsByCategoryCbtmId.get(cbtmKey) : undefined;
+  if (byCbtmId && byCbtmId.size > 0) {
+    return byCbtmId;
+  }
+
+  const normalizedKey = normalizeText(input.category.normalizedName);
+  const byNormalized = normalizedKey
+    ? input.athleteIdsByCategoryNormalizedName.get(normalizedKey)
+    : undefined;
+  if (byNormalized && byNormalized.size > 0) {
+    return byNormalized;
+  }
+
+  const merged = mergeAthleteIdSets([byId, byCbtmId, byNormalized]);
+  return merged.size > 0 ? merged : null;
 }
 
 function getMatchParticipantsKey(match: ParsedMatch): string {
@@ -404,9 +498,6 @@ function getRoundHierarchyOrder(round: string | null | undefined, phase: ParsedM
 
   if (phase === "GRUPOS") {
     return 10;
-  }
-  if (phase === "ELIMINATORIA") {
-    return 80;
   }
   if (phase === "RESULTADOS") {
     return 90;
@@ -694,6 +785,8 @@ function deduplicateParsedMatches(matches: ParsedMatch[]): DedupedMatchesResult 
     if (!timestamp) {
       return null;
     }
+    const roundKey = normalizeText(match.round) || "sem-rodada";
+    const gameId = extractGameId(match) ?? "sem-jogo";
 
     return [
       getMatchCategoryKey(match),
@@ -701,6 +794,8 @@ function deduplicateParsedMatches(matches: ParsedMatch[]): DedupedMatchesResult 
       timestamp,
       match.tableNumber ?? "sem-mesa",
       normalizeText(match.scoreRaw),
+      `round:${roundKey}`,
+      `game:${gameId}`,
     ].join("|");
   });
 
@@ -720,6 +815,135 @@ export class UpsertService {
   private static readonly REGISTRATION_SYNC_MIN_CATEGORY_COVERAGE = 0.85;
   private static readonly REGISTRATION_SYNC_PREVIOUS_RUN_LOOKBACK = 30;
 
+  private deduplicateCrossCategoryHashMatches(input: {
+    matches: ParsedMatch[];
+    categoriesByCbtmId: Map<string, CachedCategory>;
+    athleteIdsByCategoryCbtmId: Map<string, Set<number>>;
+    aliasToAthleteIds: Map<string, Set<number>>;
+    athletesById: Map<number, CachedAthlete>;
+  }): { matches: ParsedMatch[]; removed: number; droppedMatchKeys: string[]; warnings: string[] } {
+    const groups = new Map<string, ParsedMatch[]>();
+    for (const match of input.matches) {
+      const key = extractCrossCategoryHash(match.matchKey);
+      const bucket = groups.get(key) ?? [];
+      bucket.push(match);
+      groups.set(key, bucket);
+    }
+
+    const selected: ParsedMatch[] = [];
+    const dropped = new Set<string>();
+    let crossCategoryGroups = 0;
+
+    const scoreMatchForCategoryPool = (match: ParsedMatch): number => {
+      const cbtmCategoryId = compactWhitespace(match.categoryId ?? "");
+      if (!cbtmCategoryId) {
+        return 0;
+      }
+      const category = input.categoriesByCbtmId.get(cbtmCategoryId);
+      if (!category) {
+        return 0;
+      }
+      const categoryPool = input.athleteIdsByCategoryCbtmId.get(String(category.cbtmCategoryId ?? "").trim());
+      if (!categoryPool || categoryPool.size === 0) {
+        return 0;
+      }
+
+      const names = [
+        match.athleteANormalizedName || normalizeText(match.athleteAName),
+        match.athleteBNormalizedName || normalizeText(match.athleteBName),
+      ].filter(Boolean);
+      if (names.length === 0) {
+        return 0;
+      }
+
+      let score = 0;
+      for (const shortName of names) {
+        const aliasBucket = input.aliasToAthleteIds.get(shortName);
+        if (!aliasBucket || aliasBucket.size === 0) {
+          continue;
+        }
+        const compatible = [...aliasBucket].some((athleteId) => {
+          if (!categoryPool.has(athleteId)) {
+            return false;
+          }
+          const athlete = input.athletesById.get(athleteId);
+          if (!athlete) {
+            return false;
+          }
+          return athleteNameContainsAllReducedTokens(shortName, athlete.nameDisplay);
+        });
+        if (compatible) {
+          score += 1;
+        }
+      }
+      return score;
+    };
+
+    for (const bucket of groups.values()) {
+      if (bucket.length <= 1) {
+        selected.push(bucket[0]);
+        continue;
+      }
+
+      const distinctCategories = new Set(
+        bucket.map((match) => compactWhitespace(match.categoryId ?? "") || match.categoryNormalizedName || "sem"),
+      );
+      if (distinctCategories.size <= 1) {
+        let winner = bucket[0];
+        for (let i = 1; i < bucket.length; i += 1) {
+          winner = selectPreferredMatch(winner, bucket[i]);
+        }
+        selected.push(winner);
+        for (const item of bucket) {
+          if (item.matchKey !== winner.matchKey) {
+            dropped.add(item.matchKey);
+          }
+        }
+        continue;
+      }
+
+      crossCategoryGroups += 1;
+      let winner = bucket[0];
+      let winnerScore = scoreMatchForCategoryPool(winner);
+      for (let i = 1; i < bucket.length; i += 1) {
+        const candidate = bucket[i];
+        const candidateScore = scoreMatchForCategoryPool(candidate);
+        if (candidateScore > winnerScore) {
+          winner = candidate;
+          winnerScore = candidateScore;
+          continue;
+        }
+        if (candidateScore === winnerScore) {
+          winner = selectPreferredMatch(winner, candidate);
+          winnerScore = scoreMatchForCategoryPool(winner);
+        }
+      }
+
+      selected.push(winner);
+      for (const item of bucket) {
+        if (item.matchKey !== winner.matchKey) {
+          dropped.add(item.matchKey);
+        }
+      }
+    }
+
+    const selectedKeys = new Set(selected.map((item) => item.matchKey));
+    const droppedMatchKeys = [...dropped].filter((key) => !selectedKeys.has(key));
+    const warnings: string[] = [];
+    if (crossCategoryGroups > 0 || droppedMatchKeys.length > 0) {
+      warnings.push(
+        `Deduplicação cross-category colapsou ${crossCategoryGroups} grupo(s) de hash repetido entre categorias; removidos ${droppedMatchKeys.length} registro(s).`,
+      );
+    }
+
+    return {
+      matches: selected,
+      removed: input.matches.length - selected.length,
+      droppedMatchKeys,
+      warnings,
+    };
+  }
+
   async upsert(eventId: number, dataset: ParsedDataset, options?: UpsertOptions): Promise<UpsertResult> {
     const processRegistrations = options?.processRegistrations ?? true;
     const inserted: Record<string, number> = {};
@@ -732,6 +956,7 @@ export class UpsertService {
     const athletesById = new Map<number, CachedAthlete>();
     const aliasToAthleteIds = new Map<string, Set<number>>();
     const conflictsByKey = new Map<string, CachedConflict>();
+    const globalAliasHintsByAlias = new Map<string, string[]>();
     const federationWarningKeys = new Set<string>();
     const observedRegistrationPairs = new Map<string, ObservedRegistrationPair>();
 
@@ -757,6 +982,14 @@ export class UpsertService {
       dataInicio: event?.dataInicio ?? null,
       dataFim: event?.dataFim ?? null,
     });
+    const allowAutoCreateWarningAthlete =
+      config.conflictAutoCreateWarningAthleteEnabled &&
+      Boolean(event?.concluido);
+
+    if (processRegistrations) {
+      await this.reconcileCategoriesWithSource(eventId, dataset.categories, updated, warnings);
+      await this.repairMisnormalizedCategories(eventId, updated, warnings);
+    }
 
     await this.preloadState({
       eventId,
@@ -774,6 +1007,7 @@ export class UpsertService {
         parsedCategory.categoryName,
         parsedCategory.categoryNormalizedName,
         parsedCategory.categoryId ?? null,
+        processRegistrations,
         categoriesByNormalized,
         categoriesByCbtmId,
         inserted,
@@ -819,6 +1053,7 @@ export class UpsertService {
           categoryNameDisplay,
           categoryNameNormalized,
           registration.categoryId ?? null,
+          true,
           categoriesByNormalized,
           categoriesByCbtmId,
           inserted,
@@ -964,30 +1199,105 @@ export class UpsertService {
         categoryId: true,
       },
     });
+    const categoryIdentityRows: CategoryIdentityRow[] = await prisma.category.findMany({
+      where: { eventId },
+      select: {
+        id: true,
+        normalizedName: true,
+        cbtmCategoryId: true,
+      },
+    });
+    const categoryIdentityById = new Map<number, CategoryIdentityRow>(
+      categoryIdentityRows.map((row) => [row.id, row] as const),
+    );
     for (const row of persistedAthleteCategories) {
       const bucket = athleteIdsByCategoryId.get(row.categoryId) ?? new Set<number>();
       bucket.add(row.athleteId);
       athleteIdsByCategoryId.set(row.categoryId, bucket);
     }
+    const athleteIdsByCategoryCbtmId = new Map<string, Set<number>>();
+    const athleteIdsByCategoryNormalizedName = new Map<string, Set<number>>();
+    for (const [categoryId, athleteIds] of athleteIdsByCategoryId.entries()) {
+      const categoryIdentity = categoryIdentityById.get(categoryId);
+      if (!categoryIdentity) {
+        continue;
+      }
+      const cbtmKey = String(categoryIdentity.cbtmCategoryId ?? "").trim();
+      if (cbtmKey) {
+        const bucket = athleteIdsByCategoryCbtmId.get(cbtmKey) ?? new Set<number>();
+        for (const athleteId of athleteIds) {
+          bucket.add(athleteId);
+        }
+        athleteIdsByCategoryCbtmId.set(cbtmKey, bucket);
+      }
+      const normalizedKey = normalizeText(categoryIdentity.normalizedName);
+      if (normalizedKey) {
+        const bucket = athleteIdsByCategoryNormalizedName.get(normalizedKey) ?? new Set<number>();
+        for (const athleteId of athleteIds) {
+          bucket.add(athleteId);
+        }
+        athleteIdsByCategoryNormalizedName.set(normalizedKey, bucket);
+      }
+    }
     const categoryAliasHistoryCounts = await this.buildCategoryAliasHistoryCounts(eventId, athletesById);
+    const activeConflictContexts = new Set<string>();
+    const emptyResolverPoolByCategory = new Map<string, number>();
 
-    const mergedMatches = mergeMatchesAcrossSources(eventId, dataset.matches);
+    const categoryScopedMatches = dataset.matches.map((match) => withCategoryScopedMatchKey(match));
+    const mergedMatches = mergeMatchesAcrossSources(eventId, categoryScopedMatches);
     warnings.push(...mergedMatches.warnings);
     const dedupedMatches = deduplicateParsedMatches(mergedMatches.matches);
-    if (dedupedMatches.removed > 0) {
-      warnings.push(
-        `Deduplicação de ingestão removeu ${dedupedMatches.removed} jogo(s) repetido(s) antes de persistir.`,
+    const crossCategoryDedup = this.deduplicateCrossCategoryHashMatches({
+      matches: dedupedMatches.matches,
+      categoriesByCbtmId,
+      athleteIdsByCategoryCbtmId,
+      aliasToAthleteIds,
+      athletesById,
+    });
+    warnings.push(...crossCategoryDedup.warnings);
+    const dedupedMatchesFinal: DedupedMatchesResult = {
+      matches: crossCategoryDedup.matches,
+      removed: dedupedMatches.removed + crossCategoryDedup.removed,
+      droppedMatchKeys: [...new Set([...dedupedMatches.droppedMatchKeys, ...crossCategoryDedup.droppedMatchKeys])],
+    };
+
+    if (dedupedMatchesFinal.removed > 0) {
+      const mergedByKey = new Map(
+        mergedMatches.matches.map((match) => [match.matchKey, match] as const),
       );
+      const droppedByCategory = new Map<string, number>();
+      for (const matchKey of dedupedMatchesFinal.droppedMatchKeys) {
+        const dropped = mergedByKey.get(matchKey);
+        const categoryLabel = compactWhitespace(
+          dropped?.categoryName ??
+            dropped?.categoryNormalizedName ??
+            dropped?.categoryId ??
+            "CATEGORIA_DESCONHECIDA",
+        );
+        droppedByCategory.set(categoryLabel, (droppedByCategory.get(categoryLabel) ?? 0) + 1);
+      }
+      const droppedTop = [...droppedByCategory.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([category, count]) => `${category}=${count}`)
+        .join(" | ");
+
+      warnings.push(
+        `Deduplicação de ingestão removeu ${dedupedMatchesFinal.removed} jogo(s) repetido(s) antes de persistir.`,
+      );
+      if (droppedTop) {
+        warnings.push(`Deduplicação de ingestão top categorias removidas: ${droppedTop}.`);
+      }
       updated.matches_deduplicated_input =
-        (updated.matches_deduplicated_input ?? 0) + dedupedMatches.removed;
+        (updated.matches_deduplicated_input ?? 0) + dedupedMatchesFinal.removed;
     }
 
-    if (dedupedMatches.droppedMatchKeys.length > 0) {
+    if (dedupedMatchesFinal.droppedMatchKeys.length > 0) {
       const staleMatches = await prisma.match.findMany({
         where: {
           eventId,
           matchKey: {
-            in: dedupedMatches.droppedMatchKeys,
+            in: dedupedMatchesFinal.droppedMatchKeys,
           },
         },
         select: { id: true },
@@ -1021,17 +1331,92 @@ export class UpsertService {
       }
     }
 
-    for (const parsedMatch of dedupedMatches.matches) {
+    const shouldPruneStage3StaleMatches =
+      !processRegistrations && (Boolean(event?.concluido) || eventSituation === "POS_EVENTO");
+    if (shouldPruneStage3StaleMatches) {
+      const keepMatchKeys = new Set(dedupedMatchesFinal.matches.map((item) => item.matchKey));
+      const existingStage3Matches = await prisma.match.findMany({
+        where: {
+          eventId,
+          phase: {
+            in: [MatchPhase.GRUPOS, MatchPhase.RESULTADOS],
+          },
+        },
+        select: {
+          id: true,
+          matchKey: true,
+        },
+      });
+      const staleIds = existingStage3Matches
+        .filter((item) => !keepMatchKeys.has(item.matchKey))
+        .map((item) => item.id);
+      if (staleIds.length > 0) {
+        await prisma.matchParticipant.deleteMany({
+          where: {
+            matchId: {
+              in: staleIds,
+            },
+          },
+        });
+        const deleted = await prisma.match.deleteMany({
+          where: {
+            id: {
+              in: staleIds,
+            },
+          },
+        });
+        if (deleted.count > 0) {
+          updated.matches_removed_stale_stage3 =
+            (updated.matches_removed_stale_stage3 ?? 0) + deleted.count;
+          warnings.push(
+            `Saneamento stage-3 removeu ${deleted.count} jogo(s) obsoleto(s) fora do snapshot atual.`,
+          );
+        }
+      }
+    }
+
+    for (const parsedMatch of dedupedMatchesFinal.matches) {
+      let reconciledCategoryId: string | null = parsedMatch.categoryId ?? null;
+      const knownByCbtmId = reconciledCategoryId ? categoriesByCbtmId.get(reconciledCategoryId) ?? null : null;
+      const knownByName = categoriesByNormalized.get(parsedMatch.categoryNormalizedName) ?? null;
+      if (
+        knownByCbtmId &&
+        knownByName &&
+        knownByCbtmId.id !== knownByName.id &&
+        knownByName.cbtmCategoryId
+      ) {
+        warnings.push(
+          `Reconciliacao categoria por nome aplicada no match ${parsedMatch.matchKey}: cbtmId=${reconciledCategoryId} -> ${knownByName.cbtmCategoryId} (${knownByName.name}).`,
+        );
+        reconciledCategoryId = knownByName.cbtmCategoryId;
+      }
+
       const category = await this.ensureCategory(
         eventId,
         parsedMatch.categoryName,
         parsedMatch.categoryNormalizedName,
-        parsedMatch.categoryId ?? null,
+        reconciledCategoryId,
+        processRegistrations,
         categoriesByNormalized,
         categoriesByCbtmId,
         inserted,
         updated,
       );
+      const categoryAthletePool = getCategoryAthletePool({
+        category,
+        athleteIdsByCategoryId,
+        athleteIdsByCategoryCbtmId,
+        athleteIdsByCategoryNormalizedName,
+      });
+      if (!categoryAthletePool || categoryAthletePool.size === 0) {
+        const categoryLabel = compactWhitespace(
+          `${parsedMatch.categoryName} (${category.cbtmCategoryId ?? category.id})`,
+        );
+        emptyResolverPoolByCategory.set(
+          categoryLabel,
+          (emptyResolverPoolByCategory.get(categoryLabel) ?? 0) + 1,
+        );
+      }
 
       const athleteA = await this.resolveMatchAthlete({
         eventId,
@@ -1047,13 +1432,17 @@ export class UpsertService {
         inserted,
         updated,
         warnings,
+        clubsByNormalized,
         athletesById,
         aliasToAthleteIds,
         conflictsByKey,
-        categoryAthleteIds: athleteIdsByCategoryId.get(category.id) ?? null,
+        categoryAthleteIds: categoryAthletePool,
         categoryAliasHistoryCounts:
           categoryAliasHistoryCounts.get(`${category.id}|${normalizeText(parsedMatch.athleteAName)}`) ?? null,
+        autoCreateWarningAthlete: allowAutoCreateWarningAthlete,
+        globalAliasHintsByAlias,
       });
+      activeConflictContexts.add(`${parsedMatch.matchKey}:A`);
 
       const athleteB = await this.resolveMatchAthlete({
         eventId,
@@ -1069,18 +1458,24 @@ export class UpsertService {
         inserted,
         updated,
         warnings,
+        clubsByNormalized,
         athletesById,
         aliasToAthleteIds,
         conflictsByKey,
-        categoryAthleteIds: athleteIdsByCategoryId.get(category.id) ?? null,
+        categoryAthleteIds: categoryAthletePool,
         categoryAliasHistoryCounts:
           categoryAliasHistoryCounts.get(`${category.id}|${normalizeText(parsedMatch.athleteBName)}`) ?? null,
+        autoCreateWarningAthlete: allowAutoCreateWarningAthlete,
+        globalAliasHintsByAlias,
       });
+      activeConflictContexts.add(`${parsedMatch.matchKey}:B`);
 
-      const existingMatch = await prisma.match.findUnique({
+      let existingMatch = await prisma.match.findUnique({
         where: { matchKey: parsedMatch.matchKey },
         select: {
           id: true,
+          eventId: true,
+          categoryId: true,
           scoreRaw: true,
           setsJson: true,
           p1Sets: true,
@@ -1092,6 +1487,42 @@ export class UpsertService {
           sourceFlags: true,
         },
       });
+      if (!existingMatch && parsedMatch.matchKey.includes("|")) {
+        const legacyMatchKey = parsedMatch.matchKey.split("|").slice(1).join("|");
+        if (legacyMatchKey) {
+          const legacyMatch = await prisma.match.findUnique({
+            where: { matchKey: legacyMatchKey },
+            select: {
+              id: true,
+              eventId: true,
+              categoryId: true,
+              scoreRaw: true,
+              setsJson: true,
+              p1Sets: true,
+              p2Sets: true,
+              winnerIndex: true,
+              cbtmMatchId: true,
+              scoreFinal: true,
+              scoreSets: true,
+              sourceFlags: true,
+            },
+          });
+          if (
+            legacyMatch &&
+            legacyMatch.eventId === eventId &&
+            legacyMatch.categoryId === category.id
+          ) {
+            await prisma.match.update({
+              where: { id: legacyMatch.id },
+              data: { matchKey: parsedMatch.matchKey },
+            });
+            existingMatch = {
+              ...legacyMatch,
+            };
+            inc(updated, "matches_key_scoped_migrated");
+          }
+        }
+      }
 
       const normalizedSets = sanitizeParsedMatchSets(parsedMatch.sets);
       const parsedScoreRaw = parseScoreRaw(parsedMatch.scoreRaw);
@@ -1152,6 +1583,9 @@ export class UpsertService {
         winnerIndex = existingMatch.winnerIndex;
       }
 
+      const persistedPhase: MatchPhase =
+        parsedMatch.phase === "ELIMINATORIA" ? MatchPhase.RESULTADOS : (parsedMatch.phase as MatchPhase);
+
       const scorePlayers: Prisma.InputJsonValue = [
         {
           athleteId: athleteA?.id ?? null,
@@ -1180,7 +1614,7 @@ export class UpsertService {
       const storedSourceFlags = parseStoredSourceFlags(existingMatch?.sourceFlags ?? null);
       const mergedSourceFlags = {
         resultados: Boolean(parsedMatch.sourceFlags?.resultados) || Boolean(storedSourceFlags?.resultados),
-        eliminatoria: Boolean(parsedMatch.sourceFlags?.eliminatoria) || Boolean(storedSourceFlags?.eliminatoria),
+        eliminatoria: false,
       };
       const sourceFlagsValue: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput =
         mergedSourceFlags.resultados || mergedSourceFlags.eliminatoria
@@ -1202,7 +1636,7 @@ export class UpsertService {
           ? existingMatch.scoreRaw
           : parsedMatch.scoreRaw;
 
-      if (parsedMatch.phase === "RESULTADOS" && setsResult && scoreSets.length === 0) {
+      if (persistedPhase === "RESULTADOS" && setsResult && scoreSets.length === 0) {
         warnings.push(
           `Resultado sem placar por set persistivel no match ${parsedMatch.matchKey} (${parsedMatch.categoryName}).`,
         );
@@ -1214,7 +1648,7 @@ export class UpsertService {
             data: {
               eventId,
               categoryId: category.id,
-              phase: parsedMatch.phase as MatchPhase,
+              phase: persistedPhase,
               round: parsedMatch.round,
               tableNumber: parsedMatch.tableNumber,
               matchDatetime: parsedMatch.matchDatetime ? new Date(parsedMatch.matchDatetime) : null,
@@ -1237,7 +1671,7 @@ export class UpsertService {
             data: {
               eventId,
               categoryId: category.id,
-              phase: parsedMatch.phase as MatchPhase,
+              phase: persistedPhase,
               round: parsedMatch.round,
               tableNumber: parsedMatch.tableNumber,
               matchDatetime: parsedMatch.matchDatetime ? new Date(parsedMatch.matchDatetime) : null,
@@ -1265,38 +1699,12 @@ export class UpsertService {
       }
 
       if (athleteA) {
-        await prisma.athleteCategory.upsert({
-          where: {
-            athleteId_categoryId: {
-              athleteId: athleteA.id,
-              categoryId: category.id,
-            },
-          },
-          update: {},
-          create: {
-            athleteId: athleteA.id,
-            categoryId: category.id,
-          },
-        });
         const categoryAthleteBucketA = athleteIdsByCategoryId.get(category.id) ?? new Set<number>();
         categoryAthleteBucketA.add(athleteA.id);
         athleteIdsByCategoryId.set(category.id, categoryAthleteBucketA);
       }
 
       if (athleteB) {
-        await prisma.athleteCategory.upsert({
-          where: {
-            athleteId_categoryId: {
-              athleteId: athleteB.id,
-              categoryId: category.id,
-            },
-          },
-          update: {},
-          create: {
-            athleteId: athleteB.id,
-            categoryId: category.id,
-          },
-        });
         const categoryAthleteBucketB = athleteIdsByCategoryId.get(category.id) ?? new Set<number>();
         categoryAthleteBucketB.add(athleteB.id);
         athleteIdsByCategoryId.set(category.id, categoryAthleteBucketB);
@@ -1343,11 +1751,32 @@ export class UpsertService {
       }
     }
 
+    if (emptyResolverPoolByCategory.size > 0) {
+      const topCategories = [...emptyResolverPoolByCategory.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([label, count]) => `${label}=${count}`)
+        .join(" | ");
+      warnings.push(
+        `POOL_CANDIDATOS_VAZIO_POR_CATEGORIA: ${emptyResolverPoolByCategory.size} categoria(s) sem base de atletas para resolver conflitos de jogos. Top10: ${topCategories}.`,
+      );
+      updated.athlete_conflicts_empty_candidate_pool =
+        (updated.athlete_conflicts_empty_candidate_pool ?? 0) +
+        [...emptyResolverPoolByCategory.values()].reduce((sum, count) => sum + count, 0);
+    }
+
     await this.cleanupNonRealAthleteRecords({
       eventId,
       athletesById,
       aliasToAthleteIds,
       updated,
+    });
+    await this.cleanupStaleMatchConflicts({
+      eventId,
+      activeContexts: activeConflictContexts,
+      conflictsByKey,
+      updated,
+      warnings,
     });
 
     await this.syncStableEventAthleteLinks({
@@ -1699,9 +2128,6 @@ export class UpsertService {
       }>
     >();
     for (const row of existing) {
-      if (row.registrationStatus === null) {
-        continue;
-      }
       if (protectedCategoryIds.has(row.categoryId)) {
         continue;
       }
@@ -2073,6 +2499,7 @@ export class UpsertService {
     name: string,
     normalizedName: string,
     cbtmCategoryId: string | null,
+    allowLabelUpdates: boolean,
     categoriesByNormalized: Map<string, CachedCategory>,
     categoriesByCbtmId: Map<string, CachedCategory>,
     inserted: Record<string, number>,
@@ -2161,8 +2588,13 @@ export class UpsertService {
     ): Promise<CachedCategory> => {
       const nextName = data.name ?? category.name;
       const nextNormalizedName = data.normalizedName ?? category.normalizedName;
-      const nextCbtmCategoryId =
+      let nextCbtmCategoryId =
         data.cbtmCategoryId !== undefined ? data.cbtmCategoryId : category.cbtmCategoryId;
+      if (category.cbtmCategoryId && nextCbtmCategoryId && category.cbtmCategoryId !== nextCbtmCategoryId) {
+        // Once set, CBTM category id is canonical for the row.
+        nextCbtmCategoryId = category.cbtmCategoryId;
+        inc(updated, "categories_cbtm_id_conflict_ignored");
+      }
 
       const changed =
         category.name !== nextName ||
@@ -2215,10 +2647,11 @@ export class UpsertService {
       const cachedById = categoriesByCbtmId.get(cbtmCategoryId);
       if (cachedById) {
         const patch: { name?: string; normalizedName?: string } = {};
-        if (cachedById.name !== name) {
+        if (allowLabelUpdates && cachedById.name !== name) {
           patch.name = name;
         }
         if (
+          allowLabelUpdates &&
           cachedById.normalizedName !== normalizedName &&
           canUseNormalizedName(cachedById.id, normalizedName)
         ) {
@@ -2236,11 +2669,18 @@ export class UpsertService {
         if (categoryById && categoryById.id !== cached.id) {
           return categoryById;
         }
+        if (!allowLabelUpdates) {
+          // Stage-3: sem owner conhecido por ID CBTM, preserva o owner por nome normalizado.
+          inc(updated, "categories_cbtm_id_conflict_ignored");
+          return cached;
+        }
+        inc(updated, "categories_cbtm_id_conflict_ignored");
+        return cached;
       }
 
       return updateCategoryRecord(cached, {
-        name,
-        cbtmCategoryId: cbtmCategoryId ?? cached.cbtmCategoryId,
+        name: allowLabelUpdates ? name : undefined,
+        cbtmCategoryId: cached.cbtmCategoryId ? cached.cbtmCategoryId : cbtmCategoryId,
       });
     }
 
@@ -2265,10 +2705,11 @@ export class UpsertService {
       syncCategoryCache(cachedCategory);
 
       const patch: { name?: string; normalizedName?: string } = {};
-      if (cachedCategory.name !== name) {
+      if (allowLabelUpdates && cachedCategory.name !== name) {
         patch.name = name;
       }
       if (
+        allowLabelUpdates &&
         cachedCategory.normalizedName !== normalizedName &&
         canUseNormalizedName(cachedCategory.id, normalizedName)
       ) {
@@ -2292,6 +2733,32 @@ export class UpsertService {
         if (categoryById && categoryById.id !== foundByNormalized.id) {
           return categoryById;
         }
+        if (
+          !allowLabelUpdates &&
+          foundByNormalized.cbtmCategoryId &&
+          foundByNormalized.cbtmCategoryId !== cbtmCategoryId
+        ) {
+          const cachedCategory: CachedCategory = {
+            id: foundByNormalized.id,
+            name: foundByNormalized.name,
+            normalizedName: foundByNormalized.normalizedName,
+            cbtmCategoryId: foundByNormalized.cbtmCategoryId,
+          };
+          syncCategoryCache(cachedCategory);
+          inc(updated, "categories_cbtm_id_conflict_ignored");
+          return cachedCategory;
+        }
+        if (foundByNormalized.cbtmCategoryId && foundByNormalized.cbtmCategoryId !== cbtmCategoryId) {
+          const cachedCategory: CachedCategory = {
+            id: foundByNormalized.id,
+            name: foundByNormalized.name,
+            normalizedName: foundByNormalized.normalizedName,
+            cbtmCategoryId: foundByNormalized.cbtmCategoryId,
+          };
+          syncCategoryCache(cachedCategory);
+          inc(updated, "categories_cbtm_id_conflict_ignored");
+          return cachedCategory;
+        }
       }
 
       const cachedCategory: CachedCategory = {
@@ -2303,8 +2770,8 @@ export class UpsertService {
       syncCategoryCache(cachedCategory);
 
       return updateCategoryRecord(cachedCategory, {
-        name,
-        cbtmCategoryId: cbtmCategoryId ?? foundByNormalized.cbtmCategoryId,
+        name: allowLabelUpdates ? name : undefined,
+        cbtmCategoryId: foundByNormalized.cbtmCategoryId ?? cbtmCategoryId,
       });
     }
 
@@ -2608,13 +3075,17 @@ export class UpsertService {
     athletesById: Map<number, CachedAthlete>,
     categoryAthleteIds?: Set<number> | null,
   ): AthleteResolverCandidate[] {
+    if (!categoryAthleteIds || categoryAthleteIds.size === 0) {
+      return [];
+    }
+
     const candidates: AthleteResolverCandidate[] = [];
 
     for (const athlete of athletesById.values()) {
       if (athlete.eventId !== eventId || athlete.createdFromWarning) {
         continue;
       }
-      if (categoryAthleteIds && !categoryAthleteIds.has(athlete.id)) {
+      if (!categoryAthleteIds.has(athlete.id)) {
         continue;
       }
 
@@ -2712,6 +3183,12 @@ export class UpsertService {
     }
     const context = `${input.matchKey}:${input.side}`;
     const conflictKey = conflictCacheKey(context, shortNameNormalized);
+    const canBindAthlete = (athlete: CachedAthlete | null | undefined): athlete is CachedAthlete => {
+      if (!athlete) {
+        return false;
+      }
+      return athleteNameContainsAllReducedTokens(shortNameNormalized, athlete.nameDisplay);
+    };
 
     const existingConflict = input.conflictsByKey.get(conflictKey);
     if (existingConflict?.resolvedAthleteId) {
@@ -2720,7 +3197,7 @@ export class UpsertService {
         input.athletesById,
       );
 
-      if (resolvedAthlete) {
+      if (canBindAthlete(resolvedAthlete)) {
         await this.reconcileAthletePoints(
           resolvedAthlete,
           input.rankingPoints,
@@ -2741,19 +3218,48 @@ export class UpsertService {
 
         return resolvedAthlete;
       }
+
+      await prisma.athleteMatchConflict.update({
+        where: { id: existingConflict.id },
+        data: {
+          resolvedAthleteId: null,
+          resolvedAt: null,
+        },
+      });
+      existingConflict.resolvedAthleteId = null;
+      inc(input.updated, "athlete_conflicts");
+      input.warnings.push(
+        `Conflito de atleta (${input.categoryName}) em ${context}: resolucao anterior foi invalidada por incompatibilidade entre nome reduzido e nome completo.`,
+      );
     }
 
     let eventAliasHomonymAmbiguous = false;
     const resolveEventAliasHomonymCollision = (): CachedAthlete | null => {
       const aliasBucket = input.aliasToAthleteIds.get(shortNameNormalized);
-      if (!aliasBucket || aliasBucket.size <= 1) {
+      if (!aliasBucket || aliasBucket.size === 0) {
         return null;
+      }
+
+      if (aliasBucket.size === 1) {
+        const athleteId = [...aliasBucket][0];
+        const athlete = input.athletesById.get(athleteId);
+        if (
+          athlete &&
+          athlete.eventId === input.eventId &&
+          !athlete.createdFromWarning &&
+          athleteNameContainsAllReducedTokens(shortNameNormalized, athlete.nameDisplay)
+        ) {
+          return athlete;
+        }
       }
 
       const homonyms: CachedAthlete[] = [];
       for (const athleteId of aliasBucket) {
         const athlete = input.athletesById.get(athleteId);
         if (!athlete || athlete.eventId !== input.eventId || athlete.createdFromWarning) {
+          continue;
+        }
+        if (!athleteNameContainsAllReducedTokens(shortNameNormalized, athlete.nameDisplay)) {
           continue;
         }
         homonyms.push(athlete);
@@ -2850,7 +3356,10 @@ export class UpsertService {
         }
 
         const reducedAlias = toReducedAliasNormalized(athlete.nameDisplay);
-        if (athlete.aliases.has(shortNameNormalized) || reducedAlias === shortNameNormalized) {
+        if (
+          (athlete.aliases.has(shortNameNormalized) || reducedAlias === shortNameNormalized) &&
+          athleteNameContainsAllReducedTokens(shortNameNormalized, athlete.nameDisplay)
+        ) {
           candidates.push(athlete);
         }
       }
@@ -2930,10 +3439,6 @@ export class UpsertService {
       input.athletesById,
       input.categoryAthleteIds,
     );
-    if (resolverCandidates.length === 0) {
-      // Fallback: mantém comportamento anterior quando a categoria ainda não possui vínculos pré-cadastrados.
-      resolverCandidates = this.buildResolverCandidates(input.eventId, input.athletesById);
-    }
 
     const decision = resolveAthleteCandidate({
       eventId: input.eventId,
@@ -2947,7 +3452,7 @@ export class UpsertService {
 
     if (!categoryAliasAmbiguous && !eventAliasHomonymAmbiguous && decision.status === "resolved" && decision.athleteId) {
       const resolvedAthlete = await this.getAthleteById(decision.athleteId, input.athletesById);
-      if (resolvedAthlete) {
+      if (canBindAthlete(resolvedAthlete)) {
         await this.reconcileAthletePoints(
           resolvedAthlete,
           input.rankingPoints,
@@ -2989,6 +3494,28 @@ export class UpsertService {
       }
     }
 
+    const localFallbackCandidates =
+      decision.scoredCandidates.length > 0
+        ? decision.scoredCandidates.slice(0, 10).map((candidate) => ({
+            athleteId: candidate.athleteId,
+            nameDisplay: candidate.nameDisplay,
+            rankingPoints: candidate.rankingPoints,
+            ratingPoints: candidate.ratingPoints,
+            score: candidate.score,
+            reasons: candidate.reasons,
+          }))
+        : this.buildFallbackConflictCandidates({
+            shortNameNormalized,
+            resolverCandidates,
+            observedClubNormalizedName: input.clubNormalizedName,
+            observedRankingPoints: input.rankingPoints,
+            observedRatingPoints: input.ratingPoints,
+          });
+    const globalNameHints =
+      localFallbackCandidates.length === 0
+        ? await this.getGlobalAliasHints(shortNameNormalized, resolverCandidates, input.globalAliasHintsByAlias)
+        : [];
+
     const payload = {
       matchKey: input.matchKey,
       side: input.side,
@@ -3000,24 +3527,8 @@ export class UpsertService {
       observedRatingPoints: input.ratingPoints,
       observedClubNormalizedName: input.clubNormalizedName,
       strategy: decision.strategy,
-      candidates: (
-        decision.scoredCandidates.length > 0
-          ? decision.scoredCandidates.slice(0, 10).map((candidate) => ({
-              athleteId: candidate.athleteId,
-              nameDisplay: candidate.nameDisplay,
-              rankingPoints: candidate.rankingPoints,
-              ratingPoints: candidate.ratingPoints,
-              score: candidate.score,
-              reasons: candidate.reasons,
-            }))
-          : this.buildFallbackConflictCandidates({
-              shortNameNormalized,
-              resolverCandidates,
-              observedClubNormalizedName: input.clubNormalizedName,
-              observedRankingPoints: input.rankingPoints,
-              observedRatingPoints: input.ratingPoints,
-            })
-      ).slice(0, 10),
+      candidates: localFallbackCandidates.slice(0, 10),
+      hints: globalNameHints,
     };
 
     if (existingConflict) {
@@ -3049,6 +3560,47 @@ export class UpsertService {
       });
     }
 
+    if (
+      input.autoCreateWarningAthlete &&
+      !categoryAliasAmbiguous &&
+      !eventAliasHomonymAmbiguous &&
+      payload.candidates.length === 0
+    ) {
+      const warningAthlete = await this.ensureWarningAthleteForConflict({
+        eventId: input.eventId,
+        categoryId: input.categoryId,
+        shortName,
+        shortNameNormalized,
+        rankingPoints: input.rankingPoints,
+        ratingPoints: input.ratingPoints,
+        clubNormalizedName: input.clubNormalizedName,
+        clubsByNormalized: input.clubsByNormalized,
+        inserted: input.inserted,
+        updated: input.updated,
+        athletesById: input.athletesById,
+        aliasToAthleteIds: input.aliasToAthleteIds,
+      });
+
+      const conflictToResolve = input.conflictsByKey.get(conflictKey);
+      if (conflictToResolve && conflictToResolve.resolvedAthleteId !== warningAthlete.id) {
+        await prisma.athleteMatchConflict.update({
+          where: { id: conflictToResolve.id },
+          data: {
+            resolvedAthleteId: warningAthlete.id,
+            resolvedAt: new Date(),
+          },
+        });
+        conflictToResolve.resolvedAthleteId = warningAthlete.id;
+        inc(input.updated, "athlete_conflicts");
+      }
+
+      input.warnings.push(
+        `Conflito de atleta (${input.categoryName}) em ${context}: '${shortName}' foi vinculado automaticamente a um atleta temporario por ausencia de candidatos.`,
+      );
+
+      return warningAthlete;
+    }
+
     input.warnings.push(
       `Conflito de atleta (${input.categoryName}) em ${context}: '${shortName}' não pôde ser resolvido automaticamente.`,
     );
@@ -3073,15 +3625,27 @@ export class UpsertService {
     const shortTokens = input.shortNameNormalized.split(" ").filter(Boolean);
     const first = shortTokens[0] ?? "";
     const last = shortTokens[shortTokens.length - 1] ?? "";
+    const hasCompoundShortName = shortTokens.length >= 2;
 
     const scored = input.resolverCandidates
       .map((candidate) => {
+        if (!athleteNameContainsAllReducedTokens(input.shortNameNormalized, candidate.nameDisplay)) {
+          return {
+            athleteId: candidate.athleteId,
+            nameDisplay: candidate.nameDisplay,
+            rankingPoints: candidate.rankingPoints,
+            ratingPoints: candidate.ratingPoints,
+            score: 0,
+            reasons: [] as string[],
+          };
+        }
         let score = 0;
         const reasons: string[] = [];
         const candidateName = normalizeAthleteName(candidate.nameDisplay);
         const candidateTokens = candidateName.split(" ").filter(Boolean);
         const candidateFirst = candidateTokens[0] ?? "";
         const candidateLast = candidateTokens[candidateTokens.length - 1] ?? "";
+        const tokenOverlapCount = shortTokens.filter((token) => candidateTokens.includes(token)).length;
 
         if (input.shortNameNormalized && candidateName === input.shortNameNormalized) {
           score += 80;
@@ -3125,6 +3689,15 @@ export class UpsertService {
           reasons.push("rating");
         }
 
+        if (tokenOverlapCount >= 2) {
+          score += 12;
+          reasons.push("tokens coincidentes");
+        }
+
+        if (hasCompoundShortName && last && candidateLast !== last && !candidateTokens.includes(last)) {
+          score = 0;
+        }
+
         return {
           athleteId: candidate.athleteId,
           nameDisplay: candidate.nameDisplay,
@@ -3138,6 +3711,301 @@ export class UpsertService {
       .sort((a, b) => b.score - a.score || a.nameDisplay.localeCompare(b.nameDisplay, "pt-BR"));
 
     return scored;
+  }
+
+  private async reconcileCategoriesWithSource(
+    eventId: number,
+    parsedCategories: ParsedDataset["categories"],
+    updated: Record<string, number>,
+    warnings: string[],
+  ): Promise<void> {
+    const sourceByCbtmId = new Map<string, { name: string; normalizedName: string }>();
+    for (const parsed of parsedCategories) {
+      const cbtmCategoryId = String(parsed.categoryId ?? "").trim();
+      const name = compactWhitespace(parsed.categoryName);
+      const normalizedName =
+        normalizeText(parsed.categoryNormalizedName) || normalizeText(parsed.categoryName);
+      if (!cbtmCategoryId || !name || !normalizedName) {
+        continue;
+      }
+      if (!sourceByCbtmId.has(cbtmCategoryId)) {
+        sourceByCbtmId.set(cbtmCategoryId, { name, normalizedName });
+      }
+    }
+    if (sourceByCbtmId.size === 0) {
+      return;
+    }
+
+    const desiredIds = new Set(sourceByCbtmId.keys());
+    const current = await prisma.category.findMany({
+      where: { eventId },
+      select: {
+        id: true,
+        name: true,
+        normalizedName: true,
+        cbtmCategoryId: true,
+      },
+    });
+
+    const currentById = new Map(current.map((row) => [row.id, row]));
+    let detached = 0;
+    let reassigned = 0;
+    let refreshed = 0;
+    let created = 0;
+
+    // 1) Detach rows whose cbtm id belongs to source set but label clearly mismatches source.
+    for (const row of current) {
+      if (!row.cbtmCategoryId || !desiredIds.has(row.cbtmCategoryId)) {
+        continue;
+      }
+      const expected = sourceByCbtmId.get(row.cbtmCategoryId);
+      if (!expected) {
+        continue;
+      }
+      if (
+        row.normalizedName === expected.normalizedName ||
+        normalizeText(row.name) === expected.normalizedName
+      ) {
+        continue;
+      }
+      await prisma.category.update({
+        where: { id: row.id },
+        data: { cbtmCategoryId: null },
+      });
+      const cached = currentById.get(row.id);
+      if (cached) {
+        cached.cbtmCategoryId = null;
+      }
+      detached += 1;
+    }
+
+    // 2) Ensure each source cbtm id has an owner aligned with source label.
+    for (const [cbtmCategoryId, expected] of sourceByCbtmId.entries()) {
+      const byId = [...currentById.values()].find((row) => row.cbtmCategoryId === cbtmCategoryId) ?? null;
+      if (byId) {
+        if (byId.name !== expected.name || byId.normalizedName !== expected.normalizedName) {
+          await prisma.category.update({
+            where: { id: byId.id },
+            data: {
+              name: expected.name,
+              normalizedName: expected.normalizedName,
+            },
+          });
+          byId.name = expected.name;
+          byId.normalizedName = expected.normalizedName;
+          refreshed += 1;
+        }
+        continue;
+      }
+
+      const candidate =
+        [...currentById.values()].find(
+          (row) =>
+            row.normalizedName === expected.normalizedName &&
+            (!row.cbtmCategoryId || !desiredIds.has(row.cbtmCategoryId)),
+        ) ?? null;
+      if (candidate) {
+        await prisma.category.update({
+          where: { id: candidate.id },
+          data: {
+            name: expected.name,
+            normalizedName: expected.normalizedName,
+            cbtmCategoryId,
+          },
+        });
+        candidate.name = expected.name;
+        candidate.normalizedName = expected.normalizedName;
+        candidate.cbtmCategoryId = cbtmCategoryId;
+        reassigned += 1;
+        continue;
+      }
+
+      const inserted = await prisma.category.create({
+        data: {
+          eventId,
+          name: expected.name,
+          normalizedName: expected.normalizedName,
+          cbtmCategoryId,
+        },
+        select: {
+          id: true,
+          name: true,
+          normalizedName: true,
+          cbtmCategoryId: true,
+        },
+      });
+      currentById.set(inserted.id, inserted);
+      created += 1;
+    }
+
+    if (detached + reassigned + refreshed + created > 0) {
+      inc(updated, "categories_reconciled_from_source");
+      warnings.push(
+        `Reconciliacao de categorias (fonte oficial) no evento ${eventId}: detach=${detached}, reassigned=${reassigned}, refreshed=${refreshed}, created=${created}.`,
+      );
+    }
+  }
+
+  private async repairMisnormalizedCategories(
+    eventId: number,
+    updated: Record<string, number>,
+    warnings: string[],
+  ): Promise<void> {
+    const categories = await prisma.category.findMany({
+      where: { eventId },
+      select: {
+        id: true,
+        name: true,
+        normalizedName: true,
+        cbtmCategoryId: true,
+      },
+    });
+    if (categories.length === 0) {
+      return;
+    }
+
+    const byNormalized = new Map<string, (typeof categories)[number]>();
+    for (const category of categories) {
+      if (!byNormalized.has(category.normalizedName)) {
+        byNormalized.set(category.normalizedName, category);
+      }
+    }
+
+    let normalizedFixed = 0;
+    let merged = 0;
+    for (const source of categories) {
+      const expectedNormalized = normalizeText(source.name);
+      if (!expectedNormalized || expectedNormalized === source.normalizedName) {
+        continue;
+      }
+
+      const target = byNormalized.get(expectedNormalized);
+      if (!target || target.id === source.id) {
+        try {
+          await prisma.category.update({
+            where: { id: source.id },
+            data: { normalizedName: expectedNormalized },
+          });
+          normalizedFixed += 1;
+          source.normalizedName = expectedNormalized;
+          byNormalized.set(expectedNormalized, source);
+        } catch {
+          // Ignore; likely unique collision from another category.
+        }
+        continue;
+      }
+
+      // Merge only when display label is the same to avoid unsafe consolidation.
+      if (compactWhitespace(target.name) !== compactWhitespace(source.name)) {
+        continue;
+      }
+
+      await prisma.$transaction(async (tx) => {
+        const athleteIdsAtTarget = await tx.athleteCategory.findMany({
+          where: { categoryId: target.id },
+          select: { athleteId: true },
+        });
+        if (athleteIdsAtTarget.length > 0) {
+          await tx.athleteCategory.deleteMany({
+            where: {
+              categoryId: source.id,
+              athleteId: { in: athleteIdsAtTarget.map((row) => row.athleteId) },
+            },
+          });
+        }
+
+        await tx.athleteCategory.updateMany({
+          where: { categoryId: source.id },
+          data: { categoryId: target.id },
+        });
+
+        await tx.match.updateMany({
+          where: {
+            eventId,
+            categoryId: source.id,
+          },
+          data: {
+            categoryId: target.id,
+          },
+        });
+
+        if (!target.cbtmCategoryId && source.cbtmCategoryId) {
+          await tx.category.update({
+            where: { id: target.id },
+            data: { cbtmCategoryId: source.cbtmCategoryId },
+          });
+        }
+
+        const refs = await Promise.all([
+          tx.athleteCategory.count({ where: { categoryId: source.id } }),
+          tx.match.count({ where: { eventId, categoryId: source.id } }),
+        ]);
+        if (refs[0] === 0 && refs[1] === 0) {
+          await tx.category.delete({ where: { id: source.id } });
+        }
+      });
+      merged += 1;
+    }
+
+    if (normalizedFixed > 0) {
+      inc(updated, "categories_normalized_repaired");
+      warnings.push(
+        `Saneamento de categorias ajustou normalized_name em ${normalizedFixed} registro(s) no evento ${eventId}.`,
+      );
+    }
+    if (merged > 0) {
+      inc(updated, "categories_merged_misnormalized");
+      warnings.push(
+        `Saneamento de categorias consolidou ${merged} categoria(s) com nome duplicado e normalized_name inconsistente no evento ${eventId}.`,
+      );
+    }
+  }
+
+  private async getGlobalAliasHints(
+    shortNameNormalized: string,
+    resolverCandidates: AthleteResolverCandidate[],
+    cache: Map<string, string[]>,
+  ): Promise<string[]> {
+    if (!shortNameNormalized) {
+      return [];
+    }
+
+    const cached = cache.get(shortNameNormalized);
+    if (cached) {
+      return cached;
+    }
+
+    const localNames = new Set(
+      resolverCandidates.map((candidate) => normalizeAthleteName(candidate.nameDisplay)).filter(Boolean),
+    );
+
+    const rows = await prisma.athleteAlias.findMany({
+      where: {
+        aliasNormalized: shortNameNormalized,
+      },
+      select: {
+        athlete: {
+          select: {
+            nameDisplay: true,
+            createdFromWarning: true,
+          },
+        },
+      },
+      take: 30,
+      orderBy: [{ createdAt: "desc" }],
+    });
+
+    const hints = [...new Set(
+      rows
+        .map((row) => compactWhitespace(row.athlete.nameDisplay))
+        .filter(Boolean)
+        .filter((name) => athleteNameContainsAllReducedTokens(shortNameNormalized, name))
+        .filter((name) => !localNames.has(normalizeAthleteName(name)))
+        .slice(0, 5),
+    )];
+
+    cache.set(shortNameNormalized, hints);
+    return hints;
   }
 
   private async reconcileAthletePoints(
@@ -3164,6 +4032,108 @@ export class UpsertService {
     athlete.rankingPoints = mergedRanking;
     athlete.ratingPoints = mergedRating;
     inc(updated, "athletes_points_reconciled");
+  }
+
+  private async ensureWarningAthleteForConflict(input: {
+    eventId: number;
+    categoryId: number;
+    shortName: string;
+    shortNameNormalized: string;
+    rankingPoints: number | null;
+    ratingPoints: number | null;
+    clubNormalizedName: string | null;
+    clubsByNormalized: Map<string, CachedClub>;
+    inserted: Record<string, number>;
+    updated: Record<string, number>;
+    athletesById: Map<number, CachedAthlete>;
+    aliasToAthleteIds: Map<string, Set<number>>;
+  }): Promise<CachedAthlete> {
+    const clubNameDisplay = compactWhitespace(input.clubNormalizedName ?? "") || "SEM CLUBE";
+    const clubNameNormalized = normalizeText(clubNameDisplay) || "sem clube";
+    const club = await this.ensureClub(
+      clubNameDisplay,
+      clubNameNormalized,
+      input.clubsByNormalized,
+      input.inserted,
+      input.updated,
+    );
+
+    const warningNameNormalized = `${input.shortNameNormalized}__autowarn_c${input.categoryId}`;
+
+    let athleteRecord = await prisma.athlete.findUnique({
+      where: {
+        eventId_nameNormalized_clubId: {
+          eventId: input.eventId,
+          nameNormalized: warningNameNormalized,
+          clubId: club.id,
+        },
+      },
+      include: {
+        club: true,
+        aliases: true,
+      },
+    });
+
+    if (!athleteRecord) {
+      athleteRecord = await prisma.athlete.create({
+        data: {
+          eventId: input.eventId,
+          clubId: club.id,
+          nameDisplay: input.shortName,
+          nameNormalized: warningNameNormalized,
+          rankingPoints: input.rankingPoints,
+          ratingPoints: input.ratingPoints,
+          createdFromWarning: true,
+        },
+        include: {
+          club: true,
+          aliases: true,
+        },
+      });
+      inc(input.inserted, "athletes");
+    }
+
+    const cachedAthlete: CachedAthlete = {
+      id: athleteRecord.id,
+      eventId: athleteRecord.eventId,
+      clubId: athleteRecord.clubId,
+      clubNormalizedName: athleteRecord.club?.normalizedName ?? club.normalizedName,
+      stateCode: athleteRecord.stateCode,
+      stateName: athleteRecord.stateName,
+      region: athleteRecord.region,
+      nameDisplay: athleteRecord.nameDisplay,
+      nameNormalized: athleteRecord.nameNormalized,
+      rankingPoints: athleteRecord.rankingPoints,
+      ratingPoints: athleteRecord.ratingPoints,
+      createdFromWarning: athleteRecord.createdFromWarning,
+      aliases: new Set<string>([
+        athleteRecord.nameNormalized,
+        ...athleteRecord.aliases.map((alias) => alias.aliasNormalized),
+      ]),
+    };
+
+    input.athletesById.set(cachedAthlete.id, cachedAthlete);
+    this.indexAlias(input.aliasToAthleteIds, cachedAthlete.nameNormalized, cachedAthlete.id);
+
+    await this.reconcileAthletePoints(
+      cachedAthlete,
+      input.rankingPoints,
+      input.ratingPoints,
+      input.updated,
+    );
+
+    await this.ensureAthleteAlias({
+      athleteId: cachedAthlete.id,
+      aliasDisplay: input.shortName,
+      aliasNormalized: input.shortNameNormalized,
+      source: "JOGOS",
+      inserted: input.inserted,
+      updated: input.updated,
+      athletesById: input.athletesById,
+      aliasToAthleteIds: input.aliasToAthleteIds,
+    });
+
+    return cachedAthlete;
   }
 
   private async cleanupNonRealAthleteRecords(input: {
@@ -3252,6 +4222,55 @@ export class UpsertService {
       (input.updated.athletes_placeholders_removed ?? 0) + placeholderIds.length;
   }
 
+  private async cleanupStaleMatchConflicts(input: {
+    eventId: number;
+    activeContexts: Set<string>;
+    conflictsByKey: Map<string, CachedConflict>;
+    updated: Record<string, number>;
+    warnings: string[];
+  }): Promise<void> {
+    if (input.activeContexts.size === 0) {
+      return;
+    }
+
+    const activeContextList = [...input.activeContexts];
+    const stale = await prisma.athleteMatchConflict.findMany({
+      where: {
+        eventId: input.eventId,
+        context: {
+          notIn: activeContextList,
+        },
+      },
+      select: {
+        id: true,
+        context: true,
+        shortNameNormalized: true,
+      },
+    });
+
+    if (stale.length === 0) {
+      return;
+    }
+
+    await prisma.athleteMatchConflict.deleteMany({
+      where: {
+        id: {
+          in: stale.map((item) => item.id),
+        },
+      },
+    });
+
+    for (const item of stale) {
+      input.conflictsByKey.delete(conflictCacheKey(item.context, item.shortNameNormalized));
+    }
+
+    input.updated.athlete_conflicts_removed_stale =
+      (input.updated.athlete_conflicts_removed_stale ?? 0) + stale.length;
+    input.warnings.push(
+      `Limpeza de conflitos removeu ${stale.length} conflito(s) obsoleto(s) sem contexto ativo de jogo no evento ${input.eventId}.`,
+    );
+  }
+
   private async getAthleteById(
     athleteId: number,
     athletesById: Map<number, CachedAthlete>,
@@ -3307,5 +4326,7 @@ export class UpsertService {
     aliasToAthleteIds.set(key, bucket);
   }
 }
+
+
 
 

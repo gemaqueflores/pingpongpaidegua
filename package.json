@@ -14,6 +14,7 @@
     "test": "npm run test --workspace @cbtm/parser && npm run test --workspace @cbtm/shared && npm run test --workspace apps-api && npm run test --workspace apps-worker",
     "smoke:fixture": "npm run build --workspace @cbtm/shared && npm run build --workspace @cbtm/parser && cross-env SMOKE_MODE=fixture tsx scripts/smoke-test.ts",
     "smoke:live": "npm run build --workspace @cbtm/shared && npm run build --workspace @cbtm/parser && cross-env SMOKE_MODE=live tsx scripts/smoke-test.ts",
+    "audit:event": "tsx scripts/audit-event-integrity.ts",
     "validate:update:local": "tsx scripts/validate-update.ts --target=local",
     "validate:update:prod": "tsx scripts/validate-update.ts --target=prod",
     "validate:update:both": "tsx scripts/validate-update.ts --target=both",

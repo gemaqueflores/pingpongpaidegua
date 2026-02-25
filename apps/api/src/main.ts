@@ -9,7 +9,9 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, {
     logger: ["log", "error", "warn", "debug"],
   });
-  app.getHttpAdapter().getInstance().disable("x-powered-by");
+  const httpApp = app.getHttpAdapter().getInstance();
+  httpApp.disable("x-powered-by");
+  applyTrustProxy(httpApp);
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -89,10 +91,52 @@ async function bootstrap(): Promise<void> {
   });
 
   const rateLimit = new SimpleRateLimitMiddleware();
-  app.use((req: Request, res: Response, next: NextFunction) => rateLimit.use(req, res, next));
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    void rateLimit.use(req, res, next).catch(next);
+  });
 
   const port = Number(process.env.API_PORT ?? "4000");
   await app.listen(port);
+
+  const gracefulShutdown = async () => {
+    await rateLimit.close();
+    await app.close();
+  };
+
+  process.on("SIGINT", () => {
+    void gracefulShutdown().finally(() => process.exit(0));
+  });
+  process.on("SIGTERM", () => {
+    void gracefulShutdown().finally(() => process.exit(0));
+  });
 }
 
 bootstrap();
+
+function applyTrustProxy(app: { set: (key: string, value: unknown) => void }): void {
+  const raw = String(process.env.TRUST_PROXY ?? "").trim();
+  if (!raw) {
+    return;
+  }
+
+  if (raw === "1" || raw.toLowerCase() === "true") {
+    app.set("trust proxy", true);
+    return;
+  }
+
+  if (raw === "0" || raw.toLowerCase() === "false") {
+    app.set("trust proxy", false);
+    return;
+  }
+
+  if (/^\d+$/.test(raw)) {
+    app.set("trust proxy", Number(raw));
+    return;
+  }
+
+  const trustedHops = raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  app.set("trust proxy", trustedHops.length > 0 ? trustedHops : raw);
+}

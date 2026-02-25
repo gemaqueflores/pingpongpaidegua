@@ -2,6 +2,8 @@ import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Min } from "class-validat
 
 const EVENT_LEVEL_VALUES = ["ESTADUAL", "COPA", "NACIONAL", "OPEN"] as const;
 type EventLevelInput = (typeof EVENT_LEVEL_VALUES)[number];
+const RATING_MATCH_FORMAT_VALUES = ["RR_K1", "K1"] as const;
+type RatingMatchFormatInput = (typeof RATING_MATCH_FORMAT_VALUES)[number];
 
 export class CreateAdminEventDto {
   @IsInt()
@@ -42,4 +44,8 @@ export class CreateAdminEventDto {
   @IsOptional()
   @IsBoolean()
   concluido?: boolean;
+
+  @IsOptional()
+  @IsIn(RATING_MATCH_FORMAT_VALUES)
+  ratingMatchFormat?: RatingMatchFormatInput;
 }

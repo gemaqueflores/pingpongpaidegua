@@ -1,4 +1,4 @@
-import { getApiBase, getHeaders, handleResponse } from "./auth";
+import { fetchWithRecovery, getApiBase, getHeaders, handleResponse } from "./auth";
 
 const API_BASE = getApiBase();
 
@@ -30,7 +30,15 @@ export interface UserEventRow {
   situacaoComputada: EventSituation;
   totalCategorias: number;
   totalInscritos: number;
+  totalPartidas?: number;
+  totalPartidasCalculadas?: number;
+  totalPartidasWo?: number;
+  totalPartidasJogadas?: number;
   totalTecnicos: number;
+  inscricoesTotaisOficiais?: number;
+  associacoesAtletaCategoria?: number;
+  associacoesTecnicoClube?: number;
+  participantesUnicos?: number;
   groupsDefined: boolean;
   userStatus: UserEventStatus;
   groupSimulationEligible: boolean;
@@ -67,6 +75,30 @@ export interface EventEfficiencyResponse {
     pesoBronze: number;
   };
   ranking: EventEfficiencyRow[];
+}
+
+export interface EventCategoryMedalistsResponse {
+  eventId: number;
+  categories: Array<{
+    categoryId: number;
+    categoryName: string;
+    athleteCount: number;
+    officialRegisteredCount?: number | null;
+    officialPreRegisteredCount?: number | null;
+    officialTotalListedCount?: number | null;
+    expectedMedalists?: number | null;
+    publishedMatchesCount?: number;
+    calculatedMatchesCount?: number;
+    walkoverMatchesCount?: number;
+    playedMatchesCount?: number;
+    medalists: Array<{
+      athleteId: number;
+      athleteName: string;
+      clubName: string | null;
+      position: number;
+      medalha: "ouro" | "prata" | "bronze";
+    }>;
+  }>;
 }
 
 export interface GlobalEfficiencyResponse {
@@ -233,7 +265,7 @@ export interface GroupSimulationResponse {
 }
 
 export async function apiGetEvents(): Promise<UserEventRow[]> {
-  const response = await fetch(`${API_BASE}/events`, {
+  const response = await fetchWithRecovery(`${API_BASE}/events`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -242,7 +274,7 @@ export async function apiGetEvents(): Promise<UserEventRow[]> {
 }
 
 export async function apiGetEventSummary(eventId: number): Promise<UserEventRow> {
-  const response = await fetch(`${API_BASE}/events/${eventId}`, {
+  const response = await fetchWithRecovery(`${API_BASE}/events/${eventId}`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -256,7 +288,7 @@ export async function apiGetAthletes(eventId: number, search: string) {
     query.set("search", search);
   }
 
-  const response = await fetch(`${API_BASE}/events/${eventId}/athletes?${query.toString()}`, {
+  const response = await fetchWithRecovery(`${API_BASE}/events/${eventId}/athletes?${query.toString()}`, {
     headers: getHeaders(),
   });
 
@@ -273,7 +305,7 @@ export async function apiGetClubs(eventId: number, search = "", categoryId?: num
   }
 
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  const response = await fetch(`${API_BASE}/events/${eventId}/clubs${suffix}`, {
+  const response = await fetchWithRecovery(`${API_BASE}/events/${eventId}/clubs${suffix}`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -282,7 +314,7 @@ export async function apiGetClubs(eventId: number, search = "", categoryId?: num
 }
 
 export async function apiGetCategories(eventId: number) {
-  const response = await fetch(`${API_BASE}/events/${eventId}/categories`, {
+  const response = await fetchWithRecovery(`${API_BASE}/events/${eventId}/categories`, {
     headers: getHeaders(),
   });
 
@@ -290,7 +322,16 @@ export async function apiGetCategories(eventId: number) {
 }
 
 export async function apiGetEventEfficiency(eventId: number): Promise<EventEfficiencyResponse> {
-  const response = await fetch(`${API_BASE}/events/${eventId}/efficiency`, {
+  const response = await fetchWithRecovery(`${API_BASE}/events/${eventId}/efficiency`, {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+
+  return handleResponse(response);
+}
+
+export async function apiGetEventCategoryMedalists(eventId: number): Promise<EventCategoryMedalistsResponse> {
+  const response = await fetchWithRecovery(`${API_BASE}/events/${eventId}/medalists`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -299,7 +340,7 @@ export async function apiGetEventEfficiency(eventId: number): Promise<EventEffic
 }
 
 export async function apiGetGlobalEfficiency(): Promise<GlobalEfficiencyResponse> {
-  const response = await fetch(`${API_BASE}/efficiency`, {
+  const response = await fetchWithRecovery(`${API_BASE}/efficiency`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -322,7 +363,7 @@ export async function apiGetGroupSimulation(
     query.set("debug", "1");
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  const response = await fetch(`${API_BASE}/events/${eventId}/group-simulation${suffix}`, {
+  const response = await fetchWithRecovery(`${API_BASE}/events/${eventId}/group-simulation${suffix}`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -337,7 +378,7 @@ export async function apiGetClubAthletes(eventId: number, clubId: number, catego
   }
 
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  const response = await fetch(`${API_BASE}/events/${eventId}/clubs/${clubId}/athletes${suffix}`, {
+  const response = await fetchWithRecovery(`${API_BASE}/events/${eventId}/clubs/${clubId}/athletes${suffix}`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -350,7 +391,7 @@ export async function apiGetAthleteSummary(
   athleteId: number,
   orderBy: "phase_hierarchy_datetime" | "category_phase_datetime",
 ) {
-  const response = await fetch(
+  const response = await fetchWithRecovery(
     `${API_BASE}/events/${eventId}/athletes/${athleteId}/summary?orderBy=${orderBy}`,
     {
       headers: getHeaders(),
@@ -367,7 +408,7 @@ export async function apiGetAthletesDirectory(search = "") {
   }
 
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  const response = await fetch(`${API_BASE}/athletes/directory${suffix}`, {
+  const response = await fetchWithRecovery(`${API_BASE}/athletes/directory${suffix}`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -376,7 +417,7 @@ export async function apiGetAthletesDirectory(search = "") {
 }
 
 export async function apiGetAthleteCareer(athleteKey: string) {
-  const response = await fetch(`${API_BASE}/athletes/${encodeURIComponent(athleteKey)}/career`, {
+  const response = await fetchWithRecovery(`${API_BASE}/athletes/${encodeURIComponent(athleteKey)}/career`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -385,7 +426,7 @@ export async function apiGetAthleteCareer(athleteKey: string) {
 }
 
 export async function apiGetClubEfficiencyCareer(clubId: number): Promise<ClubEfficiencyCareerResponse> {
-  const response = await fetch(`${API_BASE}/clubs/${clubId}/efficiency-career`, {
+  const response = await fetchWithRecovery(`${API_BASE}/clubs/${clubId}/efficiency-career`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -394,7 +435,7 @@ export async function apiGetClubEfficiencyCareer(clubId: number): Promise<ClubEf
 }
 
 export async function apiReportProblem(input: { title: string; description: string }) {
-  const response = await fetch(`${API_BASE}/support/report-problem`, {
+  const response = await fetchWithRecovery(`${API_BASE}/support/report-problem`, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify(input),
@@ -402,3 +443,4 @@ export async function apiReportProblem(input: { title: string; description: stri
 
   return handleResponse(response);
 }
+

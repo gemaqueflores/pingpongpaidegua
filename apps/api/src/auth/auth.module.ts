@@ -7,12 +7,23 @@ import { AuthService } from "./auth.service";
 import { JwtStrategy } from "./jwt.strategy";
 import { PrismaService } from "../common/prisma.service";
 
+function resolveJwtSecret(): string {
+  const configured = process.env.JWT_SECRET?.trim();
+  if (configured) {
+    return configured;
+  }
+  if ((process.env.NODE_ENV ?? "development") === "production") {
+    throw new Error("JWT_SECRET obrigatorio em producao.");
+  }
+  return "changeme";
+}
+
 @Module({
   imports: [
     ConfigModule,
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? "changeme",
+      secret: resolveJwtSecret(),
       signOptions: {
         expiresIn: (process.env.JWT_EXPIRES_IN ?? "8h") as any,
       },

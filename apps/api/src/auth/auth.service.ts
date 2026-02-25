@@ -23,20 +23,18 @@ export class AuthService {
   private readonly lockoutMs: number;
   private readonly resetTokenTtlMs: number;
   private readonly adminResetEmail: string;
+  private readonly adminUsername: string;
+  private readonly bootstrapAdminPasswordHash: string;
   private nowProvider: () => number = () => Date.now();
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
   ) {
-    const adminUser = process.env.ADMIN_USERNAME ?? "mush1n-d0sh4";
-    const configuredHash = process.env.ADMIN_PASSWORD_HASH;
-    const adminPasswordHash =
-      configuredHash && configuredHash.trim().length > 0
-        ? configuredHash
-        : "$2a$12$Iq1queD4Z4aK9GFqIvVGz..KPrev.5WHB7PJdaAXqLBbLf5XYcthC";
+    this.adminUsername = this.resolveAdminUsername();
+    this.bootstrapAdminPasswordHash = this.resolveBootstrapAdminPasswordHash();
 
-    if (!adminPasswordHash.startsWith("$2")) {
+    if (!this.bootstrapAdminPasswordHash.startsWith("$2")) {
       throw new Error("ADMIN_PASSWORD_HASH invalido: use hash bcrypt");
     }
 
@@ -54,20 +52,39 @@ export class AuthService {
     this.adminResetEmail = (process.env.ADMIN_RESET_EMAIL ?? "gemaqueflores@gmail.com").trim().toLowerCase();
   }
 
+  private isProduction(): boolean {
+    return (process.env.NODE_ENV ?? "development") === "production";
+  }
+
+  private resolveAdminUsername(): string {
+    const configured = process.env.ADMIN_USERNAME?.trim();
+    if (configured) {
+      return configured;
+    }
+    if (this.isProduction()) {
+      throw new Error("ADMIN_USERNAME obrigatorio em producao.");
+    }
+    return "mush1n-d0sh4";
+  }
+
+  private resolveBootstrapAdminPasswordHash(): string {
+    const configured = process.env.ADMIN_PASSWORD_HASH?.trim();
+    if (configured) {
+      return configured;
+    }
+    if (this.isProduction()) {
+      throw new Error("ADMIN_PASSWORD_HASH obrigatorio em producao.");
+    }
+    return "$2a$12$Iq1queD4Z4aK9GFqIvVGz..KPrev.5WHB7PJdaAXqLBbLf5XYcthC";
+  }
+
   setNowProvider(nowProvider: () => number): void {
     this.nowProvider = nowProvider;
   }
 
   private async ensureAdminAccount(): Promise<AuthAccount> {
-    const configuredUsername = process.env.ADMIN_USERNAME ?? "mush1n-d0sh4";
-    const configuredHash = process.env.ADMIN_PASSWORD_HASH;
-    const fallbackHash =
-      configuredHash && configuredHash.trim().length > 0
-        ? configuredHash
-        : "$2a$12$Iq1queD4Z4aK9GFqIvVGz..KPrev.5WHB7PJdaAXqLBbLf5XYcthC";
-
     const existing = await this.prisma.adminCredential.findUnique({
-      where: { username: configuredUsername },
+      where: { username: this.adminUsername },
     });
 
     if (existing) {
@@ -81,8 +98,8 @@ export class AuthService {
 
     const created = await this.prisma.adminCredential.create({
       data: {
-        username: configuredUsername,
-        passwordHash: fallbackHash,
+        username: this.adminUsername,
+        passwordHash: this.bootstrapAdminPasswordHash,
       },
     });
 

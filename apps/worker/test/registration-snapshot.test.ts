@@ -64,7 +64,7 @@ test("computeEventRegistrationPairRemovals remove pares obsoletos mesmo para atl
   assert.deepEqual(removals, [{ athleteId: 2, categoryId: 20, registrationStatus: "PRE_INSCRITO" }]);
 });
 
-test("computeEventRegistrationPairRemovals preserva pares protegidos e pares sem status de inscricao", () => {
+test("computeEventRegistrationPairRemovals preserva pares protegidos e remove pares sem status de inscricao", () => {
   const removals = computeEventRegistrationPairRemovals({
     currentPairs: [
       { athleteId: 1, categoryId: 10, registrationStatus: "INSCRITO" },
@@ -75,7 +75,10 @@ test("computeEventRegistrationPairRemovals preserva pares protegidos e pares sem
     protectedCategoryIds: new Set([99]),
   });
 
-  assert.deepEqual(removals, [{ athleteId: 1, categoryId: 10, registrationStatus: "INSCRITO" }]);
+  assert.deepEqual(removals, [
+    { athleteId: 1, categoryId: 10, registrationStatus: "INSCRITO" },
+    { athleteId: 2, categoryId: 20, registrationStatus: null },
+  ]);
 });
 
 test("shouldAllowDestructiveRegistrationSync bloqueia sincronizacao destrutiva com baixa cobertura", () => {

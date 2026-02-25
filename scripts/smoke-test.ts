@@ -230,6 +230,56 @@ async function main() {
     throw new Error(`Smoke falhou: athleteCategoryCount=${athleteCategoryCount} < totalAthletes=${totalAthletes}`);
   }
 
+  const discoveredValidCategories = captured.categoriesDiscovered.filter((item) => item.valid);
+  const discoveredAllCategories = captured.categoriesDiscovered;
+  const expectedByComboTotalAll = discoveredAllCategories.reduce(
+    (sum, item) => sum + Number(item.totalListedCount ?? 0),
+    0,
+  );
+  const expectedByComboTotal = discoveredValidCategories.reduce(
+    (sum, item) => sum + Number(item.totalListedCount ?? 0),
+    0,
+  );
+  const expectedByComboRegistered = discoveredValidCategories.reduce(
+    (sum, item) => sum + Number(item.registeredCount ?? 0),
+    0,
+  );
+  const expectedByComboPreRegistered = discoveredValidCategories.reduce(
+    (sum, item) => sum + Number(item.preRegisteredCount ?? 0),
+    0,
+  );
+
+  const actualByCategory = new Map<string, number>();
+  for (const registration of dataset.registrations) {
+    if (!registration.categoryId) {
+      continue;
+    }
+    actualByCategory.set(
+      registration.categoryId,
+      (actualByCategory.get(registration.categoryId) ?? 0) + 1,
+    );
+  }
+  const parserFromCategoriesDiscovered = discoveredValidCategories.reduce(
+    (sum, item) => sum + (actualByCategory.get(item.categoryId) ?? 0),
+    0,
+  );
+
+  const topRegistrationGaps = discoveredValidCategories
+    .map((item) => {
+      const expected = Number(item.totalListedCount ?? 0);
+      const actual = actualByCategory.get(item.categoryId) ?? 0;
+      return {
+        categoryId: item.categoryId,
+        categoryName: item.categoryName,
+        expected,
+        actual,
+        gap: expected - actual,
+      };
+    })
+    .filter((item) => item.gap > 0)
+    .sort((a, b) => b.gap - a.gap)
+    .slice(0, 15);
+
   const example = orderingExample(dataset);
   const categoriesProof = dataset.categories
     .map((category) => {
@@ -257,6 +307,22 @@ async function main() {
   console.log(`inscricoes=${totalRegistrations}`);
   console.log(`jogos=${totalMatches}`);
   console.log(`athlete_category=${athleteCategoryCount}`);
+  console.log(`combo_inscricoes_total=${expectedByComboTotal}`);
+  console.log(`combo_inscricoes_total_todas_categorias=${expectedByComboTotalAll}`);
+  console.log(`combo_inscritos=${expectedByComboRegistered}`);
+  console.log(`combo_pre_inscritos=${expectedByComboPreRegistered}`);
+  console.log(`parser_inscricoes_em_categorias_descobertas=${parserFromCategoriesDiscovered}`);
+  console.log(
+    `cobertura_inscricoes_combo=${expectedByComboTotal > 0 ? ((parserFromCategoriesDiscovered / expectedByComboTotal) * 100).toFixed(1) : "n/a"}%`,
+  );
+  if (topRegistrationGaps.length > 0) {
+    console.log("=== TOP GAPS INSCRICOES (combo - parser) ===");
+    for (const gap of topRegistrationGaps) {
+      console.log(
+        `gap=${gap.categoryName} [${gap.categoryId}] esperado=${gap.expected} parser=${gap.actual} diff=${gap.gap}`,
+      );
+    }
+  }
   console.log("=== PROVA CATEGORIAS ===");
   for (const line of categoriesProof) {
     console.log(`categoria=${line}`);

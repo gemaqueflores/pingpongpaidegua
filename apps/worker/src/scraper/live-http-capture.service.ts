@@ -5,7 +5,7 @@ import {
   EliminationPayload,
   extractDxPayloads,
 } from "@cbtm/parser";
-import { compactWhitespace } from "@cbtm/shared";
+import { compactWhitespace, computeOfficialCategoryMatchesCount } from "@cbtm/shared";
 import { config } from "../config";
 import { CategoryContext, DXRequestBuilder } from "./dx-request-builder";
 import type { CaptureOptions } from "./capture.service";
@@ -57,7 +57,43 @@ const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
 
 function categoryDisplayName(raw: string): string {
-  return compactWhitespace(raw.replace(/\s+\d+\s+inscrito\(s\).*$/i, ""));
+  return compactWhitespace(
+    raw.replace(
+      /\s+\d+\s+(?:pr[eé][-\s]?inscrito(?:\(s\)|s)?|inscrito(?:\(s\)|s)?)(?:[\s\S]*)$/i,
+      "",
+    ),
+  );
+}
+
+function parseCategoryCounters(raw: string): {
+  registeredCount: number | null;
+  preRegisteredCount: number | null;
+  totalListedCount: number | null;
+} {
+  const text = compactWhitespace(raw);
+  if (!text) {
+    return {
+      registeredCount: null,
+      preRegisteredCount: null,
+      totalListedCount: null,
+    };
+  }
+
+  const preMatches = [...text.matchAll(/(\d+)\s+pr[^\s]*inscrito(?:\(s\)|s)?/gi)];
+  const registeredMatches = [...text.matchAll(/(\d+)\s+inscrito(?:\(s\)|s)?/gi)];
+
+  const preRegisteredCount = preMatches.reduce((sum, match) => sum + Number(match[1] ?? 0), 0) || null;
+  const registeredCount = registeredMatches.reduce((sum, match) => sum + Number(match[1] ?? 0), 0) || null;
+  const totalListedCount =
+    (registeredCount ?? 0) + (preRegisteredCount ?? 0) > 0
+      ? (registeredCount ?? 0) + (preRegisteredCount ?? 0)
+      : null;
+
+  return {
+    registeredCount,
+    preRegisteredCount,
+    totalListedCount,
+  };
 }
 
 function decodeHtmlEntities(value: string): string {
@@ -99,6 +135,7 @@ function parseHiddenInputs(html: string): Record<string, string> {
 function parseCategoriesFromHtml(
   html: string,
   ignoredCategoryIds: Set<string>,
+  options?: CaptureOptions,
 ): { categories: DiscoveredCategory[]; categoryTextById: Map<string, string> } {
   const categories: DiscoveredCategory[] = [];
   const categoryTextById = new Map<string, string>();
@@ -122,11 +159,22 @@ function parseCategoriesFromHtml(
 
     seen.add(categoryId);
     const textDecoded = decodeHtmlEntities(rawText.replace(/\\'/g, "'"));
+    const counters = parseCategoryCounters(textDecoded);
     categoryTextById.set(categoryId, textDecoded);
+    const categoryName = categoryDisplayName(textDecoded);
+    const officialMatchesCount = computeOfficialCategoryMatchesCount(counters.registeredCount, {
+      categoryName,
+      eventStartDate: options?.eventStartDate ?? null,
+      ratingMatchFormat: options?.ratingMatchFormat ?? null,
+    });
     categories.push({
       categoryId,
-      categoryName: categoryDisplayName(textDecoded),
+      categoryName,
       valid: !ignoredCategoryIds.has(categoryId),
+      registeredCount: counters.registeredCount,
+      preRegisteredCount: counters.preRegisteredCount,
+      totalListedCount: counters.totalListedCount,
+      officialMatchesCount: officialMatchesCount > 0 ? officialMatchesCount : null,
     });
   }
 
@@ -201,12 +249,12 @@ export class LiveHttpCaptureService {
     const eliminationPayloads: EliminationPayload[] = [];
     let paginationRequests = 0;
 
-    const snapshot = await this.loadInitialPage(requestContext, eventUrl);
+    const snapshot = await this.loadInitialPage(requestContext, eventUrl, options);
     const validCategories = snapshot.categories.filter((item) => item.valid);
     const shouldCaptureInscricoes = options?.captureInscricoes ?? true;
     const shouldCaptureGrupos = options?.captureGrupos ?? true;
     const shouldCaptureResultados = options?.captureResultados ?? true;
-    const shouldFetchEliminatoria = options?.fetchEliminatoria ?? true;
+    const shouldFetchEliminatoria = false;
 
     for (const category of validCategories) {
       const categoryContext: CategoryContext = {
@@ -336,24 +384,30 @@ export class LiveHttpCaptureService {
       }
 
       if (shouldFetchEliminatoria) {
-        tabsVisited.add("ELIMINATORIA");
-        const elimination = await this.fetchElimination(requestContext, eventId, category);
-        if (elimination) {
-          eliminationPayloads.push(elimination);
-        }
+        // Hard-disabled: fase eliminatoria nao faz mais parte do scraping oficial.
       }
     }
 
     const payloads: DxPayload[] = [];
+    const discoveredCategoryIds = new Set(snapshot.categories.map((item) => item.categoryId));
+    const ignoredCategoryIds = new Set(config.scraperExcludedCategoryIds);
     const mismatchedCategoryIds = new Map<string, number>();
     for (const rawBody of responses) {
       const fallbackCategoryId = responseCategoryByBody.get(rawBody) ?? null;
       const extracted = extractDxPayloads(rawBody).map((payload) => {
+        const payloadCategoryId = compactWhitespace(payload.categoryId ?? "");
         if (!fallbackCategoryId) {
           return payload;
         }
-        if (payload.categoryId && payload.categoryId !== fallbackCategoryId) {
-          const mismatchKey = `${payload.tab}:${payload.categoryId}->${fallbackCategoryId}`;
+        const payloadCategoryIsValid =
+          Boolean(payloadCategoryId) &&
+          discoveredCategoryIds.has(payloadCategoryId) &&
+          !ignoredCategoryIds.has(payloadCategoryId);
+
+        // Categoria do request HTTP (callbackparam) e a fonte de verdade.
+        // O payload DX pode retornar categoryId defasado mesmo quando "valido".
+        if (payloadCategoryIsValid && payloadCategoryId !== fallbackCategoryId) {
+          const mismatchKey = `${payload.tab}:${payloadCategoryId}->${fallbackCategoryId}`;
           mismatchedCategoryIds.set(mismatchKey, (mismatchedCategoryIds.get(mismatchKey) ?? 0) + 1);
         }
         return {
@@ -389,6 +443,7 @@ export class LiveHttpCaptureService {
   private async loadInitialPage(
     requestContext: APIRequestContext,
     eventUrl: string,
+    options?: CaptureOptions,
   ): Promise<InitialPageSnapshot> {
     const response = await requestContext.get(eventUrl, {
       headers: {
@@ -406,6 +461,7 @@ export class LiveHttpCaptureService {
     const { categories, categoryTextById } = parseCategoriesFromHtml(
       html,
       new Set(config.scraperExcludedCategoryIds),
+      options,
     );
 
     if (categories.length === 0) {
@@ -474,32 +530,5 @@ export class LiveHttpCaptureService {
     }
 
     return text;
-  }
-
-  private async fetchElimination(
-    requestContext: APIRequestContext,
-    eventId: number,
-    category: DiscoveredCategory,
-  ): Promise<EliminationPayload | null> {
-    const url = `https://app.cbtm.org.br/api/GameResult/${eventId}/${category.categoryId}`;
-    try {
-      const response = await requestContext.get(url);
-      if (!response.ok()) {
-        return null;
-      }
-
-      const rawBody = compactWhitespace(await response.text());
-      if (!rawBody || rawBody === "\"\"" || rawBody === "null") {
-        return null;
-      }
-
-      return {
-        categoryId: category.categoryId,
-        categoryName: categoryDisplayName(category.categoryName),
-        rawBody,
-      };
-    } catch {
-      return null;
-    }
   }
 }

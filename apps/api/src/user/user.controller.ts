@@ -31,8 +31,10 @@ export class UserController {
   async listAthletes(
     @Param("id", ParseIntPipe) eventId: number,
     @Query("search") search?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
   ) {
-    return this.service.listAthletes(eventId, search ?? "");
+    return this.service.listAthletes(eventId, search ?? "", page, pageSize);
   }
 
   @Get("events/:id/clubs")
@@ -40,12 +42,16 @@ export class UserController {
     @Param("id", ParseIntPipe) eventId: number,
     @Query("search") search?: string,
     @Query("categoryId") categoryId?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
   ) {
     const parsedCategoryId = categoryId ? Number(categoryId) : null;
     return this.service.listClubs(
       eventId,
       search ?? "",
       parsedCategoryId && Number.isFinite(parsedCategoryId) ? parsedCategoryId : null,
+      page,
+      pageSize,
     );
   }
 
@@ -57,6 +63,12 @@ export class UserController {
   @Get("events/:id/efficiency")
   async listEventEfficiency(@Param("id", ParseIntPipe) eventId: number) {
     return this.service.listEventEfficiency(eventId);
+  }
+
+  @Get("events/:id/medalists")
+  @PublicCacheTtl(60)
+  async listEventCategoryMedalists(@Param("id", ParseIntPipe) eventId: number) {
+    return this.service.listEventCategoryMedalists(eventId);
   }
 
   @Get("efficiency")
@@ -115,8 +127,12 @@ export class UserController {
   }
 
   @Get("athletes/directory")
-  async athletesDirectory(@Query("search") search?: string) {
-    return this.service.listAthleteDirectory(search ?? "");
+  async athletesDirectory(
+    @Query("search") search?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+  ) {
+    return this.service.listAthleteDirectory(search ?? "", page, pageSize);
   }
 
   @Get("athletes/:athleteKey/career")

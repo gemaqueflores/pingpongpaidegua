@@ -46,7 +46,7 @@ export class AdminEventsService {
             by: ["eventId"],
             where: {
               eventId: { in: eventIds },
-              phase: { in: ["GRUPOS", "RESULTADOS", "ELIMINATORIA"] },
+              phase: { in: ["GRUPOS", "RESULTADOS"] },
             },
             _count: { _all: true },
           }),
@@ -54,7 +54,7 @@ export class AdminEventsService {
             by: ["eventId"],
             where: {
               eventId: { in: eventIds },
-              phase: { in: ["GRUPOS", "RESULTADOS", "ELIMINATORIA"] },
+              phase: { in: ["GRUPOS", "RESULTADOS"] },
               OR: [{ winnerIndex: { not: null } }, { p1Sets: { not: null } }, { p2Sets: { not: null } }],
             },
             _count: { _all: true },
@@ -107,6 +107,7 @@ export class AdminEventsService {
         cbtmEventId: dto.cbtmEventId,
         nome: dto.nome,
         nivel: dto.nivel ?? null,
+        ratingMatchFormat: dto.ratingMatchFormat ?? "RR_K1",
         inicioInscricoes,
         fimInscricoes,
         inicioRealizacao,
@@ -296,6 +297,7 @@ export class AdminEventsService {
         cbtmEventId: dto.cbtmEventId,
         nome: dto.nome,
         nivel: dto.nivel,
+        ratingMatchFormat: dto.ratingMatchFormat,
         inicioInscricoes: nextInicioInscricoes,
         fimInscricoes: nextFimInscricoes,
         inicioRealizacao: nextInicioRealizacao,
@@ -461,6 +463,11 @@ export class AdminEventsService {
     }
 
     return this.queue.enqueueScrapeNow(id, stage);
+  }
+
+  async reprocessPostScrape(id: number) {
+    await this.ensureEvent(id);
+    return this.queue.enqueuePostScrapeReprocess(id);
   }
 
   async listScrapeRuns(eventId: number) {

@@ -1,8 +1,10 @@
 ﻿import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  collectWalkoverLoserAthleteIds,
   computeCategoryClassificationSummaries,
   computeCategoryPerformanceSummaries,
+  isWalkoverMatch,
   type CategoryAnalyticsMatch,
 } from "../src/user/athlete-analytics";
 
@@ -22,6 +24,54 @@ function createMatch(input: Partial<CategoryAnalyticsMatch>): CategoryAnalyticsM
     ...input,
   };
 }
+
+test("detecta WO quando placar e parciais sao 3x0 com 11x0", () => {
+  const match = createMatch({
+    players: [{ athleteId: 100, name: "Vencedor" }, { athleteId: 200, name: "Perdedor" }],
+    winnerIndex: 0,
+    setsResult: { p1Sets: 3, p2Sets: 0 },
+    sets: [
+      { p1: 11, p2: 0 },
+      { p1: 11, p2: 0 },
+      { p1: 11, p2: 0 },
+    ],
+  });
+
+  assert.equal(isWalkoverMatch(match), true);
+  assert.deepEqual([...collectWalkoverLoserAthleteIds([match])], [200]);
+});
+
+test("nao detecta WO quando houver parcial diferente de 11x0", () => {
+  const match = createMatch({
+    players: [{ athleteId: 100, name: "Vencedor" }, { athleteId: 200, name: "Perdedor" }],
+    winnerIndex: 0,
+    setsResult: { p1Sets: 3, p2Sets: 0 },
+    sets: [
+      { p1: 11, p2: 0 },
+      { p1: 11, p2: 8 },
+      { p1: 11, p2: 0 },
+    ],
+  });
+
+  assert.equal(isWalkoverMatch(match), false);
+  assert.equal(collectWalkoverLoserAthleteIds([match]).size, 0);
+});
+
+test("detecta duplo WO com placar 0-0 e parciais 0-0", () => {
+  const match = createMatch({
+    players: [{ athleteId: 300, name: "Ausente A" }, { athleteId: 400, name: "Ausente B" }],
+    winnerIndex: null,
+    setsResult: { p1Sets: 0, p2Sets: 0 },
+    sets: [
+      { p1: 0, p2: 0 },
+      { p1: 0, p2: 0 },
+      { p1: 0, p2: 0 },
+    ],
+  });
+
+  assert.equal(isWalkoverMatch(match), true);
+  assert.deepEqual([...collectWalkoverLoserAthleteIds([match])].sort((a, b) => a - b), [300, 400]);
+});
 
 test("performance por categoria soma pontos apenas da categoria", () => {
   const matches: CategoryAnalyticsMatch[] = [
@@ -60,6 +110,27 @@ test("classificacao eliminatoria campeao", () => {
       round: "Final",
       players: [{ athleteId: 10, name: "A" }, { athleteId: 13, name: "D" }],
       winnerIndex: 0,
+    }),
+  ];
+
+  const classification = computeCategoryClassificationSummaries(matches, { athleteId: 10 })[0];
+  assert.equal(classification.position, 1);
+  assert.equal(classification.mode, "eliminatoria");
+});
+
+test("eliminatoria com confronto pendente nao bloqueia podio quando final ja foi decidida", () => {
+  const matches: CategoryAnalyticsMatch[] = [
+    createMatch({
+      round: "Final",
+      players: [{ athleteId: 10, name: "A" }, { athleteId: 13, name: "D" }],
+      winnerIndex: 0,
+    }),
+    createMatch({
+      round: "Semifinal",
+      players: [{ athleteId: 12, name: "C" }, { athleteId: 14, name: "E" }],
+      winnerIndex: null,
+      setsResult: null,
+      sets: [],
     }),
   ];
 

@@ -18,6 +18,7 @@ import {
   type EfficiencyConfig,
   type EventLevel,
   type EventSituation,
+  type RatingMatchFormat,
 } from "../../lib/admin-api";
 import { clearAuth, getAuthToken, getUserRole } from "../../lib/auth";
 
@@ -72,6 +73,10 @@ type WarningSummary = {
 };
 
 const EVENT_LEVELS: EventLevel[] = ["ESTADUAL", "COPA", "NACIONAL", "OPEN"];
+const RATING_MATCH_FORMATS: Array<{ value: RatingMatchFormat; label: string }> = [
+  { value: "RR_K1", label: "RR+k1 (grupo + eliminatória)" },
+  { value: "K1", label: "k1 (eliminatória simples)" },
+];
 const EVENT_TIME_ZONE = "America/Sao_Paulo";
 
 function formatEventDate(value: string | null | undefined): string {
@@ -331,6 +336,7 @@ export default function AdminPage() {
   const [inicioRealizacao, setInicioRealizacao] = useState("");
   const [fimRealizacao, setFimRealizacao] = useState("");
   const [concluidoForm, setConcluidoForm] = useState(false);
+  const [ratingMatchFormat, setRatingMatchFormat] = useState<RatingMatchFormat>("RR_K1");
 
   const selectedEvent = useMemo(
     () => events.find((event) => event.id === selectedEventId) ?? null,
@@ -409,6 +415,7 @@ export default function AdminPage() {
     setInicioRealizacao("");
     setFimRealizacao("");
     setConcluidoForm(false);
+    setRatingMatchFormat("RR_K1");
   }
 
   function startEditEvent(event: EventRow) {
@@ -421,6 +428,7 @@ export default function AdminPage() {
     setInicioRealizacao(formatDateInput(event.inicioRealizacao ?? event.dataInicio));
     setFimRealizacao(formatDateInput(event.fimRealizacao ?? event.dataFim));
     setConcluidoForm(Boolean(event.concluido));
+    setRatingMatchFormat(event.ratingMatchFormat ?? "RR_K1");
   }
 
   function setScrapeProgress(eventId: number, next: ScrapeProgressState | null) {
@@ -657,6 +665,7 @@ export default function AdminPage() {
         nome: nome.trim(),
         cbtmEventId: parsedCbtmEventId,
         nivel: nivel || undefined,
+        ratingMatchFormat,
         inicioInscricoes: normalizedInicioInscricoes,
         fimInscricoes: normalizedFimInscricoes,
         inicioRealizacao: normalizedInicioRealizacao,
@@ -973,6 +982,23 @@ export default function AdminPage() {
           </label>
         </div>
 
+        <div className="admin-form-row admin-form-row-event-main">
+          <label className="admin-field admin-field-grid">
+            <span>Formato Rating (R*)</span>
+            <select
+              className="admin-input admin-input-level"
+              value={ratingMatchFormat}
+              onChange={(event) => setRatingMatchFormat(event.target.value as RatingMatchFormat)}
+            >
+              {RATING_MATCH_FORMATS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
         <div className="admin-form-row admin-form-row-event-dates">
           <label className="admin-field admin-field-grid">
             <span>Início inscrições</span>
@@ -1061,6 +1087,7 @@ export default function AdminPage() {
               <th>Realização</th>
               <th>Situação</th>
               <th>Status</th>
+              <th>Rating (R*)</th>
               <th>Ultimo scrape</th>
               <th>Contagens</th>
               <th>Andamento</th>
@@ -1089,6 +1116,7 @@ export default function AdminPage() {
                 <td>
                   <span className="pill">{event.concluido ? "Concluído" : "Ativo"}</span>
                 </td>
+                <td>{event.ratingMatchFormat === "K1" ? "k1" : "RR+k1"}</td>
                 <td>{event.lastScrapeAt ? formatDateTimeDisplay(event.lastScrapeAt) : "-"}</td>
                 <td>
                   A:{event._count?.athletes ?? 0} C:{event._count?.categories ?? 0} J:{event._count?.matches ?? 0}

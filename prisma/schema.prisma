@@ -32,6 +32,11 @@ enum EventLevel {
   OPEN
 }
 
+enum RatingMatchFormat {
+  RR_K1
+  K1
+}
+
 enum RegistrationStatus {
   INSCRITO
   PRE_INSCRITO
@@ -53,6 +58,7 @@ model Event {
   cbtmEventId  Int         @unique @map("cbtm_event_id")
   nome         String
   nivel        EventLevel?
+  ratingMatchFormat RatingMatchFormat @default(RR_K1) @map("rating_match_format")
   dataInicio   DateTime?   @map("data_inicio")
   dataFim      DateTime?   @map("data_fim")
   inicioInscricoes DateTime? @map("inicio_inscricoes")
@@ -138,6 +144,8 @@ model Athlete {
   @@index([eventId, clubId])
   @@index([eventId, nameDisplay])
   @@index([eventId, createdFromWarning, nameDisplay])
+  @@index([createdFromWarning, nameDisplay])
+  @@index([createdFromWarning, nameNormalized])
   @@map("athletes")
 }
 
@@ -316,6 +324,7 @@ model AthleteMatchConflict {
 
   @@unique([eventId, context, shortNameNormalized])
   @@index([eventId, resolvedAthleteId])
+  @@index([eventId, resolvedAt, createdAt])
   @@map("athlete_match_conflicts")
 }
 

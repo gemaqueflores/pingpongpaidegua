@@ -29,9 +29,12 @@ test("EventCard snapshot", () => {
       statusTone="open"
       periodLabel="21/02/2026 ate 22/02/2026"
       totalInscritos={196}
+      inscricoesTotaisOficiais={468}
+      totalPartidas={779}
+      totalPartidasJogadas={753}
       totalCategorias={59}
-      groupSimulationEligible
       groupsDefined={false}
+      isConcluded={false}
       onOpen={() => undefined}
       onSimulate={() => undefined}
     />,

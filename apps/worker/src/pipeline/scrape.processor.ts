@@ -1,6 +1,6 @@
-import { parseDxPayloads } from "@cbtm/parser";
+import { DiscoveredCategory, parseDxPayloads } from "@cbtm/parser";
 import { createHash } from "node:crypto";
-import { buildEventScrapePolicy, computeEventSituation } from "@cbtm/shared";
+import { buildEventScrapePolicy, compactWhitespace, computeEventSituation, normalizeText } from "@cbtm/shared";
 import { Prisma, ScrapeStatus } from "@prisma/client";
 import { config } from "../config";
 import { log } from "../logger";
@@ -46,6 +46,46 @@ interface RegressionGuardrailStats {
   flagged: boolean;
 }
 
+interface PostScrapeSummary {
+  warningsBySeverity: {
+    high: number;
+    medium: number;
+    low: number;
+  };
+  conflictAutofix: {
+    poolSize: number;
+    scanned: number;
+    backlogPending: number;
+    noCandidatesInPool: number;
+    resolved: number;
+    resolvedByAliasExact: number;
+    skippedAmbiguous: number;
+    skippedInvalidCandidate: number;
+    disabled: boolean;
+  };
+}
+
+interface ScrapeConformanceAudit {
+  categoryCountExpected: number;
+  categoryCountObserved: number;
+  registrationMismatches: number;
+  matchMismatches: number;
+  playedMatchMismatches: number;
+  expectedRegistrationsTotal: number;
+  observedRegistrationsTotal: number;
+  expectedMatchesTotal: number;
+  expectedPlayedMatchesTotal: number;
+  observedMatchesTotal: number;
+  observedWalkoverMatchesTotal: number;
+  observedPlayedMatchesTotal: number;
+  pendingConflicts: number;
+  eliminatoriaMatchesObserved: number;
+  athleteCategoryRuleViolations: number;
+  samples: string[];
+}
+
+type CategoryKindForAudit = "RATING" | "RANKING";
+
 function resolveManualForceStage(reason?: string): ManualForceStage {
   const normalized = String(reason ?? "").trim().toLowerCase();
   if (!normalized.startsWith("scrape-now-force")) {
@@ -77,6 +117,101 @@ function resolveManualForceStage(reason?: string): ManualForceStage {
   }
 
   return "full";
+}
+
+function isPostScrapeReprocessReason(reason?: string): boolean {
+  return String(reason ?? "").trim().toLowerCase().startsWith("post-scrape-reprocess");
+}
+
+function athleteNameContainsReducedTokens(shortNameNormalized: string, athleteNameDisplay: string): boolean {
+  const shortTokens = normalizeText(String(shortNameNormalized ?? ""))
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+  if (shortTokens.length === 0) {
+    return false;
+  }
+
+  const athleteTokens = new Set(
+    normalizeText(String(athleteNameDisplay ?? ""))
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter(Boolean),
+  );
+
+  return shortTokens.every((token) => athleteTokens.has(token));
+}
+
+function detectCategoryKindForAudit(categoryName: string): CategoryKindForAudit | null {
+  const normalized = normalizeText(String(categoryName ?? ""))
+    .replace(/\s+/g, "")
+    .toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+  if (/^R[A-Z]{2,3}$/.test(normalized)) {
+    return "RATING";
+  }
+  if (
+    normalized.startsWith("SUB") ||
+    normalized.startsWith("ADULTO") ||
+    normalized.startsWith("MASTER") ||
+    normalized.startsWith("ABSOLUTO")
+  ) {
+    return "RANKING";
+  }
+  return null;
+}
+
+function extractMatchKeyFromConflictContext(context: string): string {
+  return String(context ?? "").replace(/:(A|B)$/i, "");
+}
+
+function parseScoreSetsForAudit(raw: Prisma.JsonValue | null | undefined): Array<{ p1: number; p2: number }> {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const parsed: Array<{ p1: number; p2: number }> = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      continue;
+    }
+    const value = entry as { a?: unknown; b?: unknown; p1?: unknown; p2?: unknown };
+    const p1 = Number(value.a ?? value.p1);
+    const p2 = Number(value.b ?? value.p2);
+    if (!Number.isFinite(p1) || !Number.isFinite(p2)) {
+      continue;
+    }
+    parsed.push({ p1, p2 });
+  }
+  return parsed;
+}
+
+function isWalkoverByStoredScoreForAudit(input: {
+  sets: Array<{ p1: number; p2: number }>;
+  p1Sets: number | null;
+  p2Sets: number | null;
+}): boolean {
+  if (
+    input.sets.length > 0 &&
+    input.sets.every((set) => set.p1 === 0 && set.p2 === 0) &&
+    input.p1Sets === 0 &&
+    input.p2Sets === 0
+  ) {
+    return true;
+  }
+
+  const isStraightWin =
+    (input.p1Sets === 3 && input.p2Sets === 0) ||
+    (input.p1Sets === 0 && input.p2Sets === 3);
+  if (!isStraightWin || input.sets.length !== 3) {
+    return false;
+  }
+
+  const winnerIsP1 = input.p1Sets === 3;
+  return input.sets.every((set) =>
+    winnerIsP1 ? set.p1 === 11 && set.p2 === 0 : set.p2 === 11 && set.p1 === 0,
+  );
 }
 
 export class ScrapeProcessor {
@@ -117,6 +252,7 @@ export class ScrapeProcessor {
     });
 
     const forceScrape = String(reason ?? "").startsWith("scrape-now-force");
+    const postScrapeOnly = isPostScrapeReprocessReason(reason);
     const lockAcquired = forceScrape
       ? await this.acquireEventLockWithRetry(eventId)
       : await this.acquireEventLock(eventId);
@@ -136,7 +272,7 @@ export class ScrapeProcessor {
     }
 
     const manualForceStage = forceScrape ? resolveManualForceStage(reason) : "full";
-    if (event.concluido && !forceScrape) {
+    if (event.concluido && !forceScrape && !postScrapeOnly) {
       log("info", "Evento concluido, scrape ignorado", {
         eventId,
         reason: reason ?? null,
@@ -161,7 +297,16 @@ export class ScrapeProcessor {
       },
     );
 
-    const scrapePolicy =
+    if (postScrapeOnly) {
+      try {
+        await this.executePostScrapeReprocess(eventId, reason, eventSituation, baseScrapePolicy.reason);
+      } finally {
+        await this.releaseEventLock(eventId);
+      }
+      return;
+    }
+
+    const requestedScrapePolicy =
       manualForceStage === "stage-2-inscricoes"
         ? {
             ...baseScrapePolicy,
@@ -177,10 +322,18 @@ export class ScrapeProcessor {
               captureInscricoes: false,
               captureGrupos: true,
               captureResultados: true,
-              fetchEliminatoria: true,
+              fetchEliminatoria: false,
               reason: "manual-force-stage-3-resultados",
             }
           : baseScrapePolicy;
+    const scrapePolicy = {
+      ...requestedScrapePolicy,
+      fetchEliminatoria: false,
+      reason:
+        requestedScrapePolicy.fetchEliminatoria
+          ? `${requestedScrapePolicy.reason}|eliminatoria-hard-disabled`
+          : requestedScrapePolicy.reason,
+    };
 
     if (!scrapePolicy.autoSchedule && !forceScrape) {
       log("info", "Evento fora da policy automatica de scrape", {
@@ -318,6 +471,8 @@ export class ScrapeProcessor {
           captureGrupos: scrapePolicy.captureGrupos,
           captureResultados: scrapePolicy.captureResultados,
           fetchEliminatoria: scrapePolicy.fetchEliminatoria,
+          eventStartDate: event.dataInicio ?? event.inicioRealizacao ?? null,
+          ratingMatchFormat: event.ratingMatchFormat ?? "RR_K1",
         }),
         new Promise<never>((_, reject) => {
           setTimeout(
@@ -335,11 +490,11 @@ export class ScrapeProcessor {
       const incrementalStage3Enabled =
         !scrapePolicy.captureInscricoes && scrapePolicy.captureResultados && scrapePolicy.captureGrupos;
       const stage3CategoryHashes = incrementalStage3Enabled
-        ? this.computeStage3CategoryHashes(capture.payloads, capture.eliminationPayloads)
+        ? this.computeStage3CategoryHashes(capture.payloads, [])
         : {};
 
       let effectivePayloads = capture.payloads;
-      let effectiveEliminationPayloads = capture.eliminationPayloads;
+      let effectiveEliminationPayloads: typeof capture.eliminationPayloads = [];
       let incrementalFilteredOutCategories: string[] = [];
       if (incrementalStage3Enabled && latestCaptureState?.stage3CategoryHashes) {
         const changedCategories = new Set<string>();
@@ -379,6 +534,7 @@ export class ScrapeProcessor {
             : []),
           ...capture.warnings,
         ];
+        const persistedIdempotentWarnings = this.buildPersistedWarnings(idempotentWarnings);
 
         await this.withDbRetry(
           () =>
@@ -410,6 +566,15 @@ export class ScrapeProcessor {
                     idempotent: true,
                     categoriesFilteredOut: incrementalFilteredOutCategories,
                     categoryDiagnostics: capture.categoryDiagnostics,
+                    categoriesDiscoveredAudit: capture.categoriesDiscovered.map((item) => ({
+                      categoryId: item.categoryId,
+                      categoryName: item.categoryName,
+                      valid: item.valid,
+                      registeredCount: item.registeredCount ?? null,
+                      preRegisteredCount: item.preRegisteredCount ?? null,
+                      totalListedCount: item.totalListedCount ?? null,
+                      officialMatchesCount: item.officialMatchesCount ?? null,
+                    })),
                     stage3CategoryHashes,
                     lastSuccessfulStage3At: latestCaptureState?.lastSuccessfulStage3At ?? null,
                     lastSuccessfulStage3ByCategory:
@@ -418,7 +583,7 @@ export class ScrapeProcessor {
                   eventSituation,
                   scrapePolicy: { ...scrapePolicy },
                 } as unknown as Prisma.InputJsonValue,
-                warnings: idempotentWarnings,
+                warnings: persistedIdempotentWarnings,
                 errorMessage: null,
               },
             }),
@@ -445,24 +610,6 @@ export class ScrapeProcessor {
             scrapeRunId: scrapeRun.id,
             tab: payload.tab,
             categoryId: payload.categoryId,
-            rawBody: sanitized.rawBody,
-            htmlBody: sanitized.htmlBody,
-          },
-        });
-      }
-
-      for (const eliminationPayload of effectiveEliminationPayloads) {
-        const sanitized = this.prepareRawCapturePayload(
-          "ELIMINATORIA_API",
-          eliminationPayload.rawBody,
-          eliminationPayload.rawBody,
-        );
-        await prisma.rawCapture.create({
-          data: {
-            eventId,
-            scrapeRunId: scrapeRun.id,
-            tab: "ELIMINATORIA_API",
-            categoryId: eliminationPayload.categoryId,
             rawBody: sanitized.rawBody,
             htmlBody: sanitized.htmlBody,
           },
@@ -503,7 +650,80 @@ export class ScrapeProcessor {
 
       const upsertResult = await this.upsertService.upsert(eventId, dataset, { processRegistrations });
       const combinedWarnings = [...upsertResult.warnings, ...capture.warnings];
-      const httpDegradedResults = combinedWarnings.some((warning) =>
+      const prePostWarnings = this.buildPersistedWarnings(combinedWarnings);
+      const postScrape = await this.withDbRetry(
+        () => this.runPostScrape(eventId, prePostWarnings),
+        "postScrape.run",
+      );
+      combinedWarnings.push(this.formatPostScrapeSummaryWarning(postScrape));
+      const conformanceAudit = await this.withDbRetry(
+        () => this.runScrapeConformanceAudit(eventId, capture.categoriesDiscovered),
+        "postScrape.conformanceAudit",
+      );
+      combinedWarnings.push(...this.buildConformanceWarnings(conformanceAudit));
+      const strictGate = {
+        enabled: config.scrapeStrictQualityGateEnabled,
+        applied: false,
+        violated: false,
+        reasons: [] as string[],
+      };
+      const eventIsConcluded = Boolean(event.concluido) || eventSituation === "POS_EVENTO";
+      if (strictGate.enabled && eventIsConcluded) {
+        strictGate.applied = true;
+        if (
+          config.scrapeStrictRequireZeroPendingConflicts &&
+          postScrape.conflictAutofix.backlogPending > 0
+        ) {
+          strictGate.reasons.push(
+            `conflitos_pendentes=${postScrape.conflictAutofix.backlogPending}`,
+          );
+        }
+        if (
+          config.scrapeStrictRequireZeroNoCandidateConflicts &&
+          postScrape.conflictAutofix.noCandidatesInPool > 0
+        ) {
+          strictGate.reasons.push(
+            `conflitos_sem_candidatos_pool=${postScrape.conflictAutofix.noCandidatesInPool}`,
+          );
+        }
+        if (config.scrapeStrictRequireConformance) {
+          if (conformanceAudit.categoryCountExpected !== conformanceAudit.categoryCountObserved) {
+            strictGate.reasons.push(
+              `auditoria_categorias=${conformanceAudit.categoryCountObserved}/${conformanceAudit.categoryCountExpected}`,
+            );
+          }
+          if (conformanceAudit.registrationMismatches > 0) {
+            strictGate.reasons.push(
+              `auditoria_inscricoes_divergencias=${conformanceAudit.registrationMismatches}`,
+            );
+          }
+          if (conformanceAudit.matchMismatches > 0) {
+            strictGate.reasons.push(
+              `auditoria_partidas_divergencias=${conformanceAudit.matchMismatches}`,
+            );
+          }
+          if (conformanceAudit.playedMatchMismatches > 0) {
+            strictGate.reasons.push(
+              `auditoria_partidas_jogadas_divergencias=${conformanceAudit.playedMatchMismatches}`,
+            );
+          }
+          if (conformanceAudit.eliminatoriaMatchesObserved > 0) {
+            strictGate.reasons.push(
+              `auditoria_eliminatoria_detectada=${conformanceAudit.eliminatoriaMatchesObserved}`,
+            );
+          }
+        }
+        strictGate.violated = strictGate.reasons.length > 0;
+        if (strictGate.violated) {
+          combinedWarnings.push(
+            `SCRAPE_STRICT_QUALITY_GATE_ALERTA: evento concluido com pendencias de confiabilidade (${strictGate.reasons.join(
+              ", ",
+            )}).`,
+          );
+        }
+      }
+      const persistedWarnings = this.buildPersistedWarnings(combinedWarnings);
+      const httpDegradedResults = persistedWarnings.some((warning) =>
         String(warning ?? "").includes("HTTP_DEGRADED_RESULTS"),
       );
       const currentTotalsAfterUpsert = await this.withDbRetry(
@@ -532,7 +752,7 @@ export class ScrapeProcessor {
         currentTotals: currentTotalsAfterUpsert,
         flagged: regressionFlagged,
       };
-      const status: ScrapeStatus = combinedWarnings.length > 0 ? "PARTIAL" : "SUCCESS";
+      let status: ScrapeStatus = persistedWarnings.length > 0 ? "PARTIAL" : "SUCCESS";
       const stage3SuccessByCategory: Record<string, string> = {
         ...(latestCaptureState?.lastSuccessfulStage3ByCategory ?? {}),
       };
@@ -575,13 +795,22 @@ export class ScrapeProcessor {
                   idempotent: false,
                   httpDegradedResults,
                   payloadCount: effectivePayloads.length,
-                  eliminationPayloadCount: effectiveEliminationPayloads.length,
+                  eliminationPayloadCount: 0,
                   categoriesFound: capture.categoriesDiscovered.length,
                   categoriesValid: capture.categoriesDiscovered.filter((item) => item.valid).length,
                   categoriesVisited: capture.categoriesVisited,
                   tabsVisited: capture.tabsVisited,
                   paginationRequests: capture.paginationRequests,
                   categoryDiagnostics: capture.categoryDiagnostics,
+                  categoriesDiscoveredAudit: capture.categoriesDiscovered.map((item) => ({
+                    categoryId: item.categoryId,
+                    categoryName: item.categoryName,
+                    valid: item.valid,
+                    registeredCount: item.registeredCount ?? null,
+                    preRegisteredCount: item.preRegisteredCount ?? null,
+                    totalListedCount: item.totalListedCount ?? null,
+                    officialMatchesCount: item.officialMatchesCount ?? null,
+                  })),
                   stage3CategoryHashes,
                   lastSuccessfulStage3At:
                     incrementalStage3Enabled && (status === "SUCCESS" || status === "PARTIAL")
@@ -592,6 +821,13 @@ export class ScrapeProcessor {
                 },
                 dataTotals: currentTotalsAfterUpsert,
                 guardrail: regressionGuardrailStats,
+                postScrape,
+                conformanceAudit,
+                strictQualityGate: strictGate,
+                warningPersistence: {
+                  rawCount: combinedWarnings.length,
+                  persistedCount: persistedWarnings.length,
+                },
                 eventSituation,
                 scrapePolicy: { ...scrapePolicy },
                 stage2CleanupSummary: stage2CleanupSummary
@@ -603,7 +839,7 @@ export class ScrapeProcessor {
                     }
                   : undefined,
               } as unknown as Prisma.InputJsonValue,
-              warnings: combinedWarnings,
+              warnings: persistedWarnings,
               errorMessage: null,
             },
           }),
@@ -706,7 +942,7 @@ export class ScrapeProcessor {
     hasPublishedMatches: boolean;
     hasPublishedResults: boolean;
   }> {
-    const scheduledMatchPhases = ["GRUPOS", "RESULTADOS", "ELIMINATORIA"] as const;
+    const scheduledMatchPhases = ["GRUPOS", "RESULTADOS"] as const;
 
     const [scheduledMatch, playedMatch] = await Promise.all([
       prisma.match.findFirst({
@@ -901,7 +1137,7 @@ export class ScrapeProcessor {
       `i:${scrapePolicy.captureInscricoes ? 1 : 0}`,
       `g:${scrapePolicy.captureGrupos ? 1 : 0}`,
       `r:${scrapePolicy.captureResultados ? 1 : 0}`,
-      `e:${scrapePolicy.fetchEliminatoria ? 1 : 0}`,
+      "e:0",
     ].join("|");
   }
 
@@ -914,9 +1150,7 @@ export class ScrapeProcessor {
       ...input.payloads.map((payload) =>
         `${payload.tab}|${payload.categoryId ?? "-"}|${createHash("sha1").update(payload.rawLiteral).digest("hex")}`,
       ),
-      ...input.eliminationPayloads.map(
-        (payload) => `ELIMINATORIA|${payload.categoryId}|${createHash("sha1").update(payload.rawBody).digest("hex")}`,
-      ),
+      ...[],
     ].sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
 
     return createHash("sha1")
@@ -940,16 +1174,6 @@ export class ScrapeProcessor {
       }
       const entries = bucket.get(categoryId) ?? [];
       entries.push(`${payload.tab}:${createHash("sha1").update(payload.rawLiteral).digest("hex")}`);
-      bucket.set(categoryId, entries);
-    }
-
-    for (const payload of eliminationPayloads) {
-      const categoryId = String(payload.categoryId ?? "").trim();
-      if (!categoryId) {
-        continue;
-      }
-      const entries = bucket.get(categoryId) ?? [];
-      entries.push(`ELIMINATORIA:${createHash("sha1").update(payload.rawBody).digest("hex")}`);
       bucket.set(categoryId, entries);
     }
 
@@ -1021,6 +1245,317 @@ export class ScrapeProcessor {
         typeof capture.lastSuccessfulStage3At === "string" ? capture.lastSuccessfulStage3At : null,
       lastSuccessfulStage3ByCategory,
     };
+  }
+
+  private async runScrapeConformanceAudit(
+    eventId: number,
+    categoriesDiscovered: DiscoveredCategory[],
+  ): Promise<ScrapeConformanceAudit> {
+    const validCategories = categoriesDiscovered.filter((item) => item.valid);
+    const expectedByCbtmCategoryId = new Map<
+      string,
+      { categoryName: string; registered: number; matches: number | null }
+    >();
+    for (const item of validCategories) {
+      const cbtmCategoryId = String(item.categoryId ?? "").trim();
+      if (!cbtmCategoryId) {
+        continue;
+      }
+      expectedByCbtmCategoryId.set(cbtmCategoryId, {
+        categoryName: String(item.categoryName ?? "").trim() || cbtmCategoryId,
+        registered: Math.max(0, Number(item.registeredCount ?? 0)),
+        matches: Number.isFinite(Number(item.officialMatchesCount))
+          ? Math.max(0, Number(item.officialMatchesCount))
+          : null,
+      });
+    }
+
+    const dbCategories = await prisma.category.findMany({
+      where: {
+        eventId,
+        cbtmCategoryId: {
+          in: [...expectedByCbtmCategoryId.keys()],
+        },
+      },
+      select: {
+        id: true,
+        cbtmCategoryId: true,
+        name: true,
+      },
+    });
+
+    const dbCategoryIdByCbtmId = new Map<string, number>();
+    for (const category of dbCategories) {
+      const cbtmCategoryId = String(category.cbtmCategoryId ?? "").trim();
+      if (!cbtmCategoryId) {
+        continue;
+      }
+      dbCategoryIdByCbtmId.set(cbtmCategoryId, category.id);
+    }
+
+    const categoryIds = [...dbCategoryIdByCbtmId.values()];
+    const [registrationByCategory, athleteCategoryLinks, matchesByCategory, matchesForPlayedAudit, pendingConflicts, eliminatoriaMatchesObserved] =
+      await Promise.all([
+        categoryIds.length === 0
+          ? Promise.resolve([])
+          : prisma.athleteCategory.groupBy({
+              by: ["categoryId"],
+              where: {
+                categoryId: { in: categoryIds },
+                registrationStatus: "INSCRITO",
+              },
+              _count: { _all: true },
+            }),
+        categoryIds.length === 0
+          ? Promise.resolve([])
+          : prisma.athleteCategory.findMany({
+              where: {
+                categoryId: { in: categoryIds },
+                registrationStatus: "INSCRITO",
+                athlete: {
+                  eventId,
+                  createdFromWarning: false,
+                },
+              },
+              select: {
+                athleteId: true,
+                category: {
+                  select: {
+                    name: true,
+                  },
+                },
+                athlete: {
+                  select: {
+                    nameDisplay: true,
+                  },
+                },
+              },
+            }),
+        categoryIds.length === 0
+          ? Promise.resolve([])
+          : prisma.match.groupBy({
+              by: ["categoryId"],
+              where: {
+                eventId,
+                categoryId: { in: categoryIds },
+                phase: { in: ["GRUPOS", "RESULTADOS"] },
+              },
+              _count: { _all: true },
+            }),
+        categoryIds.length === 0
+          ? Promise.resolve([])
+          : prisma.match.findMany({
+              where: {
+                eventId,
+                categoryId: { in: categoryIds },
+                phase: { in: ["GRUPOS", "RESULTADOS"] },
+              },
+              select: {
+                categoryId: true,
+                p1Sets: true,
+                p2Sets: true,
+                scoreSets: true,
+                setsJson: true,
+              },
+            }),
+        prisma.athleteMatchConflict.count({
+          where: {
+            eventId,
+            resolvedAthleteId: null,
+          },
+        }),
+        prisma.match.count({
+          where: {
+            eventId,
+            phase: "ELIMINATORIA",
+          },
+        }),
+      ]);
+
+    const registrationsByCategoryId = new Map<number, number>();
+    for (const row of registrationByCategory) {
+      registrationsByCategoryId.set(row.categoryId, row._count._all);
+    }
+    const matchesByCategoryId = new Map<number, number>();
+    for (const row of matchesByCategory) {
+      matchesByCategoryId.set(row.categoryId, row._count._all);
+    }
+    const playedMatchesByCategoryId = new Map<number, number>();
+    for (const row of matchesForPlayedAudit) {
+      const sets = parseScoreSetsForAudit(row.scoreSets) || parseScoreSetsForAudit(row.setsJson);
+      const isWalkover = isWalkoverByStoredScoreForAudit({
+        sets,
+        p1Sets: row.p1Sets ?? null,
+        p2Sets: row.p2Sets ?? null,
+      });
+      if (isWalkover) {
+        continue;
+      }
+      playedMatchesByCategoryId.set(
+        row.categoryId,
+        (playedMatchesByCategoryId.get(row.categoryId) ?? 0) + 1,
+      );
+    }
+
+    let registrationMismatches = 0;
+    let matchMismatches = 0;
+    let playedMatchMismatches = 0;
+    let expectedRegistrationsTotal = 0;
+    let observedRegistrationsTotal = 0;
+    let expectedMatchesTotal = 0;
+    let expectedPlayedMatchesTotal = 0;
+    let observedMatchesTotal = 0;
+    let observedWalkoverMatchesTotal = 0;
+    let observedPlayedMatchesTotal = 0;
+    let athleteCategoryRuleViolations = 0;
+    const samples: string[] = [];
+
+    const linksByAthlete = new Map<
+      number,
+      { athleteName: string; ratingCount: number; rankingCount: number; total: number }
+    >();
+    for (const link of athleteCategoryLinks) {
+      const kind = detectCategoryKindForAudit(link.category.name);
+      const current = linksByAthlete.get(link.athleteId) ?? {
+        athleteName: link.athlete.nameDisplay,
+        ratingCount: 0,
+        rankingCount: 0,
+        total: 0,
+      };
+      current.total += 1;
+      if (kind === "RATING") {
+        current.ratingCount += 1;
+      } else if (kind === "RANKING") {
+        current.rankingCount += 1;
+      }
+      linksByAthlete.set(link.athleteId, current);
+    }
+    for (const [athleteId, stats] of linksByAthlete.entries()) {
+      const invalid = stats.total > 3 || stats.ratingCount > 1 || stats.rankingCount > 2;
+      if (!invalid) {
+        continue;
+      }
+      athleteCategoryRuleViolations += 1;
+      if (samples.length < 8) {
+        samples.push(
+          `regra_vinculo atleta=${stats.athleteName}#${athleteId} total=${stats.total} ranking=${stats.rankingCount} rating=${stats.ratingCount}`,
+        );
+      }
+    }
+
+    for (const [cbtmCategoryId, expected] of expectedByCbtmCategoryId.entries()) {
+      const categoryId = dbCategoryIdByCbtmId.get(cbtmCategoryId);
+      const observedRegistrations = categoryId ? registrationsByCategoryId.get(categoryId) ?? 0 : 0;
+      const observedMatches = categoryId ? matchesByCategoryId.get(categoryId) ?? 0 : 0;
+      const observedPlayedMatches = categoryId ? playedMatchesByCategoryId.get(categoryId) ?? 0 : 0;
+      const observedWalkoverMatches = Math.max(0, observedMatches - observedPlayedMatches);
+
+      expectedRegistrationsTotal += expected.registered;
+      observedRegistrationsTotal += observedRegistrations;
+      if (expected.matches !== null) {
+        expectedMatchesTotal += expected.matches;
+        expectedPlayedMatchesTotal += Math.max(0, expected.matches - observedWalkoverMatches);
+      }
+      observedMatchesTotal += observedMatches;
+      observedWalkoverMatchesTotal += observedWalkoverMatches;
+      observedPlayedMatchesTotal += observedPlayedMatches;
+
+      if (expected.registered !== observedRegistrations) {
+        registrationMismatches += 1;
+        if (samples.length < 8) {
+          samples.push(
+            `${expected.categoryName}(${cbtmCategoryId}) inscritos esperado=${expected.registered} observado=${observedRegistrations}`,
+          );
+        }
+      }
+
+      if (expected.matches !== null && expected.matches !== observedMatches) {
+        matchMismatches += 1;
+        if (samples.length < 8) {
+          samples.push(
+            `${expected.categoryName}(${cbtmCategoryId}) partidas esperado=${expected.matches} observado=${observedMatches}`,
+          );
+        }
+      }
+      if (
+        expected.matches !== null &&
+        Math.max(0, expected.matches - observedWalkoverMatches) !== observedPlayedMatches
+      ) {
+        playedMatchMismatches += 1;
+        if (samples.length < 8) {
+          samples.push(
+            `${expected.categoryName}(${cbtmCategoryId}) partidas_jogadas esperado=${Math.max(
+              0,
+              expected.matches - observedWalkoverMatches,
+            )} observado=${observedPlayedMatches} wo=${observedWalkoverMatches}`,
+          );
+        }
+      }
+    }
+
+    return {
+      categoryCountExpected: expectedByCbtmCategoryId.size,
+      categoryCountObserved: dbCategoryIdByCbtmId.size,
+      registrationMismatches,
+      matchMismatches,
+      playedMatchMismatches,
+      expectedRegistrationsTotal,
+      observedRegistrationsTotal,
+      expectedMatchesTotal,
+      expectedPlayedMatchesTotal,
+      observedMatchesTotal,
+      observedWalkoverMatchesTotal,
+      observedPlayedMatchesTotal,
+      pendingConflicts,
+      eliminatoriaMatchesObserved,
+      athleteCategoryRuleViolations,
+      samples,
+    };
+  }
+
+  private buildConformanceWarnings(audit: ScrapeConformanceAudit): string[] {
+    const warnings: string[] = [];
+
+    if (audit.categoryCountExpected !== audit.categoryCountObserved) {
+      warnings.push(
+        `AUDITORIA_CATEGORIAS_DIVERGENCIA: categorias esperadas=${audit.categoryCountExpected}, observadas=${audit.categoryCountObserved}.`,
+      );
+    }
+    if (audit.registrationMismatches > 0) {
+      warnings.push(
+        `AUDITORIA_INSCRICOES_DIVERGENCIA: ${audit.registrationMismatches} categoria(s) com divergencia de inscritos (esperado=${audit.expectedRegistrationsTotal}, observado=${audit.observedRegistrationsTotal}).`,
+      );
+    }
+    if (audit.matchMismatches > 0) {
+      warnings.push(
+        `AUDITORIA_PARTIDAS_DIVERGENCIA: ${audit.matchMismatches} categoria(s) com divergencia de partidas (esperado=${audit.expectedMatchesTotal}, observado=${audit.observedMatchesTotal}).`,
+      );
+    }
+    if (audit.playedMatchMismatches > 0) {
+      warnings.push(
+        `AUDITORIA_PARTIDAS_JOGADAS_DIVERGENCIA: ${audit.playedMatchMismatches} categoria(s) com divergencia de partidas jogadas sem WO (esperado=${audit.expectedPlayedMatchesTotal}, observado=${audit.observedPlayedMatchesTotal}, wo_observado=${audit.observedWalkoverMatchesTotal}).`,
+      );
+    }
+    if (audit.pendingConflicts > 0) {
+      warnings.push(
+        `AUDITORIA_CONFLITOS_PENDENTES: ${audit.pendingConflicts} conflito(s) pendente(s) apos upsert.`,
+      );
+    }
+    if (audit.eliminatoriaMatchesObserved > 0) {
+      warnings.push(
+        `AUDITORIA_ELIMINATORIA_BLOQUEADA: ${audit.eliminatoriaMatchesObserved} partida(s) com fase ELIMINATORIA detectada(s) em persistencia.`,
+      );
+    }
+    if (audit.athleteCategoryRuleViolations > 0) {
+      warnings.push(
+        `AUDITORIA_REGRA_VINCULO: ${audit.athleteCategoryRuleViolations} atleta(s) violam regra de inscricao (max 2 ranking + 1 rating).`,
+      );
+    }
+    if (audit.samples.length > 0) {
+      warnings.push(`AUDITORIA_AMOSTRAS: ${audit.samples.join(" | ")}`);
+    }
+
+    return warnings;
   }
 
   private prepareRawCapturePayload(
@@ -1100,6 +1635,791 @@ export class ScrapeProcessor {
   private buildRawCaptureDigest(input: string): string {
     const digest = createHash("sha256").update(input).digest("hex");
     return `[SANITIZED_HASH:${digest}]`;
+  }
+
+  private formatPostScrapeSummaryWarning(postScrape: PostScrapeSummary): string {
+    return `POST_SCRAPE_SUMMARY: warnings(high=${postScrape.warningsBySeverity.high}, medium=${postScrape.warningsBySeverity.medium}, low=${postScrape.warningsBySeverity.low}); conflicts(pool=${postScrape.conflictAutofix.poolSize}, sem_candidatos_pool=${postScrape.conflictAutofix.noCandidatesInPool}, analisados=${postScrape.conflictAutofix.scanned}, resolvidos=${postScrape.conflictAutofix.resolved}, alias_exato=${postScrape.conflictAutofix.resolvedByAliasExact}, ambiguos=${postScrape.conflictAutofix.skippedAmbiguous}, invalidos=${postScrape.conflictAutofix.skippedInvalidCandidate}, backlog=${postScrape.conflictAutofix.backlogPending}, disabled=${postScrape.conflictAutofix.disabled ? "sim" : "nao"}).`;
+  }
+
+  private buildPersistedWarnings(rawWarnings: string[]): string[] {
+    const normalized = rawWarnings
+      .map((warning) => String(warning ?? "").trim())
+      .filter(Boolean);
+
+    const persisted = new Set<string>();
+    let conflictAthleteCount = 0;
+    let mergeWarningCount = 0;
+    let droppedNoise = 0;
+    const conflictByCategory = new Map<string, number>();
+    let postScrapeBacklog: number | null = null;
+    let postScrapeResolved: number | null = null;
+
+    for (const warning of normalized) {
+      const text = warning.toLowerCase();
+
+      if (text.startsWith("post_scrape_summary")) {
+        const backlogMatch = warning.match(/\bbacklog=(\d+)\b/i);
+        if (backlogMatch?.[1]) {
+          const parsedBacklog = Number(backlogMatch[1]);
+          if (Number.isFinite(parsedBacklog) && parsedBacklog >= 0) {
+            postScrapeBacklog = Math.floor(parsedBacklog);
+          }
+        }
+        const resolvedMatch = warning.match(/\bresolvidos=(\d+)\b/i);
+        if (resolvedMatch?.[1]) {
+          const parsedResolved = Number(resolvedMatch[1]);
+          if (Number.isFinite(parsedResolved) && parsedResolved >= 0) {
+            postScrapeResolved = Math.floor(parsedResolved);
+          }
+        }
+      }
+
+      if (text.startsWith("conflito de atleta")) {
+        conflictAthleteCount += 1;
+        const categoryMatch = warning.match(/^Conflito de atleta \((.+?)\) em /i);
+        const categoryLabel = compactWhitespace(categoryMatch?.[1] ?? "CATEGORIA_DESCONHECIDA");
+        conflictByCategory.set(categoryLabel, (conflictByCategory.get(categoryLabel) ?? 0) + 1);
+        continue;
+      }
+
+      if (text.startsWith("merge-warning: conflito de participantes")) {
+        mergeWarningCount += 1;
+        continue;
+      }
+
+      if (
+        text.startsWith("resultados diagnostico") ||
+        text.startsWith("inscricoes reconciliacao") ||
+        text.startsWith("inscricoes gaps top10")
+      ) {
+        droppedNoise += 1;
+        continue;
+      }
+
+      const severity = this.classifyWarningSeverity(warning);
+      const isActionable =
+        severity === "high" ||
+        severity === "medium" ||
+        text.includes("guardrail_registration_drop") ||
+        text.includes("post_scrape_summary");
+
+      if (!isActionable) {
+        droppedNoise += 1;
+        continue;
+      }
+
+      persisted.add(warning);
+    }
+
+    const pendingConflictCount = postScrapeBacklog ?? conflictAthleteCount;
+    if (pendingConflictCount > 0) {
+      const pendingMsg =
+        postScrapeBacklog === null
+          ? `CONFLITO_DE_ATLETA_PENDENTE: ${pendingConflictCount} ocorrencia(s) detectadas no run. Consulte a fila de conflitos para resolucao.`
+          : `CONFLITO_DE_ATLETA_PENDENTE: ${pendingConflictCount} ocorrencia(s) pendente(s) apos o pos-scrape. Consulte a fila de conflitos para resolucao.`;
+      persisted.add(pendingMsg);
+      if (postScrapeBacklog === null) {
+        const topCategories = [...conflictByCategory.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 8)
+          .map(([category, count]) => `${category}=${count}`)
+          .join(" | ");
+        if (topCategories) {
+          persisted.add(`CONFLITO_DE_ATLETA_TOP_CATEGORIAS: ${topCategories}.`);
+        }
+      }
+    }
+    if ((postScrapeResolved ?? 0) > 0) {
+      persisted.add(
+        `CONFLITO_DE_ATLETA_AUTORRESOLVIDO: ${postScrapeResolved} ocorrencia(s) resolvida(s) automaticamente no pos-scrape.`,
+      );
+    }
+
+    if (mergeWarningCount > 0) {
+      persisted.add(
+        `MERGE_WARNING_PARTICIPANTES: ${mergeWarningCount} conflito(s) de participantes detectados durante merge.`,
+      );
+    }
+
+    if (droppedNoise > 0) {
+      persisted.add(
+        `WARNINGS_FILTRADOS_RUIDO: ${droppedNoise} item(ns) diagnosticos nao acionaveis omitidos da persistencia.`,
+      );
+    }
+
+    const parsedMaxPersisted = Number(process.env.SCRAPE_PERSISTED_WARNINGS_MAX ?? "120");
+    const maxPersisted = Number.isFinite(parsedMaxPersisted)
+      ? Math.max(20, Math.floor(parsedMaxPersisted))
+      : 120;
+    const sorted = [...persisted.values()].sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+    if (sorted.length <= maxPersisted) {
+      return sorted;
+    }
+
+    return [
+      ...sorted.slice(0, maxPersisted),
+      `WARNINGS_TRUNCATED: ${sorted.length - maxPersisted} item(ns) adicional(is) foram truncados para reduzir ruido.`,
+    ];
+  }
+
+  private classifyWarningSeverity(warning: string): "high" | "medium" | "low" {
+    const text = String(warning ?? "").toLowerCase();
+    const isDxCallbackWithFallback =
+      text.includes("detectado erro de callback dx") && text.includes("fallback");
+
+    if (isDxCallbackWithFallback) {
+      return "medium";
+    }
+
+    if (
+      text.includes("guardrail_regression") ||
+      text.includes("falha") ||
+      text.includes("erro") ||
+      text.includes("http_degraded_results")
+    ) {
+      return "high";
+    }
+    if (
+      text.includes("conflito de atleta") ||
+      text.includes("merge-warning") ||
+      text.includes("payloads dx invalidos")
+    ) {
+      return "medium";
+    }
+    return "low";
+  }
+
+  private async runPostScrape(eventId: number, warnings: string[]): Promise<PostScrapeSummary> {
+    const warningsBySeverity = {
+      high: 0,
+      medium: 0,
+      low: 0,
+    };
+    for (const warning of warnings) {
+      const severity = this.classifyWarningSeverity(warning);
+      warningsBySeverity[severity] += 1;
+    }
+
+    if (!config.postScrapeConflictAutofixEnabled) {
+      const unresolvedCount = await prisma.athleteMatchConflict.count({
+        where: {
+          eventId,
+          resolvedAthleteId: null,
+        },
+      });
+      return {
+        warningsBySeverity,
+        conflictAutofix: {
+          poolSize: unresolvedCount,
+          scanned: 0,
+          backlogPending: unresolvedCount,
+          noCandidatesInPool: 0,
+          resolved: 0,
+          resolvedByAliasExact: 0,
+          skippedAmbiguous: 0,
+          skippedInvalidCandidate: 0,
+          disabled: true,
+        },
+      };
+    }
+
+    const parsedMaxPerRun = Math.floor(config.postScrapeConflictAutofixMaxPerRun);
+    const baseMaxPerRun = Number.isFinite(parsedMaxPerRun)
+      ? Math.max(1, parsedMaxPerRun)
+      : 200;
+    const parsedScanMultiplier = Math.floor(config.postScrapeConflictAutofixScanMultiplier);
+    const scanMultiplier = Number.isFinite(parsedScanMultiplier)
+      ? Math.max(1, parsedScanMultiplier)
+      : 4;
+    const [event, unresolvedCount] = await Promise.all([
+      prisma.event.findUnique({
+        where: { id: eventId },
+        select: {
+          concluido: true,
+          inicioInscricoes: true,
+          fimInscricoes: true,
+          inicioRealizacao: true,
+          fimRealizacao: true,
+          dataInicio: true,
+          dataFim: true,
+        },
+      }),
+      prisma.athleteMatchConflict.count({
+        where: {
+          eventId,
+          resolvedAthleteId: null,
+        },
+      }),
+    ]);
+    const eventSituation = computeEventSituation({
+      inicioInscricoes: event?.inicioInscricoes ?? null,
+      fimInscricoes: event?.fimInscricoes ?? null,
+      inicioRealizacao: event?.inicioRealizacao ?? null,
+      fimRealizacao: event?.fimRealizacao ?? null,
+      dataInicio: event?.dataInicio ?? null,
+      dataFim: event?.dataFim ?? null,
+    });
+    const eventConcluded = Boolean(event?.concluido) || eventSituation === "POS_EVENTO";
+
+    const maxPerRun = eventConcluded ? Math.max(baseMaxPerRun, 600) : baseMaxPerRun;
+    let scanTake = Math.max(maxPerRun, maxPerRun * scanMultiplier);
+    if (eventConcluded) {
+      scanTake = Math.min(unresolvedCount, Math.max(scanTake, 2400));
+    }
+
+    const unresolvedPool = await prisma.athleteMatchConflict.findMany({
+      where: {
+        eventId,
+        resolvedAthleteId: null,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: scanTake,
+      select: {
+        id: true,
+        context: true,
+        shortNameNormalized: true,
+        candidateAthletes: true,
+      },
+    });
+
+    let resolved = 0;
+    let resolvedByAliasExact = 0;
+    let skippedAmbiguous = 0;
+    let skippedInvalidCandidate = 0;
+    let noCandidatesInPool = 0;
+    const conflictMatchLookupKeysById = new Map<number, string[]>();
+    const conflictIdsByMatchKey = new Map<string, number[]>();
+    for (const conflict of unresolvedPool) {
+      const matchKey = extractMatchKeyFromConflictContext(conflict.context);
+      const lookupKeys = new Set<string>([matchKey]);
+      if (matchKey.includes("|")) {
+        const legacyKey = compactWhitespace(matchKey.split("|").slice(1).join("|"));
+        if (legacyKey) {
+          lookupKeys.add(legacyKey);
+        }
+      }
+      const normalizedLookupKeys = [...lookupKeys.values()].filter(Boolean);
+      conflictMatchLookupKeysById.set(conflict.id, normalizedLookupKeys);
+      for (const lookupKey of normalizedLookupKeys) {
+        const current = conflictIdsByMatchKey.get(lookupKey) ?? [];
+        current.push(conflict.id);
+        conflictIdsByMatchKey.set(lookupKey, current);
+      }
+    }
+
+    const matchRows = conflictIdsByMatchKey.size
+      ? await prisma.match.findMany({
+          where: {
+            eventId,
+            matchKey: { in: [...conflictIdsByMatchKey.keys()] },
+          },
+          select: {
+            id: true,
+            matchKey: true,
+            categoryId: true,
+          },
+        })
+      : [];
+    const categoryByMatchKey = new Map<string, number>(
+      matchRows.map((row) => [row.matchKey, row.categoryId] as const),
+    );
+    const categoryIds = [...new Set(matchRows.map((row) => row.categoryId))];
+    const categoryRows = categoryIds.length
+      ? await prisma.category.findMany({
+          where: {
+            id: { in: categoryIds },
+          },
+          select: {
+            id: true,
+            cbtmCategoryId: true,
+            normalizedName: true,
+          },
+        })
+      : [];
+    const categoryIdentityById = new Map(
+      categoryRows.map((row) => [row.id, row] as const),
+    );
+    const athleteCategoryRows = categoryIds.length
+      ? await prisma.athleteCategory.findMany({
+          where: {
+            categoryId: { in: categoryIds },
+          },
+          select: {
+            categoryId: true,
+            athleteId: true,
+          },
+        })
+      : [];
+    const matchCategoryById = new Map<number, number>(
+      matchRows.map((row) => [row.id, row.categoryId] as const),
+    );
+    const matchParticipantRows = matchRows.length
+      ? await prisma.matchParticipant.findMany({
+          where: {
+            matchId: { in: matchRows.map((row) => row.id) },
+          },
+          select: {
+            athleteId: true,
+            matchId: true,
+          },
+        })
+      : [];
+    const athleteIdsByCategory = new Map<number, Set<number>>();
+    const athleteIdsByCategoryCbtmId = new Map<string, Set<number>>();
+    const athleteIdsByCategoryNormalizedName = new Map<string, Set<number>>();
+    for (const row of athleteCategoryRows) {
+      const current = athleteIdsByCategory.get(row.categoryId) ?? new Set<number>();
+      current.add(row.athleteId);
+      athleteIdsByCategory.set(row.categoryId, current);
+    }
+    for (const row of matchParticipantRows) {
+      const athleteId = Number(row.athleteId ?? 0);
+      if (!Number.isInteger(athleteId) || athleteId <= 0) {
+        continue;
+      }
+      const categoryId = matchCategoryById.get(row.matchId);
+      if (!categoryId) {
+        continue;
+      }
+      const current = athleteIdsByCategory.get(categoryId) ?? new Set<number>();
+      current.add(athleteId);
+      athleteIdsByCategory.set(categoryId, current);
+    }
+    for (const [categoryId, athleteIds] of athleteIdsByCategory.entries()) {
+      const identity = categoryIdentityById.get(categoryId);
+      if (!identity) {
+        continue;
+      }
+      const cbtmKey = String(identity.cbtmCategoryId ?? "").trim();
+      if (cbtmKey) {
+        const current = athleteIdsByCategoryCbtmId.get(cbtmKey) ?? new Set<number>();
+        for (const athleteId of athleteIds) {
+          current.add(athleteId);
+        }
+        athleteIdsByCategoryCbtmId.set(cbtmKey, current);
+      }
+      const normalizedKey = normalizeText(identity.normalizedName);
+      if (normalizedKey) {
+        const current = athleteIdsByCategoryNormalizedName.get(normalizedKey) ?? new Set<number>();
+        for (const athleteId of athleteIds) {
+          current.add(athleteId);
+        }
+        athleteIdsByCategoryNormalizedName.set(normalizedKey, current);
+      }
+    }
+    const allowedAthleteIdsByConflict = new Map<number, Set<number>>();
+    for (const conflict of unresolvedPool) {
+      const lookupKeys = conflictMatchLookupKeysById.get(conflict.id) ?? [];
+      const categoryId = lookupKeys
+        .map((key) => categoryByMatchKey.get(key))
+        .find((value): value is number => typeof value === "number" && Number.isInteger(value) && value > 0);
+      if (!categoryId) {
+        allowedAthleteIdsByConflict.set(conflict.id, new Set<number>());
+        continue;
+      }
+      const byId = athleteIdsByCategory.get(categoryId);
+      const identity = categoryIdentityById.get(categoryId);
+      const byCbtmId =
+        identity && identity.cbtmCategoryId
+          ? athleteIdsByCategoryCbtmId.get(String(identity.cbtmCategoryId).trim())
+          : undefined;
+      const byNormalized =
+        identity && identity.normalizedName
+          ? athleteIdsByCategoryNormalizedName.get(normalizeText(identity.normalizedName))
+          : undefined;
+      const merged = new Set<number>();
+      for (const source of [byId, byCbtmId, byNormalized]) {
+        if (!source || source.size === 0) {
+          continue;
+        }
+        for (const athleteId of source) {
+          merged.add(athleteId);
+        }
+      }
+      allowedAthleteIdsByConflict.set(conflict.id, merged);
+    }
+    const allAllowedAthleteIds = new Set<number>();
+    for (const athleteIds of allowedAthleteIdsByConflict.values()) {
+      for (const athleteId of athleteIds) {
+        allAllowedAthleteIds.add(athleteId);
+      }
+    }
+
+    const candidateAthleteIds = new Set<number>();
+    const aliasKeys = new Set<string>();
+    for (const conflict of unresolvedPool) {
+      const payload = (conflict.candidateAthletes ?? {}) as {
+        candidates?: Array<{ athleteId?: number; score?: number }>;
+      };
+      const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+      for (const candidate of candidates) {
+        const athleteId = Number(candidate?.athleteId ?? 0);
+        if (Number.isInteger(athleteId) && athleteId > 0) {
+          candidateAthleteIds.add(athleteId);
+        }
+      }
+      if (conflict.shortNameNormalized) {
+        aliasKeys.add(conflict.shortNameNormalized);
+      }
+    }
+
+    const aliases = aliasKeys.size
+      ? await prisma.athleteAlias.findMany({
+          where: {
+            aliasNormalized: { in: [...aliasKeys.values()] },
+            athlete: {
+              eventId,
+            },
+          },
+          select: {
+            aliasNormalized: true,
+            athleteId: true,
+          },
+        })
+      : [];
+    for (const alias of aliases) {
+      candidateAthleteIds.add(alias.athleteId);
+    }
+
+    const athleteIdsToLoad = new Set<number>([...candidateAthleteIds, ...allAllowedAthleteIds]);
+    const candidateAthletes = athleteIdsToLoad.size
+      ? await prisma.athlete.findMany({
+          where: {
+            eventId,
+            id: { in: [...athleteIdsToLoad.values()] },
+          },
+          select: { id: true, nameDisplay: true },
+        })
+      : [];
+
+    const athleteNameById = new Map<number, string>(
+      candidateAthletes.map((item) => [item.id, item.nameDisplay] as const),
+    );
+    const validAthleteIds = new Set<number>(candidateAthletes.map((item) => item.id));
+    const aliasAthleteIdsByKey = new Map<string, Set<number>>();
+    for (const alias of aliases) {
+      const current = aliasAthleteIdsByKey.get(alias.aliasNormalized) ?? new Set<number>();
+      current.add(alias.athleteId);
+      aliasAthleteIdsByKey.set(alias.aliasNormalized, current);
+    }
+    const unresolvedContexts = [...new Set(unresolvedPool.map((item) => item.context))];
+    const unresolvedShortNames = [...new Set(unresolvedPool.map((item) => item.shortNameNormalized))];
+    const historicalResolvedConflicts =
+      unresolvedContexts.length > 0 && unresolvedShortNames.length > 0
+        ? await prisma.athleteMatchConflict.findMany({
+            where: {
+              eventId,
+              resolvedAthleteId: { not: null },
+              context: { in: unresolvedContexts },
+              shortNameNormalized: { in: unresolvedShortNames },
+            },
+            select: {
+              context: true,
+              shortNameNormalized: true,
+              resolvedAthleteId: true,
+            },
+          })
+        : [];
+    const historicalResolvedByKey = new Map<string, Set<number>>();
+    for (const row of historicalResolvedConflicts) {
+      const athleteId = Number(row.resolvedAthleteId ?? 0);
+      if (!Number.isInteger(athleteId) || athleteId <= 0) {
+        continue;
+      }
+      const key = `${row.context}|${row.shortNameNormalized}`;
+      const bucket = historicalResolvedByKey.get(key) ?? new Set<number>();
+      bucket.add(athleteId);
+      historicalResolvedByKey.set(key, bucket);
+    }
+
+    const prioritized = unresolvedPool
+      .map((conflict, index) => {
+        const payload = (conflict.candidateAthletes ?? {}) as {
+          candidates?: Array<{ athleteId?: number; score?: number }>;
+        };
+        const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+        if (candidates.length === 0) {
+          noCandidatesInPool += 1;
+        }
+        const allowedAthleteIds = allowedAthleteIdsByConflict.get(conflict.id) ?? new Set<number>();
+        const validCandidateIds = candidates
+          .map((candidate) => Number(candidate?.athleteId ?? 0))
+          .filter((athleteId) => Number.isInteger(athleteId) && athleteId > 0)
+          .filter((athleteId) => validAthleteIds.has(athleteId))
+          .filter((athleteId) => allowedAthleteIds.has(athleteId))
+          .filter((athleteId) =>
+            athleteNameContainsReducedTokens(
+              conflict.shortNameNormalized,
+              athleteNameById.get(athleteId) ?? "",
+            ),
+          );
+        const aliasMatches = aliasAthleteIdsByKey.get(conflict.shortNameNormalized) ?? new Set<number>();
+        const filteredAliasMatches = new Set<number>(
+          [...aliasMatches].filter((athleteId) =>
+            allowedAthleteIds.has(athleteId) &&
+            athleteNameContainsReducedTokens(
+              conflict.shortNameNormalized,
+              athleteNameById.get(athleteId) ?? "",
+            ),
+          ),
+        );
+
+        let priority = 4;
+        if (validCandidateIds.length === 1) {
+          priority = 0;
+        } else if (filteredAliasMatches.size === 1) {
+          priority = 1;
+        } else if (candidates.length === 1) {
+          priority = 2;
+        } else if (candidates.length > 1 || validCandidateIds.length > 1) {
+          priority = 3;
+        }
+
+        return {
+          conflict,
+          index,
+          candidates,
+          allowedAthleteIds,
+          validCandidateIds,
+          aliasMatches: filteredAliasMatches,
+          priority,
+        };
+      })
+      .sort((a, b) => a.priority - b.priority || a.index - b.index)
+      .slice(0, maxPerRun);
+
+    for (const item of prioritized) {
+      const { conflict, candidates, allowedAthleteIds, validCandidateIds, aliasMatches } = item;
+      const payload = (conflict.candidateAthletes ?? {}) as {
+        candidates?: Array<{ athleteId?: number; score?: number }>;
+      };
+      let resolvedAthleteId: number | null = null;
+      let strategy:
+        | "single_candidate"
+        | "alias_exact"
+        | "category_name_tokens"
+        | "candidate_score_dominant"
+        | "historical_context_exact"
+        | null = null;
+
+      if (validCandidateIds.length === 1) {
+        resolvedAthleteId = validCandidateIds[0];
+        strategy = "single_candidate";
+      }
+
+      if (!resolvedAthleteId) {
+        if (aliasMatches.size === 1) {
+          resolvedAthleteId = [...aliasMatches][0];
+          strategy = "alias_exact";
+        }
+      }
+
+      if (!resolvedAthleteId) {
+        const categoryTokenMatches = [...allowedAthleteIds].filter((athleteId) =>
+          athleteNameContainsReducedTokens(
+            conflict.shortNameNormalized,
+            athleteNameById.get(athleteId) ?? "",
+          ),
+        );
+        if (categoryTokenMatches.length === 1) {
+          resolvedAthleteId = categoryTokenMatches[0];
+          strategy = "category_name_tokens";
+        }
+      }
+
+      if (!resolvedAthleteId) {
+        const scoredValidCandidates = candidates
+          .map((candidate) => ({
+            athleteId: Number(candidate?.athleteId ?? 0),
+            score: Number(candidate?.score ?? 0),
+          }))
+          .filter((candidate) => Number.isInteger(candidate.athleteId) && candidate.athleteId > 0)
+          .filter((candidate) => validAthleteIds.has(candidate.athleteId))
+          .filter((candidate) => allowedAthleteIds.has(candidate.athleteId))
+          .filter((candidate) =>
+            athleteNameContainsReducedTokens(
+              conflict.shortNameNormalized,
+              athleteNameById.get(candidate.athleteId) ?? "",
+            ),
+          )
+          .sort((a, b) => b.score - a.score);
+
+        const top = scoredValidCandidates[0];
+        const second = scoredValidCandidates[1];
+        if (top && second && top.score >= 40 && top.score - second.score >= 20) {
+          resolvedAthleteId = top.athleteId;
+          strategy = "candidate_score_dominant";
+        }
+      }
+
+      if (!resolvedAthleteId) {
+        const key = `${conflict.context}|${conflict.shortNameNormalized}`;
+        const historical = historicalResolvedByKey.get(key);
+        if (historical && historical.size === 1) {
+          const athleteId = [...historical][0];
+          if (
+            validAthleteIds.has(athleteId) &&
+            athleteNameContainsReducedTokens(
+              conflict.shortNameNormalized,
+              athleteNameById.get(athleteId) ?? "",
+            )
+          ) {
+            resolvedAthleteId = athleteId;
+            strategy = "historical_context_exact";
+          }
+        }
+      }
+
+      if (!resolvedAthleteId || !strategy) {
+        if (validCandidateIds.length > 1 || candidates.length > 1) {
+          skippedAmbiguous += 1;
+        } else if (candidates.length === 1 || allowedAthleteIds.size === 0) {
+          skippedInvalidCandidate += 1;
+        }
+        continue;
+      }
+
+      await prisma.athleteMatchConflict.update({
+        where: { id: conflict.id },
+        data: {
+          resolvedAthleteId,
+          resolvedAt: new Date(),
+          candidateAthletes: {
+            ...(payload as Record<string, unknown>),
+            postScrapeAutofix: {
+              strategy,
+              at: new Date().toISOString(),
+            },
+          } as Prisma.InputJsonValue,
+        },
+      });
+      resolved += 1;
+      if (strategy === "alias_exact") {
+        resolvedByAliasExact += 1;
+      }
+    }
+
+    return {
+      warningsBySeverity,
+      conflictAutofix: {
+        poolSize: unresolvedPool.length,
+        scanned: prioritized.length,
+        backlogPending: Math.max(0, unresolvedCount - resolved),
+        noCandidatesInPool,
+        resolved,
+        resolvedByAliasExact,
+        skippedAmbiguous,
+        skippedInvalidCandidate,
+        disabled: false,
+      },
+    };
+  }
+
+  private async executePostScrapeReprocess(
+    eventId: number,
+    reason: string | undefined,
+    eventSituation: ReturnType<typeof computeEventSituation>,
+    policyReason: string,
+  ): Promise<void> {
+    const scrapeRun = await this.withDbRetry(
+      () =>
+        prisma.scrapeRun.create({
+          data: {
+            eventId,
+            status: "PARTIAL",
+            insertedCounts: {},
+            updatedCounts: {},
+            extractionStats: {},
+            warnings: [],
+          },
+        }),
+      "scrapeRun.create:post-scrape-reprocess",
+    );
+
+    try {
+      const latestWarnings = await this.withDbRetry(
+        async () => {
+          const latest = await prisma.scrapeRun.findFirst({
+            where: {
+              eventId,
+              id: { not: scrapeRun.id },
+            },
+            orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+            select: { warnings: true },
+          });
+          const rawWarnings = latest?.warnings;
+          if (!Array.isArray(rawWarnings)) {
+            return [] as string[];
+          }
+          return rawWarnings
+            .map((item) => String(item ?? "").trim())
+            .filter(Boolean);
+        },
+        "scrapeRun.latestWarnings:post-scrape-reprocess",
+      );
+      const postScrape = await this.withDbRetry(
+        () => this.runPostScrape(eventId, latestWarnings),
+        "postScrape.run:reprocess",
+      );
+      const warningSummary = this.formatPostScrapeSummaryWarning(postScrape);
+
+      await this.withDbRetry(
+        () =>
+          prisma.scrapeRun.update({
+            where: { id: scrapeRun.id },
+            data: {
+              finishedAt: new Date(),
+              status: "SUCCESS",
+              extractionStats: {
+                mode: "post-scrape-reprocess",
+                sourceWarningsCount: latestWarnings.length,
+                postScrape,
+                eventSituation,
+                scrapePolicy: {
+                  reason: `post-scrape-reprocess|base=${policyReason}`,
+                },
+              } as unknown as Prisma.InputJsonValue,
+              warnings: [warningSummary],
+              errorMessage: null,
+            },
+          }),
+        "scrapeRun.update:post-scrape-reprocess",
+      );
+
+      await this.withDbRetry(
+        () => this.pruneOldScrapeRuns(eventId, ScrapeProcessor.SCRAPE_RUN_RETENTION_LIMIT),
+        "scrapeRun.prune:post-scrape-reprocess",
+      );
+
+      log("info", "Reprocessamento de pos-scrape concluido", {
+        eventId,
+        scrapeRunId: scrapeRun.id,
+        reason: reason ?? null,
+        postScrape,
+      });
+    } catch (error) {
+      await this.withDbRetry(
+        () =>
+          prisma.scrapeRun.update({
+            where: { id: scrapeRun.id },
+            data: {
+              finishedAt: new Date(),
+              status: "ERROR",
+              extractionStats: {
+                mode: "post-scrape-reprocess",
+                eventSituation,
+                scrapePolicy: {
+                  reason: `post-scrape-reprocess|base=${policyReason}`,
+                },
+                errorAt: "executePostScrapeReprocess",
+              } as unknown as Prisma.InputJsonValue,
+              errorMessage: String(error),
+            },
+          }),
+        "scrapeRun.update:post-scrape-reprocess:error",
+      );
+      throw error;
+    }
   }
 
   private async clearEventData(eventId: number): Promise<EventDataCleanupSummary> {
@@ -1217,7 +2537,7 @@ export class ScrapeProcessor {
       const deletedRawCaptures = await tx.rawCapture.deleteMany({
         where: {
           eventId,
-          tab: { in: ["GRUPOS", "RESULTADOS", "ELIMINATORIA_API"] },
+          tab: { in: ["GRUPOS", "RESULTADOS"] },
         },
       });
 

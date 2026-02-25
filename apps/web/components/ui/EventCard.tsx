@@ -9,6 +9,9 @@ type EventCardProps = {
   statusTone: "open" | "closed" | "done";
   periodLabel: string;
   totalInscritos: number;
+  inscricoesTotaisOficiais?: number;
+  totalPartidas?: number;
+  totalPartidasJogadas?: number;
   totalCategorias: number;
   groupsDefined: boolean;
   isConcluded: boolean;
@@ -24,6 +27,9 @@ export function EventCard(props: EventCardProps) {
     statusTone,
     periodLabel,
     totalInscritos,
+    inscricoesTotaisOficiais,
+    totalPartidas,
+    totalPartidasJogadas,
     totalCategorias,
     groupsDefined,
     isConcluded,
@@ -51,7 +57,9 @@ export function EventCard(props: EventCardProps) {
       </div>
       <p className="event-period">{periodLabel}</p>
       <div className="event-metrics">
-        <span>Inscritos: <strong>{totalInscritos}</strong></span>
+        <span>Atletas: <strong>{totalInscritos}</strong></span>
+        <span>Inscrições: <strong>{inscricoesTotaisOficiais ?? totalInscritos}</strong></span>
+        <span>Partidas: <strong>{totalPartidasJogadas ?? totalPartidas ?? 0}</strong></span>
         <span>Categorias: <strong>{totalCategorias}</strong></span>
       </div>
       <div className={`event-actions ${isConcluded ? "event-actions-single" : ""}`}>

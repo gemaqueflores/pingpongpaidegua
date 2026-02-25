@@ -228,7 +228,7 @@ export function buildEventScrapePolicy(
       captureInscricoes: true,
       captureGrupos: true,
       captureResultados: true,
-      fetchEliminatoria: true,
+      fetchEliminatoria: false,
       recommendedIntervalMs: 0,
       reason: "manual-force",
     };
@@ -272,7 +272,7 @@ export function buildEventScrapePolicy(
           captureInscricoes: false,
           captureGrupos: true,
           captureResultados: true,
-          fetchEliminatoria: true,
+          fetchEliminatoria: false,
           recommendedIntervalMs: 90 * 60 * 1000,
           reason: "pre-evento-confrontos-90min",
         };
@@ -307,7 +307,7 @@ export function buildEventScrapePolicy(
             captureInscricoes: true,
             captureGrupos: true,
             captureResultados: true,
-            fetchEliminatoria: true,
+            fetchEliminatoria: false,
             recommendedIntervalMs: 2 * 60 * 60 * 1000,
             reason: "formacao-de-grupos",
           };
@@ -318,7 +318,7 @@ export function buildEventScrapePolicy(
             captureInscricoes: false,
             captureGrupos: true,
             captureResultados: true,
-            fetchEliminatoria: true,
+            fetchEliminatoria: false,
             recommendedIntervalMs:
               intervalBySituationMs.POS_INSCRICOES_PRE_EVENTO ?? 3 * 60 * 60 * 1000,
             reason: "definicao-de-confrontos",
@@ -331,7 +331,7 @@ export function buildEventScrapePolicy(
           captureInscricoes: false,
           captureGrupos: true,
           captureResultados: true,
-          fetchEliminatoria: true,
+          fetchEliminatoria: false,
           recommendedIntervalMs: 90 * 60 * 1000,
           reason: "pre-evento-confrontos-90min",
         };
@@ -341,7 +341,7 @@ export function buildEventScrapePolicy(
         captureInscricoes: false,
         captureGrupos: true,
         captureResultados: true,
-        fetchEliminatoria: true,
+        fetchEliminatoria: false,
         recommendedIntervalMs:
           intervalBySituationMs.GRADES_PUBLICADAS_PRE_JOGO ?? 45 * 60 * 1000,
         reason: "grades-publicadas-pre-jogo",
@@ -352,7 +352,7 @@ export function buildEventScrapePolicy(
         captureInscricoes: false,
         captureGrupos: false,
         captureResultados: true,
-        fetchEliminatoria: true,
+        fetchEliminatoria: false,
         recommendedIntervalMs: intervalBySituationMs.EM_ANDAMENTO ?? 30 * 60 * 1000,
         reason: "em-andamento",
       };
@@ -365,7 +365,7 @@ export function buildEventScrapePolicy(
             captureInscricoes: false,
             captureGrupos: false,
             captureResultados: true,
-            fetchEliminatoria: true,
+            fetchEliminatoria: false,
             recommendedIntervalMs: 2 * 60 * 60 * 1000,
             reason: "pos-evento-imediato-consolidacao",
           };

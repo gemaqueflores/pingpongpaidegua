@@ -183,6 +183,9 @@ export default function EventsHubPage() {
                   statusTone={eventStatusTone(resolveDisplayStatus(event))}
                   periodLabel={`${formatDate(event.dataInicio)} até ${formatDate(event.dataFim)}`}
                   totalInscritos={event.totalInscritos}
+                  inscricoesTotaisOficiais={event.inscricoesTotaisOficiais}
+                  totalPartidas={event.totalPartidas}
+                  totalPartidasJogadas={event.totalPartidasJogadas}
                   totalCategorias={event.totalCategorias}
                   groupsDefined={event.groupsDefined}
                   isConcluded={event.userStatus === "CONCLUIDO"}
