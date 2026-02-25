@@ -104,6 +104,16 @@ export class AdminEventsController {
     return this.service.listScrapeRuns(id);
   }
 
+  @Get(":id/audit")
+  async getLatestAudit(@Param("id", ParseIntPipe) id: number) {
+    return this.service.getLatestAudit(id);
+  }
+
+  @Get(":id/audit-history")
+  async getAuditHistory(@Param("id", ParseIntPipe) id: number) {
+    return this.service.getAuditHistory(id);
+  }
+
   @Post("raw-captures/cleanup")
   async cleanupRawCapturesGlobal(@Body() body: RawCaptureCleanupDto) {
     return this.service.cleanupRawCaptures({

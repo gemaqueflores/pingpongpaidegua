@@ -1,4 +1,5 @@
 ﻿import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../common/prisma.service";
 import { QueueService } from "../common/queue.service";
 import { computeEventSituation, getEventSituationTransition, normalizeText } from "@cbtm/shared";
@@ -14,6 +15,34 @@ const DEFAULT_EFFICIENCY_CONFIG = {
   pesoPrata: 240,
   pesoBronze: 120,
 } as const;
+
+type ConformanceAuditSummary = {
+  categoryCountExpected: number;
+  categoryCountObserved: number;
+  expectedRegistrationsTotal: number;
+  observedRegistrationsTotal: number;
+  expectedMatchesTotal: number;
+  observedMatchesTotal: number;
+  expectedPlayedMatchesTotal: number;
+  observedPlayedMatchesTotal: number;
+  observedWalkoverMatchesTotal: number;
+  pendingConflicts: number;
+  eliminatoriaMatchesObserved: number;
+  athleteCategoryRuleViolations: number;
+  registrationMismatches: number;
+  matchMismatches: number;
+  playedMatchMismatches: number;
+  samples: string[];
+};
+
+type AuditRunPayload = {
+  runId: number;
+  startedAt: string;
+  finishedAt: string | null;
+  status: string;
+  warningsCount: number;
+  conformanceAudit: ConformanceAuditSummary | null;
+};
 
 @Injectable()
 export class AdminEventsService {
@@ -480,6 +509,61 @@ export class AdminEventsService {
     });
   }
 
+  async getLatestAudit(eventId: number) {
+    await this.ensureEvent(eventId);
+
+    const run = await this.prisma.scrapeRun.findFirst({
+      where: { eventId },
+      orderBy: [{ startedAt: "desc" }],
+      select: {
+        id: true,
+        startedAt: true,
+        finishedAt: true,
+        status: true,
+        warnings: true,
+        extractionStats: true,
+      },
+    });
+
+    if (!run) {
+      return {
+        eventId,
+        hasAudit: false,
+        message: "Nenhum scrape_run encontrado para este evento.",
+      };
+    }
+
+    return {
+      eventId,
+      hasAudit: true,
+      run: this.mapRunToAuditPayload(run),
+    };
+  }
+
+  async getAuditHistory(eventId: number) {
+    await this.ensureEvent(eventId);
+
+    const runs = await this.prisma.scrapeRun.findMany({
+      where: { eventId },
+      orderBy: [{ startedAt: "desc" }],
+      take: 20,
+      select: {
+        id: true,
+        startedAt: true,
+        finishedAt: true,
+        status: true,
+        warnings: true,
+        extractionStats: true,
+      },
+    });
+
+    return {
+      eventId,
+      count: runs.length,
+      items: runs.map((run) => this.mapRunToAuditPayload(run)),
+    };
+  }
+
   async cleanupRawCaptures(input: { eventId?: number; dryRun?: boolean }) {
     if (input.eventId) {
       await this.ensureEvent(input.eventId);
@@ -604,6 +688,63 @@ export class AdminEventsService {
       success: true,
       conflictId,
       athleteId,
+    };
+  }
+
+  private mapRunToAuditPayload(input: {
+    id: number;
+    startedAt: Date;
+    finishedAt: Date | null;
+    status: string;
+    warnings: Prisma.JsonValue;
+    extractionStats: Prisma.JsonValue;
+  }): AuditRunPayload {
+    const warningsCount = Array.isArray(input.warnings) ? input.warnings.length : 0;
+    return {
+      runId: input.id,
+      startedAt: input.startedAt.toISOString(),
+      finishedAt: input.finishedAt ? input.finishedAt.toISOString() : null,
+      status: input.status,
+      warningsCount,
+      conformanceAudit: this.extractConformanceAudit(input.extractionStats),
+    };
+  }
+
+  private extractConformanceAudit(input: Prisma.JsonValue): ConformanceAuditSummary | null {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return null;
+    }
+
+    const json = input as Prisma.JsonObject;
+    const auditRaw = json.conformanceAudit;
+    if (!auditRaw || typeof auditRaw !== "object" || Array.isArray(auditRaw)) {
+      return null;
+    }
+
+    const audit = auditRaw as Prisma.JsonObject;
+    const numberOrZero = (value: Prisma.JsonValue | undefined): number =>
+      typeof value === "number" && Number.isFinite(value) ? value : 0;
+    const samples = Array.isArray(audit.samples)
+      ? audit.samples.filter((item): item is string => typeof item === "string")
+      : [];
+
+    return {
+      categoryCountExpected: numberOrZero(audit.categoryCountExpected),
+      categoryCountObserved: numberOrZero(audit.categoryCountObserved),
+      expectedRegistrationsTotal: numberOrZero(audit.expectedRegistrationsTotal),
+      observedRegistrationsTotal: numberOrZero(audit.observedRegistrationsTotal),
+      expectedMatchesTotal: numberOrZero(audit.expectedMatchesTotal),
+      observedMatchesTotal: numberOrZero(audit.observedMatchesTotal),
+      expectedPlayedMatchesTotal: numberOrZero(audit.expectedPlayedMatchesTotal),
+      observedPlayedMatchesTotal: numberOrZero(audit.observedPlayedMatchesTotal),
+      observedWalkoverMatchesTotal: numberOrZero(audit.observedWalkoverMatchesTotal),
+      pendingConflicts: numberOrZero(audit.pendingConflicts),
+      eliminatoriaMatchesObserved: numberOrZero(audit.eliminatoriaMatchesObserved),
+      athleteCategoryRuleViolations: numberOrZero(audit.athleteCategoryRuleViolations),
+      registrationMismatches: numberOrZero(audit.registrationMismatches),
+      matchMismatches: numberOrZero(audit.matchMismatches),
+      playedMatchMismatches: numberOrZero(audit.playedMatchMismatches),
+      samples,
     };
   }
 
