@@ -44,6 +44,13 @@ export const config = {
   rawCaptureMaxRunsPerEvent: Number(process.env.RAW_CAPTURE_MAX_RUNS_PER_EVENT ?? "20"),
   rawCaptureCleanupEnabled: process.env.RAW_CAPTURE_CLEANUP_ENABLED !== "false",
   rawCaptureCleanupEveryMs: Number(process.env.RAW_CAPTURE_CLEANUP_EVERY_MS ?? "86400000"),
+  rawCaptureSanitizeEnabled: process.env.RAW_CAPTURE_SANITIZE_ENABLED !== "false",
+  rawCaptureMaxBodyChars: Number(process.env.RAW_CAPTURE_MAX_BODY_CHARS ?? "25000"),
+  rawCaptureStoreHtml: process.env.RAW_CAPTURE_STORE_HTML === "true",
+  rawCaptureHashOnlyTabs: (process.env.RAW_CAPTURE_HASH_ONLY_TABS ?? "")
+    .split(",")
+    .map((value) => value.trim().toUpperCase())
+    .filter(Boolean),
   dbRetryAttempts: Number(process.env.DB_RETRY_ATTEMPTS ?? "5"),
   dbRetryDelayMs: Number(process.env.DB_RETRY_DELAY_MS ?? "1000"),
   readModelPrewarmEnabled: process.env.READ_MODEL_PREWARM_ENABLED !== "false",

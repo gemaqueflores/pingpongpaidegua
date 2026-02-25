@@ -438,27 +438,33 @@ export class ScrapeProcessor {
       });
 
       for (const payload of effectivePayloads) {
+        const sanitized = this.prepareRawCapturePayload(payload.tab, payload.rawLiteral, payload.html);
         await prisma.rawCapture.create({
           data: {
             eventId,
             scrapeRunId: scrapeRun.id,
             tab: payload.tab,
             categoryId: payload.categoryId,
-            rawBody: payload.rawLiteral,
-            htmlBody: payload.html,
+            rawBody: sanitized.rawBody,
+            htmlBody: sanitized.htmlBody,
           },
         });
       }
 
       for (const eliminationPayload of effectiveEliminationPayloads) {
+        const sanitized = this.prepareRawCapturePayload(
+          "ELIMINATORIA_API",
+          eliminationPayload.rawBody,
+          eliminationPayload.rawBody,
+        );
         await prisma.rawCapture.create({
           data: {
             eventId,
             scrapeRunId: scrapeRun.id,
             tab: "ELIMINATORIA_API",
             categoryId: eliminationPayload.categoryId,
-            rawBody: eliminationPayload.rawBody,
-            htmlBody: eliminationPayload.rawBody,
+            rawBody: sanitized.rawBody,
+            htmlBody: sanitized.htmlBody,
           },
         });
       }
@@ -1015,6 +1021,85 @@ export class ScrapeProcessor {
         typeof capture.lastSuccessfulStage3At === "string" ? capture.lastSuccessfulStage3At : null,
       lastSuccessfulStage3ByCategory,
     };
+  }
+
+  private prepareRawCapturePayload(
+    tab: string,
+    rawBody: string | null | undefined,
+    htmlBody: string | null | undefined,
+  ): { rawBody: string; htmlBody: string } {
+    const normalizedTab = String(tab ?? "").trim().toUpperCase();
+    const hashOnlyTabs = new Set(config.rawCaptureHashOnlyTabs);
+
+    const sanitizedRawBody = this.sanitizeRawCaptureText(rawBody ?? "");
+    const rawBodyValue = hashOnlyTabs.has(normalizedTab)
+      ? this.buildRawCaptureDigest(sanitizedRawBody)
+      : this.truncateRawCaptureText(sanitizedRawBody);
+
+    if (!config.rawCaptureStoreHtml) {
+      return {
+        rawBody: rawBodyValue,
+        htmlBody: "",
+      };
+    }
+
+    const sanitizedHtmlBody = this.sanitizeRawCaptureText(htmlBody ?? "");
+    const htmlBodyValue = hashOnlyTabs.has(normalizedTab)
+      ? this.buildRawCaptureDigest(sanitizedHtmlBody)
+      : this.truncateRawCaptureText(sanitizedHtmlBody);
+
+    return {
+      rawBody: rawBodyValue,
+      htmlBody: htmlBodyValue,
+    };
+  }
+
+  private sanitizeRawCaptureText(input: string): string {
+    if (!config.rawCaptureSanitizeEnabled || !input) {
+      return input;
+    }
+
+    let text = input;
+
+    text = text.replace(
+      /(bearer\s+)[a-z0-9._-]+/gi,
+      "$1[REDACTED_TOKEN]",
+    );
+    text = text.replace(
+      /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+      "[REDACTED_EMAIL]",
+    );
+    text = text.replace(
+      /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g,
+      "[REDACTED_CPF]",
+    );
+    text = text.replace(
+      /\b(password|senha|token|secret|authorization|cookie)=([^&\s]+)/gi,
+      "$1=[REDACTED]",
+    );
+    text = text.replace(
+      /"(password|senha|token|secret|authorization|cookie)"\s*:\s*"[^"]*"/gi,
+      "\"$1\":\"[REDACTED]\"",
+    );
+    text = text.replace(
+      /(__VIEWSTATE(?:ENCRYPTED)?|__EVENTVALIDATION)=([^&\s]+)/gi,
+      "$1=[REDACTED]",
+    );
+
+    return text;
+  }
+
+  private truncateRawCaptureText(input: string): string {
+    const maxChars = Math.max(0, Math.floor(config.rawCaptureMaxBodyChars));
+    if (maxChars === 0 || input.length <= maxChars) {
+      return input;
+    }
+    return `${input.slice(0, maxChars)}...[truncated:${input.length}]`;
+  }
+
+  private buildRawCaptureDigest(input: string): string {
+    const digest = createHash("sha256").update(input).digest("hex");
+    return `[SANITIZED_HASH:${digest}]`;
   }
 
   private async clearEventData(eventId: number): Promise<EventDataCleanupSummary> {

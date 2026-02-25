@@ -184,6 +184,81 @@ function formatFinalSets(match: SummaryMatch): string {
   return match.scoreRaw || "-";
 }
 
+function parseRoundLabel(round: string | null): string {
+  const normalized = String(round ?? "").trim();
+  if (!normalized) {
+    return "-";
+  }
+  const normalizedKey = normalized
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (normalizedKey === "unico 01" || normalizedKey === "unica 01" || normalizedKey === "grupo unico 01") {
+    return "Grupo Único";
+  }
+  return normalized;
+}
+
+function resolveScoreSets(match: SummaryMatch): Array<{ a: number; b: number }> {
+  if (match.scoreSets.length > 0) {
+    return match.scoreSets.map((set) => ({ a: Number(set.a), b: Number(set.b) }));
+  }
+  if (match.sets.length > 0) {
+    return match.sets.map((set) => ({ a: Number(set.p1), b: Number(set.p2) }));
+  }
+  return [];
+}
+
+function resolveSetsResult(match: SummaryMatch): { p1Sets: number; p2Sets: number } | null {
+  if (match.scoreFinal) {
+    return { p1Sets: match.scoreFinal.setsA, p2Sets: match.scoreFinal.setsB };
+  }
+  if (match.setsResult) {
+    return { p1Sets: match.setsResult.p1Sets, p2Sets: match.setsResult.p2Sets };
+  }
+  return null;
+}
+
+function isWalkoverMatch(match: SummaryMatch): boolean {
+  const raw = String(match.scoreRaw ?? "")
+    .trim()
+    .toLowerCase();
+  if (raw.includes("wo")) {
+    return true;
+  }
+
+  const sets = resolveScoreSets(match);
+  const setsResult = resolveSetsResult(match);
+
+  const isDoubleWalkover =
+    sets.length > 0 &&
+    sets.every((set) => set.a === 0 && set.b === 0) &&
+    Boolean(setsResult) &&
+    (setsResult?.p1Sets ?? -1) === 0 &&
+    (setsResult?.p2Sets ?? -1) === 0;
+  if (isDoubleWalkover) {
+    return true;
+  }
+
+  if (!setsResult) {
+    return false;
+  }
+
+  const isStraightWin =
+    (setsResult.p1Sets === 3 && setsResult.p2Sets === 0) ||
+    (setsResult.p1Sets === 0 && setsResult.p2Sets === 3);
+  if (!isStraightWin || sets.length !== 3) {
+    return false;
+  }
+
+  const winnerIndex = match.winnerIndex;
+  if (winnerIndex !== 0 && winnerIndex !== 1) {
+    return false;
+  }
+  const winnerIsP1 = winnerIndex === 0;
+  return sets.every((set) => (winnerIsP1 ? set.a === 11 && set.b === 0 : set.b === 11 && set.a === 0));
+}
+
 function formatRatio(ratio: number | null): string {
   if (ratio === null) {
     return "-";
@@ -338,9 +413,35 @@ export default function AthleteSummaryPage() {
     for (const match of summary.matches) {
       const tone = resolveMatchTone(match);
       if (tone === "win") totalVitorias += 1;
+      if (isWalkoverMatch(match)) {
+        continue;
+      }
       const sets = summarizeSetStats(match);
       setsGanhos += sets.won;
       setsDisputados += sets.played;
+    }
+
+    let pontosGanhos = 0;
+    let pontosDisputados = 0;
+    for (const match of summary.matches) {
+      if (isWalkoverMatch(match)) {
+        continue;
+      }
+      if (match.athleteIndex !== 0 && match.athleteIndex !== 1) {
+        continue;
+      }
+      for (const set of resolveScoreSets(match)) {
+        if (!Number.isFinite(set.a) || !Number.isFinite(set.b)) {
+          continue;
+        }
+        if (set.a < 0 || set.b < 0) {
+          continue;
+        }
+        const athletePoints = match.athleteIndex === 0 ? set.a : set.b;
+        const opponentPoints = match.athleteIndex === 0 ? set.b : set.a;
+        pontosGanhos += athletePoints;
+        pontosDisputados += athletePoints + opponentPoints;
+      }
     }
 
     return {
@@ -348,8 +449,8 @@ export default function AthleteSummaryPage() {
       totalConfrontos: summary.matches.length,
       setsGanhos,
       setsDisputados,
-      pontosGanhos: summary.performance.pointsWon,
-      pontosDisputados: summary.performance.pointsPlayed,
+      pontosGanhos,
+      pontosDisputados,
     };
   }, [summary]);
 
@@ -357,7 +458,7 @@ export default function AthleteSummaryPage() {
     <main className="container grid user-page">
       <PageHeader
         title="Resumo do Atleta"
-        subtitle="Tênis de Mesa / Table Tennis"
+        subtitle={summary?.event.name ?? "Evento"}
         compact
         actions={
           <button type="button" className="event-back-button" onClick={() => (window.location.href = `/events/${eventId}`)}>
@@ -431,7 +532,7 @@ export default function AthleteSummaryPage() {
               />
             </div>
 
-            <p>Jogos sem resultado aparecem sempre primeiro. A ordenação usa o ID do jogo (não o horário).</p>
+            <p>Jogos sem resultado aparecem primeiro.</p>
 
             {groups.length === 0 ? <p>Nenhum jogo encontrado para este atleta.</p> : null}
 
@@ -447,7 +548,7 @@ export default function AthleteSummaryPage() {
                         key={match.matchKey}
                         categoryName={separateByCategory ? group.title : match.category.name}
                         phase={match.phase}
-                        round={`${match.round ?? "-"} | Mesa ${match.tableNumber ?? "-"}`}
+                        round={`${parseRoundLabel(match.round)} | Mesa ${match.tableNumber ?? "-"}`}
                         datetime={formatDatetime(match.matchDatetime)}
                         confrontation={`${toReducedName(match.players[0]?.name)} x ${toReducedName(match.players[1]?.name)}`}
                         setsLine={scoreSetsLabel || "-"}

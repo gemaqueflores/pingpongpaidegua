@@ -44,7 +44,7 @@ export function MatchCard({
       <p className="match-card-meta">{round && round !== "-" ? `${phase} | ${round}` : phase}</p>
       <p className="match-card-meta">{datetime}</p>
       <p className="match-card-vs">{confrontation}</p>
-      <p className="match-card-result">Resultado: {finalLine}</p>
+      <p className="match-card-result">{finalLine}</p>
       <p className="match-card-sets">Sets: {setsLine}</p>
     </article>
   );
