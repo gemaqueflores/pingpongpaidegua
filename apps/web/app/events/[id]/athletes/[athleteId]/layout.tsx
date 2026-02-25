@@ -28,8 +28,8 @@ export async function generateMetadata(
     `/events/${id}/athletes/${athleteId}/identity`,
   );
 
-  const alias = summary?.athlete?.shortName || summary?.athlete?.name || "Resumo do Atleta";
-  const eventName = summary?.event?.name || "evento";
+  const alias = summary?.athlete?.shortName || summary?.athlete?.name || "nome indisponível";
+  const eventName = summary?.event?.name || "nome indisponível";
 
   return buildMetadata({
     title: `${alias} no evento ${eventName} de Tênis de Mesa`,

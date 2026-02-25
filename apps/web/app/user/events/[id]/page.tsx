@@ -44,6 +44,7 @@ type AthleteRow = {
   categoryNames?: string[];
 };
 const ATHLETES_PAGE_SIZE = 30;
+const MEDALISTS_PAGE_SIZE = 20;
 type EventPhase = "INSCRICOES_ABERTAS" | "INSCRICOES_ENCERRADAS" | "EM_DISPUTA" | "CONCLUIDO";
 const EVENT_TIME_ZONE = "America/Belem";
 
@@ -214,6 +215,7 @@ export default function EventDetailPage() {
   const [efficiencyLoading, setEfficiencyLoading] = useState(false);
   const [medalistsData, setMedalistsData] = useState<EventCategoryMedalistsResponse | null>(null);
   const [medalistsLoading, setMedalistsLoading] = useState(false);
+  const [medalistsVisible, setMedalistsVisible] = useState(MEDALISTS_PAGE_SIZE);
   const [efficiencyMode, setEfficiencyMode] = useState<EfficiencyViewMode>("pontuacao");
 
   useEffect(() => {
@@ -270,6 +272,10 @@ export default function EventDetailPage() {
       .then((response) => setMedalistsData(response))
       .finally(() => setMedalistsLoading(false));
   }, [activeTab, eventId, event?.lastScrapeAt]);
+
+  useEffect(() => {
+    setMedalistsVisible(MEDALISTS_PAGE_SIZE);
+  }, [eventId, activeTab, medalistsData?.categories?.length]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -416,6 +422,11 @@ export default function EventDetailPage() {
     if (!hasConcludedPodium) return rankedEfficiencyRows;
     return rankedEfficiencyRows.slice(3);
   }, [hasConcludedPodium, rankedEfficiencyRows]);
+  const medalistCategories = useMemo(() => medalistsData?.categories ?? [], [medalistsData?.categories]);
+  const visibleMedalistCategories = useMemo(
+    () => medalistCategories.slice(0, medalistsVisible),
+    [medalistCategories, medalistsVisible],
+  );
 
   function valueForMode(row: EventEfficiencyRow, medalha: "ouro" | "prata" | "bronze" | "total"): number {
     if (efficiencyMode === "quantidade") {
@@ -484,8 +495,8 @@ export default function EventDetailPage() {
           <div className="event-metrics">
             <span className="event-metric-card"><small>Atletas</small><strong>{String(event?.totalInscritos ?? 0)}</strong></span>
             <span className="event-metric-card"><small>Categorias</small><strong>{String(event?.totalCategorias ?? 0)}</strong></span>
-            <span className="event-metric-card"><small>Inscrições</small><strong>{String(event?.inscricoesTotaisOficiais ?? event?.totalInscritos ?? 0)}</strong></span>
-            <span className="event-metric-card"><small>Partidas Previstas</small><strong>{String(event?.totalPartidasCalculadas ?? event?.totalPartidas ?? 0)}</strong></span>
+            <span className="event-metric-card"><small>Inscrições</small><strong>{String(event?.associacoesAtletaCategoria ?? event?.inscricoesTotaisOficiais ?? event?.totalInscritos ?? 0)}</strong></span>
+            <span className="event-metric-card"><small>Partidas Previstas</small><strong>{String(event?.totalPartidasPrevistas ?? event?.totalPartidasCalculadas ?? event?.totalPartidas ?? 0)}</strong></span>
             <span className="event-metric-card"><small>Partidas</small><strong>{String(event?.totalPartidasJogadas ?? event?.totalPartidas ?? 0)}</strong></span>
             <span className="event-metric-card"><small>WO</small><strong>{String(event?.totalPartidasWo ?? 0)}</strong></span>
           </div>
@@ -784,9 +795,9 @@ export default function EventDetailPage() {
             {!medalistsLoading && (medalistsData?.categories?.length ?? 0) === 0 ? (
               <p className="arena-muted">Sem categorias com atletas vinculados para auditoria.</p>
             ) : null}
-            {!medalistsLoading && (medalistsData?.categories?.length ?? 0) > 0 ? (
+            {!medalistsLoading && medalistCategories.length > 0 ? (
               <div className="grid" style={{ gap: "10px" }}>
-                {medalistsData!.categories.map((category) => {
+                {visibleMedalistCategories.map((category) => {
                   const displayedRegisteredCount =
                     Number.isFinite(category.officialRegisteredCount as number) &&
                     Number(category.officialRegisteredCount) >= 0
@@ -816,7 +827,6 @@ export default function EventDetailPage() {
                             {medalist.medalha === "ouro" ? "🥇" : medalist.medalha === "prata" ? "🥈" : "🥉"}{" "}
                             {medalist.athleteName}
                             {medalist.clubName ? ` · ${medalist.clubName}` : ""}
-                            {` · ${medalist.position}º`}
                           </li>
                         ))}
                       </ul>
@@ -824,6 +834,13 @@ export default function EventDetailPage() {
                     </article>
                   );
                 })}
+                {medalistCategories.length > medalistsVisible ? (
+                  <div className="row" style={{ justifyContent: "center" }}>
+                    <button type="button" onClick={() => setMedalistsVisible((current) => current + MEDALISTS_PAGE_SIZE)}>
+                      Carregar mais categorias
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </section>

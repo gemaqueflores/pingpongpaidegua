@@ -6,8 +6,10 @@ const API_BASE_PUBLIC = process.env.NEXT_PUBLIC_API_URL ?? null;
 
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? DEFAULT_SITE_URL;
 export const SITE_NAME = "PingPong Paid'egua";
-const FETCH_TIMEOUT_MS = 1200;
+const FETCH_TIMEOUT_MS = 4000;
 const FETCH_REVALIDATE_SECONDS = 300;
+const METADATA_CACHE_TTL_MS = 60_000;
+const metadataFetchCache = new Map<string, { expiresAt: number; payload: unknown | null }>();
 
 function normalizePath(path: string): string {
   if (!path) return "/";
@@ -83,6 +85,12 @@ async function fetchJsonFromBase<T>(base: string, path: string): Promise<T | nul
 }
 
 export async function fetchJson<T>(path: string): Promise<T | null> {
+  const now = Date.now();
+  const cached = metadataFetchCache.get(path);
+  if (cached && cached.expiresAt > now) {
+    return cached.payload as T | null;
+  }
+
   const bases = [API_BASE_INTERNAL, API_BASE_PUBLIC, "http://localhost:4000"].filter(
     (base): base is string => Boolean(base),
   );
@@ -93,8 +101,9 @@ export async function fetchJson<T>(path: string): Promise<T | null> {
 
   const attempts = await Promise.all(uniqueBases.map((base) => fetchJsonFromBase<T>(base, path)));
   const firstSuccess = attempts.find((item) => item !== null) ?? null;
-  if (firstSuccess) {
-    return firstSuccess;
-  }
-  return null;
+  metadataFetchCache.set(path, {
+    expiresAt: now + METADATA_CACHE_TTL_MS,
+    payload: firstSuccess,
+  });
+  return firstSuccess;
 }

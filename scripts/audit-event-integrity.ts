@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { computeOfficialCategoryMatchesCount, normalizeText } from "@cbtm/shared";
+import { computeOfficialCategoryMatchesCount, detectWalkover, normalizeText } from "@cbtm/shared";
 import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
@@ -8,6 +8,7 @@ type Args = {
   eventId: number;
   json: boolean;
   top: number;
+  strict: boolean;
 };
 
 type CategoryKind = "RATING" | "RANKING_IDADE" | "RANKING_TECNICO" | "OUTRA";
@@ -19,6 +20,7 @@ function parseArgs(argv: string[]): Args {
   let eventId = 0;
   let json = false;
   let top = 20;
+  let strict = false;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = String(argv[i] ?? "");
     if (arg === "--eventId" && argv[i + 1]) {
@@ -35,14 +37,18 @@ function parseArgs(argv: string[]): Args {
       i += 1;
       continue;
     }
+    if (arg === "--strict") {
+      strict = true;
+      continue;
+    }
   }
   if (!Number.isFinite(eventId) || eventId <= 0) {
-    throw new Error("Uso: tsx scripts/audit-event-integrity.ts --eventId <cbtmEventId> [--json] [--top 20]");
+    throw new Error("Uso: tsx scripts/audit-event-integrity.ts --eventId <cbtmEventId> [--json] [--top 20] [--strict]");
   }
   if (!Number.isFinite(top) || top <= 0) {
     top = 20;
   }
-  return { eventId, json, top };
+  return { eventId, json, top, strict };
 }
 
 function normalizeCategoryName(name: string): string {
@@ -75,31 +81,13 @@ function isWalkoverMatch(input: {
   p2Sets: number | null;
   scoreRaw?: string | null;
 }): { wo: boolean; doubleWo: boolean } {
-  const sets = input.sets ?? [];
-  const p1Sets = asInt(input.p1Sets, 0);
-  const p2Sets = asInt(input.p2Sets, 0);
-  const scoreRaw = String(input.scoreRaw ?? "").toLowerCase().replace(/\s+/g, "");
-
-  const all00 = sets.length > 0 && sets.every((set) => set.p1 === 0 && set.p2 === 0);
-  if (all00) {
-    const explicit00 = (p1Sets === 0 && p2Sets === 0) || scoreRaw.includes("0x0");
-    return { wo: explicit00, doubleWo: explicit00 };
-  }
-
-  const simpleWoBySets =
-    sets.length === 3 &&
-    (sets.every((set) => set.p1 === 11 && set.p2 === 0) || sets.every((set) => set.p2 === 11 && set.p1 === 0));
-  if (simpleWoBySets) {
-    return { wo: true, doubleWo: false };
-  }
-
-  const straightWin = (p1Sets === 3 && p2Sets === 0) || (p1Sets === 0 && p2Sets === 3);
-  if (!straightWin || sets.length !== 3) {
-    return { wo: false, doubleWo: false };
-  }
-  const winnerIsP1 = p1Sets > p2Sets;
-  const validWo = sets.every((set) => (winnerIsP1 ? set.p1 === 11 && set.p2 === 0 : set.p2 === 11 && set.p1 === 0));
-  return { wo: validWo, doubleWo: false };
+  const detection = detectWalkover({
+    sets: input.sets,
+    p1Sets: input.p1Sets,
+    p2Sets: input.p2Sets,
+    scoreRaw: input.scoreRaw ?? null,
+  });
+  return { wo: detection.isWalkover, doubleWo: detection.isDoubleWalkover };
 }
 
 function parseSets(payload: unknown): Array<{ p1: number; p2: number }> {
@@ -429,6 +417,9 @@ async function main(): Promise<void> {
         .slice(0, args.top),
       athleteRuleViolations: athleteRuleViolations.slice(0, args.top),
     };
+    const hasCategoryDiffs = payload.topCategoryDiffs.length > 0;
+    const hasRuleViolations = payload.athleteRuleViolations.length > 0;
+    const strictFail = hasCategoryDiffs || hasRuleViolations;
 
     if (args.json) {
       console.log(JSON.stringify(payload, null, 2));
@@ -460,6 +451,10 @@ async function main(): Promise<void> {
       console.log(
         `- ${row.categoryName}: insc=${row.confirmedRegistrations} ofc=${row.official?.registered ?? "-"} | pre=${row.preRegistrations} ofc=${row.official?.preRegistered ?? "-"} | publicadas=${row.publishedMatches} previstas=${row.expectedMatchesFromConfirmed} ofcPartidas=${row.official?.officialMatches ?? "-"}`,
       );
+    }
+
+    if (args.strict && strictFail) {
+      process.exit(2);
     }
   } finally {
     await prisma.$disconnect();

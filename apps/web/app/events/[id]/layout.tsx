@@ -18,7 +18,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { id } = await params;
   const events = await fetchJson<EventRow[]>("/events");
-  const eventName = events?.find((row) => String(row.id) === String(id))?.nome || "evento";
+  const eventName = events?.find((row) => String(row.id) === String(id))?.nome || "nome indisponível";
 
   return buildMetadata({
     title: `Confira o evento ${eventName} de Tênis de Mesa`,

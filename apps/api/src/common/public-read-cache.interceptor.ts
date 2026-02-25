@@ -29,10 +29,9 @@ export class PublicReadCacheInterceptor implements NestInterceptor {
       tap(() => {
         response.setHeader(
           "Cache-Control",
-          `public, s-maxage=${ttl}, stale-while-revalidate=${Math.max(300, ttl * 2)}`,
+          `public, s-maxage=${ttl}, stale-while-revalidate=${Math.max(0, ttl)}`,
         );
       }),
     );
   }
 }
-

@@ -6,6 +6,7 @@ import {
   calculateAthletePointPerformance,
   computeOfficialCategoryMatchesCount,
   computeEventSituation,
+  detectWalkover,
   getAthleteMatchOutcome,
   getMatchPhaseOrder,
   getRoundSemanticOrder,
@@ -20,7 +21,6 @@ import {
   collectWalkoverLoserAthleteIds,
   computeCategoryClassificationSummaries,
   computeCategoryPerformanceSummaries,
-  isWalkoverMatch,
   type CategoryAnalyticsMatch,
 } from "./athlete-analytics";
 import { buildCareerMedalTable } from "./career-medals";
@@ -311,11 +311,42 @@ function resolveMedalFromPosition(position: number | null | undefined): "ouro" |
 }
 
 function isEfficiencyEligibleCategoryName(categoryName: string | null | undefined): boolean {
-  const normalized = normalizeText(categoryName ?? "")
-    .replace(/\s+/g, "")
-    .toUpperCase();
-  // Quadro de eficiencia oficial nao considera categorias de rating (RBF, ROM, etc).
-  return !/^R[A-Z]{2,3}$/.test(normalized);
+  void categoryName;
+  // Regra vigente: categorias de rating (R*) tambem participam dos quadros/listas de eficiencia.
+  return true;
+}
+
+function toNonNegativeInt(value: number | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0;
+  }
+  return Math.trunc(parsed);
+}
+
+function computeCategoryMatchMetrics(input: {
+  publishedMatchesCount: number | null | undefined;
+  calculatedMatchesCount: number | null | undefined;
+  walkoverMatchesCount: number | null | undefined;
+}): {
+  publishedMatchesCount: number;
+  calculatedMatchesCount: number;
+  walkoverMatchesCount: number;
+  playedMatchesCount: number;
+} {
+  const publishedMatchesCount = toNonNegativeInt(input.publishedMatchesCount);
+  const calculatedMatchesCount = toNonNegativeInt(input.calculatedMatchesCount);
+  // WO e contabilizado apenas sobre partidas publicadas na categoria.
+  const walkoverMatchesCount = Math.min(toNonNegativeInt(input.walkoverMatchesCount), publishedMatchesCount);
+  const playedMatchesCount =
+    publishedMatchesCount === 0 ? 0 : Math.max(0, publishedMatchesCount - walkoverMatchesCount);
+
+  return {
+    publishedMatchesCount,
+    calculatedMatchesCount,
+    walkoverMatchesCount,
+    playedMatchesCount,
+  };
 }
 
 function escapeHtml(value: string): string {
@@ -359,14 +390,16 @@ function sanitizeUserWarnings(warnings: string[]): string[] {
 function countWalkoverMatches(matches: CategoryAnalyticsMatch[]): number {
   let total = 0;
   for (const match of matches) {
-    if (!isWalkoverMatch(match)) {
+    const detection = detectWalkover({
+      sets: match.sets,
+      p1Sets: match.setsResult?.p1Sets ?? null,
+      p2Sets: match.setsResult?.p2Sets ?? null,
+      scoreRaw: match.scoreRaw ?? null,
+    });
+    if (!detection.isWalkover) {
       continue;
     }
-    const isDoubleWalkover =
-      match.sets.length > 0 &&
-      match.sets.every((set) => set.p1 === 0 && set.p2 === 0) &&
-      ((match.setsResult?.p1Sets ?? 0) === 0 && (match.setsResult?.p2Sets ?? 0) === 0);
-    total += isDoubleWalkover ? 2 : 1;
+    total += detection.isDoubleWalkover ? 2 : 1;
   }
   return total;
 }
@@ -376,47 +409,12 @@ function isWalkoverByStoredScore(input: {
   setsResult: { p1Sets: number; p2Sets: number } | null;
   scoreRaw?: string | null;
 }): boolean {
-  // Duplo WO: aceita 0-0 somente quando o placar final explicita encerramento (setsResult 0-0
-  // ou scoreRaw contendo 0x0). Evita contar partidas apenas pendentes com sets vazios.
-  if (input.sets.length > 0 && input.sets.every((set) => set.p1 === 0 && set.p2 === 0)) {
-    const scoreRawNormalized = String(input.scoreRaw ?? "")
-      .toLowerCase()
-      .replace(/\s+/g, "");
-    const hasExplicitZeroFinal =
-      Boolean(input.setsResult) &&
-      (input.setsResult?.p1Sets ?? -1) === 0 &&
-      (input.setsResult?.p2Sets ?? -1) === 0;
-    if (hasExplicitZeroFinal || scoreRawNormalized.includes("0x0")) {
-      return true;
-    }
-    return false;
-  }
-
-  // WO simples por parciais (mesmo sem setsResult confiavel).
-  if (
-    input.sets.length === 3 &&
-    (input.sets.every((set) => set.p1 === 11 && set.p2 === 0) ||
-      input.sets.every((set) => set.p2 === 11 && set.p1 === 0))
-  ) {
-    return true;
-  }
-
-  const setsResult = input.setsResult;
-  if (!setsResult) {
-    return false;
-  }
-
-  const isStraightWin =
-    (setsResult.p1Sets === 3 && setsResult.p2Sets === 0) ||
-    (setsResult.p1Sets === 0 && setsResult.p2Sets === 3);
-  if (!isStraightWin || input.sets.length !== 3) {
-    return false;
-  }
-
-  const winnerIsP1 = setsResult.p1Sets > setsResult.p2Sets;
-  return input.sets.every((set) =>
-    winnerIsP1 ? set.p1 === 11 && set.p2 === 0 : set.p2 === 11 && set.p1 === 0,
-  );
+  return detectWalkover({
+    sets: input.sets,
+    p1Sets: input.setsResult?.p1Sets ?? null,
+    p2Sets: input.setsResult?.p2Sets ?? null,
+    scoreRaw: input.scoreRaw ?? null,
+  }).isWalkover;
 }
 
 function parsePositiveInteger(value: string | number | undefined): number | null {
@@ -787,10 +785,10 @@ export class UserService {
       categoriesCountByEvent,
       registrationMetrics,
       groupMatchesByEvent,
-      publishedMatchesByEvent,
       publishedResultsByEvent,
       officialAuditByEvent,
-      walkoversByEventMap,
+      categoriesForAudit,
+      athleteRegistrationsByCategory,
     ] = await Promise.all([
       this.prisma.category.groupBy({
         by: ["eventId"],
@@ -824,19 +822,6 @@ export class UserService {
           category: {
             cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
           },
-        },
-        _count: {
-          _all: true,
-        },
-      }),
-      this.prisma.match.groupBy({
-        by: ["eventId"],
-        where: {
-          eventId: { in: allScopedEventIds },
-          phase: { in: ["GRUPOS", "RESULTADOS"] },
-          category: {
-            cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
-          },
           OR: [{ p1Sets: { gte: 2 } }, { p2Sets: { gte: 2 } }],
         },
         _count: {
@@ -844,12 +829,45 @@ export class UserService {
         },
       }),
       this.loadLatestOfficialCategoryAuditByEvent(allScopedEventIds),
-      this.countWalkoversByEvent(allScopedEventIds),
+      this.prisma.category.findMany({
+        where: {
+          eventId: { in: allScopedEventIds },
+          cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
+        },
+        select: {
+          id: true,
+          eventId: true,
+          name: true,
+          cbtmCategoryId: true,
+        },
+      }),
+      this.prisma.athleteCategory.groupBy({
+        by: ["categoryId"],
+        where: {
+          registrationStatus: "INSCRITO",
+          athlete: {
+            eventId: { in: allScopedEventIds },
+            createdFromWarning: false,
+          },
+          category: {
+            eventId: { in: allScopedEventIds },
+            cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
+          },
+        },
+        _count: {
+          _all: true,
+        },
+      }),
     ]);
 
     const categoriasMap = new Map<number, number>();
     for (const row of categoriesCountByEvent) {
       categoriasMap.set(row.eventId, row._count._all);
+    }
+
+    const athleteCountByCategory = new Map<number, number>();
+    for (const row of athleteRegistrationsByCategory) {
+      athleteCountByCategory.set(row.categoryId, row._count._all);
     }
 
     const athleteCategoryAssociationsByEvent = registrationMetrics.athleteCategoryAssociationsByEvent;
@@ -874,16 +892,66 @@ export class UserService {
       groupsDefinedByEventMap.set(row.eventId, row._count._all > 0);
     }
 
-    const publishedMatchesByEventMap = new Map<number, boolean>();
-    const publishedMatchesCountByEventMap = new Map<number, number>();
-    for (const row of publishedMatchesByEvent) {
-      publishedMatchesCountByEventMap.set(row.eventId, row._count._all);
-      publishedMatchesByEventMap.set(row.eventId, row._count._all > 0);
-    }
-
     const publishedResultsByEventMap = new Map<number, boolean>();
     for (const row of publishedResultsByEvent) {
       publishedResultsByEventMap.set(row.eventId, row._count._all > 0);
+    }
+
+    const officialRegisteredByCategoryId = new Map<number, number>();
+    for (const category of categoriesForAudit) {
+      const byEvent = officialAuditByEvent.get(category.eventId);
+      if (!byEvent) {
+        continue;
+      }
+      const cbtmCategoryId = String(category.cbtmCategoryId ?? "").trim();
+      const byId = cbtmCategoryId ? byEvent.get(cbtmCategoryId) : undefined;
+      const byName =
+        byId ??
+        [...byEvent.values()].find((entry) => normalizeText(entry.categoryName) === normalizeText(category.name));
+      const officialRegistered = Number(byName?.registeredCount ?? NaN);
+      if (Number.isFinite(officialRegistered) && officialRegistered >= 0) {
+        officialRegisteredByCategoryId.set(category.id, Math.trunc(officialRegistered));
+      }
+    }
+    const categoryIdsForAudit = categoriesForAudit.map((category) => category.id);
+    const publishedMatchesByCategory = await this.prisma.match.groupBy({
+      by: ["categoryId"],
+      where: {
+        eventId: { in: allScopedEventIds },
+        categoryId: { in: categoryIdsForAudit },
+        phase: { in: ["GRUPOS", "RESULTADOS"] },
+      },
+      _count: { _all: true },
+    });
+    const publishedByCategoryId = new Map<number, number>();
+    for (const row of publishedMatchesByCategory) {
+      publishedByCategoryId.set(row.categoryId, row._count._all);
+    }
+    const walkoversByCategoryId = await this.countWalkoversByCategoryIds(allScopedEventIds, categoryIdsForAudit);
+    const metricsByEventId = new Map<number, { published: number; calculated: number; wo: number; played: number }>();
+    for (const category of categoriesForAudit) {
+      const rules = eventRulesByEventId.get(category.eventId) ?? {
+        startDate: null,
+        ratingMatchFormat: "RR_K1" as const,
+      };
+      const registeredBaseCount =
+        officialRegisteredByCategoryId.get(category.id) ?? (athleteCountByCategory.get(category.id) ?? 0);
+      const calculatedMatchesCount = computeOfficialCategoryMatchesCount(registeredBaseCount, {
+        categoryName: category.name,
+        eventStartDate: rules.startDate,
+        ratingMatchFormat: rules.ratingMatchFormat,
+      });
+      const categoryMetrics = computeCategoryMatchMetrics({
+        publishedMatchesCount: publishedByCategoryId.get(category.id) ?? 0,
+        calculatedMatchesCount,
+        walkoverMatchesCount: walkoversByCategoryId.get(category.id) ?? 0,
+      });
+      const current = metricsByEventId.get(category.eventId) ?? { published: 0, calculated: 0, wo: 0, played: 0 };
+      current.published += categoryMetrics.publishedMatchesCount;
+      current.calculated += categoryMetrics.calculatedMatchesCount;
+      current.wo += categoryMetrics.walkoverMatchesCount;
+      current.played += categoryMetrics.playedMatchesCount;
+      metricsByEventId.set(category.eventId, current);
     }
 
     const lastScrapeByEventId = new Map<number, Date>();
@@ -929,22 +997,25 @@ export class UserService {
       const totalInscritos = participantesUnicos;
       const totalTecnicos = associacoesTecnicoClube;
       const groupsDefined = scope.allEventIds.some((currentEventId) => groupsDefinedByEventMap.get(currentEventId) ?? false);
-      const hasPublishedMatches = scope.allEventIds.some((currentEventId) => publishedMatchesByEventMap.get(currentEventId) ?? false);
-      const totalPartidasBanco = scope.allEventIds.reduce(
-        (sum, currentEventId) => sum + (publishedMatchesCountByEventMap.get(currentEventId) ?? 0),
+      const totalPartidasPublicadas = scope.allEventIds.reduce(
+        (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.published ?? 0),
         0,
       );
-      const totalPartidasOficiais = scope.allEventIds.reduce(
-        (sum, currentEventId) => sum + (officialTotalsByEvent.get(currentEventId)?.totalMatches ?? 0),
+      const totalPartidasPrevistas = scope.allEventIds.reduce(
+        (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.calculated ?? 0),
         0,
       );
-      const totalPartidasCalculadas = totalPartidasOficiais > 0 ? totalPartidasOficiais : totalPartidasBanco;
+      const totalPartidasCalculadas = totalPartidasPrevistas;
       const totalPartidasWo = scope.allEventIds.reduce(
-        (sum, currentEventId) => sum + (walkoversByEventMap.get(currentEventId) ?? 0),
+        (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.wo ?? 0),
         0,
       );
-      const totalPartidasJogadas = Math.max(0, totalPartidasCalculadas - totalPartidasWo);
+      const totalPartidasJogadas = scope.allEventIds.reduce(
+        (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.played ?? 0),
+        0,
+      );
       const totalPartidas = totalPartidasCalculadas;
+      const hasPublishedMatches = totalPartidasPublicadas > 0;
       const hasPublishedResults = scope.allEventIds.some((currentEventId) => publishedResultsByEventMap.get(currentEventId) ?? false);
       const mergedLastScrape = scope.allEventIds
         .map((currentEventId) => lastScrapeByEventId.get(currentEventId) ?? null)
@@ -966,6 +1037,8 @@ export class UserService {
         }),
         totalCategorias,
         totalInscritos,
+        totalPartidasPublicadas,
+        totalPartidasPrevistas,
         totalPartidas,
         totalPartidasCalculadas,
         totalPartidasWo,
@@ -1000,7 +1073,7 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
     const latestReliableRunId = await this.getLatestReliableScrapeRunId(scope.canonicalEventId);
-    const cacheKey = this.buildReadModelKey("event-summary-v10", scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey("event-summary-v11", scope.canonicalEventId);
     const readCache = (this.prisma as unknown as { readModelCache?: any }).readModelCache;
     const writeCache = (this.prismaWrite as unknown as { readModelCache?: any }).readModelCache;
 
@@ -1014,11 +1087,7 @@ export class UserService {
         })
       : null;
 
-    if (
-      cached &&
-      (latestReliableRunId === null || cached.sourceScrapeRunId === latestReliableRunId) &&
-      cached.payload
-    ) {
+    if (cached && latestReliableRunId !== null && cached.sourceScrapeRunId === latestReliableRunId && cached.payload) {
       return cached.payload;
     }
 
@@ -1027,7 +1096,6 @@ export class UserService {
       categoriesCountByEvent,
       registrationMetrics,
       groupMatchesByEvent,
-      publishedMatchesByEvent,
       publishedResultsByEvent,
       scopedLastScrape,
       officialAuditByEvent,
@@ -1048,17 +1116,6 @@ export class UserService {
         where: {
           eventId: { in: allEventIds },
           OR: [{ phase: "GRUPOS" }, { round: { contains: "grupo", mode: "insensitive" } }],
-          category: {
-            cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
-          },
-        },
-        _count: { _all: true },
-      }),
-      this.prisma.match.groupBy({
-        by: ["eventId"],
-        where: {
-          eventId: { in: allEventIds },
-          phase: { in: ["GRUPOS", "RESULTADOS"] },
           category: {
             cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
           },
@@ -1097,6 +1154,7 @@ export class UserService {
           id: true,
           eventId: true,
           name: true,
+          cbtmCategoryId: true,
         },
       }),
       this.prisma.athleteCategory.groupBy({
@@ -1149,13 +1207,6 @@ export class UserService {
       groupsDefinedByEventMap.set(row.eventId, row._count._all > 0);
     }
 
-    const publishedMatchesByEventMap = new Map<number, boolean>();
-    const publishedMatchesCountByEventMap = new Map<number, number>();
-    for (const row of publishedMatchesByEvent) {
-      publishedMatchesCountByEventMap.set(row.eventId, row._count._all);
-      publishedMatchesByEventMap.set(row.eventId, row._count._all > 0);
-    }
-
     const publishedResultsByEventMap = new Map<number, boolean>();
     for (const row of publishedResultsByEvent) {
       publishedResultsByEventMap.set(row.eventId, row._count._all > 0);
@@ -1197,39 +1248,82 @@ export class UserService {
     const totalInscritos = participantesUnicos;
     const totalTecnicos = associacoesTecnicoClube;
     const groupsDefined = allEventIds.some((currentEventId) => groupsDefinedByEventMap.get(currentEventId) ?? false);
-    const hasPublishedMatches = allEventIds.some((currentEventId) => publishedMatchesByEventMap.get(currentEventId) ?? false);
-    const totalPartidasBanco = allEventIds.reduce(
-      (sum, currentEventId) => sum + (publishedMatchesCountByEventMap.get(currentEventId) ?? 0),
-      0,
-    );
-    const totalPartidasOficiais = allEventIds.reduce(
-      (sum, currentEventId) => sum + (officialTotalsByEvent.get(currentEventId)?.totalMatches ?? 0),
-      0,
-    );
-    const totalPartidasCalculadasPorInscricoes = allEventIds.reduce((sum, currentEventId) => {
-      const rules = eventRulesByEventId.get(currentEventId) ?? {
+    const officialRegisteredByCategoryId = new Map<number, number>();
+    for (const category of categoriesForAudit) {
+      const byEvent = officialAuditByEvent.get(category.eventId);
+      if (!byEvent) {
+        continue;
+      }
+      const cbtmCategoryId = String(category.cbtmCategoryId ?? "").trim();
+      const byId = cbtmCategoryId ? byEvent.get(cbtmCategoryId) : undefined;
+      const byName =
+        byId ??
+        [...byEvent.values()].find((entry) => normalizeText(entry.categoryName) === normalizeText(category.name));
+      const officialRegistered = Number(byName?.registeredCount ?? NaN);
+      if (Number.isFinite(officialRegistered) && officialRegistered >= 0) {
+        officialRegisteredByCategoryId.set(category.id, Math.trunc(officialRegistered));
+      }
+    }
+    const categoryIdsForAudit = categoriesForAudit.map((category) => category.id);
+    const publishedMatchesByCategory = await this.prisma.match.groupBy({
+      by: ["categoryId"],
+      where: {
+        eventId: { in: allEventIds },
+        categoryId: { in: categoryIdsForAudit },
+        phase: { in: ["GRUPOS", "RESULTADOS"] },
+      },
+      _count: { _all: true },
+    });
+    const publishedByCategoryId = new Map<number, number>();
+    for (const row of publishedMatchesByCategory) {
+      publishedByCategoryId.set(row.categoryId, row._count._all);
+    }
+    const walkoversByCategoryId = await this.countWalkoversByCategoryIds(allEventIds, categoryIdsForAudit);
+    const metricsByEventId = new Map<number, { published: number; calculated: number; wo: number; played: number }>();
+    for (const category of categoriesForAudit) {
+      const rules = eventRulesByEventId.get(category.eventId) ?? {
         startDate: null,
         ratingMatchFormat: "RR_K1" as const,
       };
-      const categories = categoriesForAudit.filter((category) => category.eventId === currentEventId);
-      let matches = 0;
-      for (const category of categories) {
-        const confirmedRegistrations = athleteCountByCategory.get(category.id) ?? 0;
-        matches += computeOfficialCategoryMatchesCount(confirmedRegistrations, {
-          categoryName: category.name,
-          eventStartDate: rules.startDate,
-          ratingMatchFormat: rules.ratingMatchFormat,
-        });
-      }
-      return sum + matches;
-    });
-    const totalPartidasCalculadas =
-      totalPartidasOficiais > 0
-        ? totalPartidasOficiais
-        : Math.max(totalPartidasBanco, totalPartidasCalculadasPorInscricoes);
-    const totalPartidasWo = await this.countWalkoversForEvents(allEventIds);
-    const totalPartidasJogadas = Math.max(0, totalPartidasCalculadas - totalPartidasWo);
+      const registeredBaseCount =
+        officialRegisteredByCategoryId.get(category.id) ?? (athleteCountByCategory.get(category.id) ?? 0);
+      const calculatedMatchesCount = computeOfficialCategoryMatchesCount(registeredBaseCount, {
+        categoryName: category.name,
+        eventStartDate: rules.startDate,
+        ratingMatchFormat: rules.ratingMatchFormat,
+      });
+      const categoryMetrics = computeCategoryMatchMetrics({
+        publishedMatchesCount: publishedByCategoryId.get(category.id) ?? 0,
+        calculatedMatchesCount,
+        walkoverMatchesCount: walkoversByCategoryId.get(category.id) ?? 0,
+      });
+      const current = metricsByEventId.get(category.eventId) ?? { published: 0, calculated: 0, wo: 0, played: 0 };
+      current.published += categoryMetrics.publishedMatchesCount;
+      current.calculated += categoryMetrics.calculatedMatchesCount;
+      current.wo += categoryMetrics.walkoverMatchesCount;
+      current.played += categoryMetrics.playedMatchesCount;
+      metricsByEventId.set(category.eventId, current);
+    }
+
+    const totalPartidasPublicadas = allEventIds.reduce(
+      (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.published ?? 0),
+      0,
+    );
+    const totalPartidasPrevistas = allEventIds.reduce(
+      (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.calculated ?? 0),
+      0,
+    );
+    const totalPartidasWo = allEventIds.reduce(
+      (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.wo ?? 0),
+      0,
+    );
+    const totalPartidasJogadas = allEventIds.reduce(
+      (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.played ?? 0),
+      0,
+    );
+    const totalPartidasCalculadas = totalPartidasPrevistas;
     const totalPartidas = totalPartidasCalculadas;
+    const hasPublishedMatches = totalPartidasPublicadas > 0;
     const hasPublishedResults = allEventIds.some((currentEventId) => publishedResultsByEventMap.get(currentEventId) ?? false);
 
     const mergedLastScrape =
@@ -1260,6 +1354,8 @@ export class UserService {
       situacaoComputada,
       totalCategorias,
       totalInscritos,
+      totalPartidasPublicadas,
+      totalPartidasPrevistas,
       totalPartidas,
       totalPartidasCalculadas,
       totalPartidasWo,
@@ -1499,7 +1595,6 @@ export class UserService {
         cbtmCategoryId: true,
       },
     });
-
     if (categories.length === 0) {
       return {
         eventId: scope.canonicalEventId,
@@ -1706,7 +1801,11 @@ export class UserService {
         typeof officialMatchesCount === "number" && officialMatchesCount >= 0
           ? officialMatchesCount
           : fallbackCalculatedMatchesCount;
-      const playedMatchesCount = Math.max(0, calculatedMatchesCount - walkoverMatchesCount);
+      const categoryMetrics = computeCategoryMatchMetrics({
+        publishedMatchesCount: fullCategoryMatches.length,
+        calculatedMatchesCount,
+        walkoverMatchesCount,
+      });
       const expectedMedalists = registeredBaseCount <= 3 ? registeredBaseCount : 4;
       const athleteCount =
         typeof officialRegisteredCount === "number" && officialRegisteredCount >= 0
@@ -1741,10 +1840,10 @@ export class UserService {
         officialPreRegisteredCount,
         officialTotalListedCount,
         expectedMedalists,
-        publishedMatchesCount: fullCategoryMatches.length,
-        calculatedMatchesCount,
-        walkoverMatchesCount,
-        playedMatchesCount,
+        publishedMatchesCount: categoryMetrics.publishedMatchesCount,
+        calculatedMatchesCount: categoryMetrics.calculatedMatchesCount,
+        walkoverMatchesCount: categoryMetrics.walkoverMatchesCount,
+        playedMatchesCount: categoryMetrics.playedMatchesCount,
         medalists,
         diagnostics,
       };
@@ -4000,6 +4099,61 @@ export class UserService {
     return [...walkoversByEvent.values()].reduce((sum, count) => sum + count, 0);
   }
 
+  private async countWalkoversByCategoryIds(
+    eventIds: number[],
+    categoryIds: number[],
+  ): Promise<Map<number, number>> {
+    const byCategory = new Map<number, number>();
+    if (eventIds.length === 0 || categoryIds.length === 0) {
+      return byCategory;
+    }
+
+    const matches = await this.prisma.match.findMany({
+      where: {
+        eventId: { in: eventIds },
+        categoryId: { in: categoryIds },
+        phase: { in: ["GRUPOS", "RESULTADOS"] },
+      },
+      select: {
+        categoryId: true,
+        setsJson: true,
+        scoreSets: true,
+        scoreRaw: true,
+        p1Sets: true,
+        p2Sets: true,
+      },
+    });
+
+    for (const match of matches) {
+      const sets = this.parseSetsJson(match.setsJson);
+      const scoreSets = this.parseScoreSetsJson(match.scoreSets, sets, match.scoreRaw);
+      const effectiveSets = scoreSets.map((set) => ({
+        p1: set.a,
+        p2: set.b,
+      }));
+      const setsResult = this.resolveSetsResult(match.p1Sets, match.p2Sets, match.scoreRaw, effectiveSets);
+      if (
+        isWalkoverByStoredScore({
+          sets: effectiveSets,
+          setsResult,
+          scoreRaw: match.scoreRaw,
+        })
+      ) {
+        const isDoubleWalkover =
+          effectiveSets.length > 0 &&
+          effectiveSets.every((set) => set.p1 === 0 && set.p2 === 0) &&
+          (setsResult?.p1Sets ?? -1) === 0 &&
+          (setsResult?.p2Sets ?? -1) === 0;
+        byCategory.set(
+          match.categoryId,
+          (byCategory.get(match.categoryId) ?? 0) + (isDoubleWalkover ? 2 : 1),
+        );
+      }
+    }
+
+    return byCategory;
+  }
+
   private async countWalkoversByEvent(eventIds: number[]): Promise<Map<number, number>> {
     const byEvent = new Map<number, number>();
     if (eventIds.length === 0) {
@@ -4184,6 +4338,7 @@ export class UserService {
       categoryName: match.category.name,
       phase: match.phase,
       round: match.round,
+      scoreRaw: match.scoreRaw,
       players: [
         {
           athleteId: match.players[0]?.id ?? null,
@@ -4233,6 +4388,7 @@ export class UserService {
       categoryName: match.category.name,
       phase: match.phase,
       round: match.round,
+      scoreRaw: match.scoreRaw,
       players: [
         {
           athleteId: ordered.players[0].id ?? null,

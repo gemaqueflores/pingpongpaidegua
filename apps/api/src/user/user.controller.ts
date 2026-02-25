@@ -21,7 +21,7 @@ export class UserController {
   }
 
   @Get("events/:id")
-  @PublicCacheTtl(90)
+  @PublicCacheTtl(20)
   async getEventSummary(@Param("id", ParseIntPipe) eventId: number) {
     return this.service.getEventSummary(eventId);
   }
@@ -61,12 +61,13 @@ export class UserController {
   }
 
   @Get("events/:id/efficiency")
+  @PublicCacheTtl(20)
   async listEventEfficiency(@Param("id", ParseIntPipe) eventId: number) {
     return this.service.listEventEfficiency(eventId);
   }
 
   @Get("events/:id/medalists")
-  @PublicCacheTtl(60)
+  @PublicCacheTtl(20)
   async listEventCategoryMedalists(@Param("id", ParseIntPipe) eventId: number) {
     return this.service.listEventCategoryMedalists(eventId);
   }

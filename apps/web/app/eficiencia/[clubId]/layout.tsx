@@ -20,7 +20,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { clubId } = await params;
   const club = await fetchJson<ClubCareerResponse>(`/clubs/${clubId}/efficiency-career`);
-  const clubName = club?.club?.name ?? clubId;
+  const clubName = club?.club?.name ?? "nome indisponível";
   return buildMetadata({
     title: `Clube ${clubName}`,
     description: `Clube ${clubName}`,

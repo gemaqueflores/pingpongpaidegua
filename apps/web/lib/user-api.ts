@@ -30,6 +30,8 @@ export interface UserEventRow {
   situacaoComputada: EventSituation;
   totalCategorias: number;
   totalInscritos: number;
+  totalPartidasPublicadas?: number;
+  totalPartidasPrevistas?: number;
   totalPartidas?: number;
   totalPartidasCalculadas?: number;
   totalPartidasWo?: number;
