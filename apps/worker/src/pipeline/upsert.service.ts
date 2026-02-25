@@ -1332,15 +1332,43 @@ export class UpsertService {
     }
 
     const shouldPruneStage3StaleMatches =
-      !processRegistrations && (Boolean(event?.concluido) || eventSituation === "POS_EVENTO");
+      config.stage3PruneStaleMatches &&
+      !processRegistrations &&
+      (Boolean(event?.concluido) || eventSituation === "POS_EVENTO");
     if (shouldPruneStage3StaleMatches) {
       const keepMatchKeys = new Set(dedupedMatchesFinal.matches.map((item) => item.matchKey));
+      const touchedCategoryIds = new Set<number>();
+      for (const item of dedupedMatchesFinal.matches) {
+        const byCbtmId = item.categoryId ? categoriesByCbtmId.get(item.categoryId) ?? null : null;
+        if (byCbtmId) {
+          touchedCategoryIds.add(byCbtmId.id);
+          continue;
+        }
+        const byName = categoriesByNormalized.get(item.categoryNormalizedName) ?? null;
+        if (byName) {
+          touchedCategoryIds.add(byName.id);
+        }
+      }
+
+      if (touchedCategoryIds.size === 0) {
+        warnings.push(
+          "Saneamento stage-3 ignorado neste run: nenhuma categoria de confronto foi identificada no snapshot.",
+        );
+      }
+
       const existingStage3Matches = await prisma.match.findMany({
         where: {
           eventId,
           phase: {
             in: [MatchPhase.GRUPOS, MatchPhase.RESULTADOS],
           },
+          ...(touchedCategoryIds.size > 0
+            ? {
+                categoryId: {
+                  in: [...touchedCategoryIds],
+                },
+              }
+            : {}),
         },
         select: {
           id: true,
@@ -1373,6 +1401,10 @@ export class UpsertService {
           );
         }
       }
+    } else if (!processRegistrations && (Boolean(event?.concluido) || eventSituation === "POS_EVENTO")) {
+      warnings.push(
+        "Saneamento stage-3 de jogos obsoletos desativado (STAGE3_PRUNE_STALE_MATCHES=false).",
+      );
     }
 
     for (const parsedMatch of dedupedMatchesFinal.matches) {
