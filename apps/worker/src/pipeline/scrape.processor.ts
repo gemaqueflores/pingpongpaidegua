@@ -1,6 +1,12 @@
 import { DiscoveredCategory, parseDxPayloads } from "@cbtm/parser";
 import { createHash } from "node:crypto";
-import { buildEventScrapePolicy, compactWhitespace, computeEventSituation, normalizeText } from "@cbtm/shared";
+import {
+  buildEventScrapePolicy,
+  compactWhitespace,
+  computeEventSituation,
+  detectWalkover,
+  normalizeText,
+} from "@cbtm/shared";
 import { Prisma, ScrapeStatus } from "@prisma/client";
 import { config } from "../config";
 import { log } from "../logger";
@@ -191,27 +197,14 @@ function isWalkoverByStoredScoreForAudit(input: {
   sets: Array<{ p1: number; p2: number }>;
   p1Sets: number | null;
   p2Sets: number | null;
+  scoreRaw?: string | null;
 }): boolean {
-  if (
-    input.sets.length > 0 &&
-    input.sets.every((set) => set.p1 === 0 && set.p2 === 0) &&
-    input.p1Sets === 0 &&
-    input.p2Sets === 0
-  ) {
-    return true;
-  }
-
-  const isStraightWin =
-    (input.p1Sets === 3 && input.p2Sets === 0) ||
-    (input.p1Sets === 0 && input.p2Sets === 3);
-  if (!isStraightWin || input.sets.length !== 3) {
-    return false;
-  }
-
-  const winnerIsP1 = input.p1Sets === 3;
-  return input.sets.every((set) =>
-    winnerIsP1 ? set.p1 === 11 && set.p2 === 0 : set.p2 === 11 && set.p1 === 0,
-  );
+  return detectWalkover({
+    sets: input.sets,
+    p1Sets: input.p1Sets,
+    p2Sets: input.p2Sets,
+    scoreRaw: input.scoreRaw ?? null,
+  }).isWalkover;
 }
 
 export class ScrapeProcessor {
@@ -488,7 +481,10 @@ export class ScrapeProcessor {
         "scrapeRun.getLatestCaptureState",
       );
       const incrementalStage3Enabled =
-        !scrapePolicy.captureInscricoes && scrapePolicy.captureResultados && scrapePolicy.captureGrupos;
+        config.stage3IncrementalEnabled &&
+        !scrapePolicy.captureInscricoes &&
+        scrapePolicy.captureResultados &&
+        scrapePolicy.captureGrupos;
       const stage3CategoryHashes = incrementalStage3Enabled
         ? this.computeStage3CategoryHashes(capture.payloads, [])
         : {};
@@ -1354,6 +1350,7 @@ export class ScrapeProcessor {
                 categoryId: true,
                 p1Sets: true,
                 p2Sets: true,
+                scoreRaw: true,
                 scoreSets: true,
                 setsJson: true,
               },
@@ -1387,6 +1384,7 @@ export class ScrapeProcessor {
         sets,
         p1Sets: row.p1Sets ?? null,
         p2Sets: row.p2Sets ?? null,
+        scoreRaw: row.scoreRaw ?? null,
       });
       if (isWalkover) {
         continue;

@@ -76,4 +76,8 @@ export const config = {
     process.env.SCRAPE_STRICT_REQUIRE_ZERO_NO_CANDIDATE_CONFLICTS !== "false",
   scrapeStrictRequireConformance:
     process.env.SCRAPE_STRICT_REQUIRE_CONFORMANCE !== "false",
+  stage3IncrementalEnabled:
+    process.env.STAGE3_INCREMENTAL_ENABLED === "true",
+  stage3PruneStaleMatches:
+    process.env.STAGE3_PRUNE_STALE_MATCHES === "true",
 };
