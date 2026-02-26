@@ -64,6 +64,19 @@ async function bootstrap(): Promise<void> {
     "scrape-event",
     async (job) => {
       if (job.name === "scan-open-events") {
+        const queueCounts = await queue.getJobCounts("waiting", "active", "delayed");
+        const pendingJobs =
+          Number(queueCounts.waiting ?? 0) +
+          Number(queueCounts.active ?? 0) +
+          Number(queueCounts.delayed ?? 0);
+        if (pendingJobs >= config.autoScrapeMaxPendingJobs) {
+          log("warn", "Autoscrape adiado por backlog de fila", {
+            pendingJobs,
+            maxPendingJobs: config.autoScrapeMaxPendingJobs,
+          });
+          return;
+        }
+
         const events = await prisma.event.findMany({
           select: {
             id: true,

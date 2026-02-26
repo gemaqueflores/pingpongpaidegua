@@ -20,6 +20,7 @@ export class SimpleRateLimitMiddleware {
   private readonly buckets = new Map<string, Bucket>();
   private readonly windowMs = Number(process.env.RATE_LIMIT_WINDOW_MS ?? "60000");
   private readonly defaultLimit = Number(process.env.RATE_LIMIT_DEFAULT_LIMIT ?? "180");
+  private readonly heavyLimit = Number(process.env.RATE_LIMIT_HEAVY_LIMIT ?? "20");
   private readonly strictLimit = Number(process.env.RATE_LIMIT_STRICT_LIMIT ?? "30");
   private readonly useRedis = process.env.RATE_LIMIT_USE_REDIS !== "false";
   private readonly trustProxyHeaders = process.env.RATE_LIMIT_TRUST_PROXY === "true";
@@ -98,6 +99,10 @@ return { current, ttl }
   }
 
   private resolveLimit(method: string, path: string): number {
+    const classification = this.classifyPath(path);
+    if (classification === "heavy") {
+      return this.heavyLimit;
+    }
     if (method === "POST" && /\/admin\/events\/\d+\/scrape-now$/i.test(path)) {
       return this.strictLimit;
     }
@@ -105,6 +110,9 @@ return { current, ttl }
       return this.strictLimit;
     }
     if (method === "POST" && /\/auth\//i.test(path)) {
+      return this.strictLimit;
+    }
+    if (method === "POST" && /\/support\/report-problem$/i.test(path)) {
       return this.strictLimit;
     }
     return this.defaultLimit;
@@ -119,6 +127,17 @@ return { current, ttl }
     }
     if (/\/auth\//i.test(path)) {
       return "auth";
+    }
+    if (/\/support\/report-problem$/i.test(path)) {
+      return "support-report-problem";
+    }
+    if (
+      /\/events\/\d+\/(efficiency|medalists|group-simulation)$/i.test(path) ||
+      /\/events\/\d+\/athletes\/\d+\/summary$/i.test(path) ||
+      /\/athletes\/[^/]+\/career$/i.test(path) ||
+      /\/clubs\/\d+\/efficiency-career$/i.test(path)
+    ) {
+      return "heavy";
     }
     return "general";
   }
