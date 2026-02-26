@@ -2641,7 +2641,12 @@ export class UserService {
     }
 
     const positionByAthleteId = new Map<number, number | null>();
+    const woDisqualifiedAthleteIds = collectWalkoverLoserAthleteIds(categoryMatches);
     for (const athlete of uniqueAthletes.values()) {
+      if (woDisqualifiedAthleteIds.has(athlete.athleteId)) {
+        positionByAthleteId.set(athlete.athleteId, null);
+        continue;
+      }
       const summary = computeCategoryClassificationSummaries(categoryMatches, {
         athleteIds: [athlete.athleteId],
         athleteName: athlete.athleteName,

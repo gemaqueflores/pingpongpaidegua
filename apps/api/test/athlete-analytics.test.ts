@@ -249,6 +249,54 @@ test("WO na fase de grupos anula confrontos anteriores do atleta para desempate/
   assert.equal(classificationB.position, 2);
 });
 
+test("grupo unico com WO e duplo WO ainda classifica atleta elegivel por comparecimento", () => {
+  const matches: CategoryAnalyticsMatch[] = [
+    createMatch({
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 5043, name: "OTAVIO" }, { athleteId: 5041, name: "JOAO" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+      sets: [
+        { p1: 11, p2: 0 },
+        { p1: 11, p2: 0 },
+        { p1: 11, p2: 0 },
+      ],
+    }),
+    createMatch({
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 5042, name: "ISAQUE" }, { athleteId: 5041, name: "JOAO" }],
+      winnerIndex: null,
+      setsResult: { p1Sets: 0, p2Sets: 0 },
+      sets: [
+        { p1: 0, p2: 0 },
+        { p1: 0, p2: 0 },
+        { p1: 0, p2: 0 },
+      ],
+    }),
+    createMatch({
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [{ athleteId: 5043, name: "OTAVIO" }, { athleteId: 5042, name: "ISAQUE" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+      sets: [
+        { p1: 11, p2: 0 },
+        { p1: 11, p2: 0 },
+        { p1: 11, p2: 0 },
+      ],
+    }),
+  ];
+
+  const classOtavio = computeCategoryClassificationSummaries(matches, { athleteId: 5043 })[0];
+  const classJoao = computeCategoryClassificationSummaries(matches, { athleteId: 5041 })[0];
+
+  assert.equal(classOtavio.mode, "grupo_unico");
+  assert.equal(classOtavio.position, 1);
+  assert.equal(classJoao.position, null);
+});
+
 test("categoria com 5 atletas em unica 01 usa grupo unico e pode gerar 1º lugar", () => {
   const matches: CategoryAnalyticsMatch[] = [
     createMatch({

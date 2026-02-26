@@ -211,6 +211,26 @@ function toStandingKey(player: CategoryAnalyticsPlayer | null, fallbackIndex: nu
   return normalizedName ? `name:${normalizedName}` : `unk:${fallbackIndex}`;
 }
 
+function athleteMatchesStandingKey(key: string, athlete: AthletePerformanceInput): boolean {
+  if (key.startsWith("id:")) {
+    const athleteId = Number(key.slice(3));
+    if (!Number.isFinite(athleteId)) {
+      return false;
+    }
+    if (typeof athlete.athleteId === "number" && athlete.athleteId === athleteId) {
+      return true;
+    }
+    return (athlete.athleteIds ?? []).some((id) => id === athleteId);
+  }
+
+  if (key.startsWith("name:")) {
+    const normalizedName = normalizeAthleteName(athlete.athleteNameNormalized ?? athlete.athleteName ?? "");
+    return key === `name:${normalizedName}`;
+  }
+
+  return false;
+}
+
 function stableHash(input: string): number {
   let hash = 2166136261;
   for (let index = 0; index < input.length; index += 1) {
@@ -728,6 +748,23 @@ export function computeCategoryClassificationSummaries(
       const hasPendingMatches = effectiveParsedMatches.some((match) => match.winnerKey === null);
       const hasAnyDecisiveResult = effectiveParsedMatches.some((match) => match.winnerKey !== null);
       if (!hasAnyMatch) {
+        const participantKeys = new Set<string>();
+        for (const parsed of parsedCategoryMatches) {
+          participantKeys.add(parsed.p1Key);
+          participantKeys.add(parsed.p2Key);
+        }
+        const eligibleKeys = [...participantKeys].filter((key) => !walkoverLosersInGroups.has(key));
+        if (eligibleKeys.length === 1 && athleteMatchesStandingKey(eligibleKeys[0], athlete)) {
+          return {
+            categoryId,
+            categoryName: first.categoryName,
+            position: 1,
+            reason: "campeao_por_comparecimento_apos_wo",
+            mode: "grupo_unico",
+            tieTechnical: false,
+          } satisfies CategoryClassificationSummary;
+        }
+
         return {
           categoryId,
           categoryName: first.categoryName,
