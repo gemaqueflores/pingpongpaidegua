@@ -117,7 +117,7 @@ async function validateClubCounters(baseUrlRaw: string, label: string): Promise<
 async function main(): Promise<void> {
   const target = resolveTarget();
   const localUrl = process.env.LOCAL_API_URL ?? "http://localhost:4000";
-  const prodUrl = process.env.PROD_API_URL ?? "";
+  const prodUrl = process.env.PROD_API_URL ?? "https://api-pingpongpaidegua.duckdns.org";
 
   if (target === "local" || target === "both") {
     await validateBase(localUrl, "local");
@@ -125,10 +125,6 @@ async function main(): Promise<void> {
   }
 
   if (target === "prod" || target === "both") {
-    if (!prodUrl) {
-      throw new Error("PROD_API_URL nao definido. Exemplo: https://api-pingpongpaidegua.duckdns.org");
-    }
-
     await validateBase(prodUrl, "producao");
     await validateClubCounters(prodUrl, "producao");
   }
