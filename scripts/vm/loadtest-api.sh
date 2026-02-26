@@ -43,9 +43,10 @@ export default function () {
 K6
 
 docker run --rm --network host \
+  -v "$SCRIPT:/tmp/loadtest.js:ro" \
   -e BASE_URL="$BASE_URL" \
   -e EVENT_ID="$EVENT_ID" \
   grafana/k6 run \
   --vus "$VUS" \
   --duration "$DURATION" \
-  "$SCRIPT"
+  /tmp/loadtest.js
