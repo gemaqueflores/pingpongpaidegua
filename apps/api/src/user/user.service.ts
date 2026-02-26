@@ -316,6 +316,22 @@ function isEfficiencyEligibleCategoryName(categoryName: string | null | undefine
   return true;
 }
 
+function isDoublesCategoryName(categoryName: string | null | undefined): boolean {
+  const normalized = normalizeText(categoryName ?? "");
+  if (!normalized) {
+    return false;
+  }
+  return /\bDUPLA(?:S)?\b/.test(normalized);
+}
+
+function isDoublesEventName(eventName: string | null | undefined): boolean {
+  const normalized = normalizeText(eventName ?? "");
+  if (!normalized) {
+    return false;
+  }
+  return /\bDUPLA(?:S)?\b/.test(normalized);
+}
+
 function toNonNegativeInt(value: number | null | undefined): number {
   const parsed = Number(value ?? 0);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -1595,14 +1611,15 @@ export class UserService {
         cbtmCategoryId: true,
       },
     });
-    if (categories.length === 0) {
+    const categoriesForMedalistList = categories.filter((category) => !isDoublesCategoryName(category.name));
+    if (categoriesForMedalistList.length === 0) {
       return {
         eventId: scope.canonicalEventId,
         categories: [],
       };
     }
 
-    const categoryIds = categories.map((category) => category.id);
+    const categoryIds = categoriesForMedalistList.map((category) => category.id);
     const [athleteCategories, fullCategoryMatchesRaw, officialAuditByEvent, scopedEvents] = await Promise.all([
       this.prisma.athleteCategory.findMany({
         where: {
@@ -1671,7 +1688,7 @@ export class UserService {
 
     const officialAuditByCategoryId = new Map<string, OfficialCategoryAuditRow>();
     const officialAuditByCategoryName = new Map<string, OfficialCategoryAuditRow>();
-    for (const category of categories) {
+    for (const category of categoriesForMedalistList) {
       const byEvent = officialAuditByEvent.get(category.eventId);
       if (!byEvent) {
         continue;
@@ -1726,7 +1743,7 @@ export class UserService {
       bronze: 2,
     };
 
-    const categoriesWithMedalists: EventCategoryMedalistRow[] = categories.map((category) => {
+    const categoriesWithMedalists: EventCategoryMedalistRow[] = categoriesForMedalistList.map((category) => {
       const categoryName =
         category.eventId === scope.canonicalEventId
           ? category.name
@@ -3616,6 +3633,10 @@ export class UserService {
 
     const summaries: AthleteSummaryMatch[] = [];
     for (const match of matches) {
+      // Regra atual: histórico de carreira do atleta considera apenas jogos individuais.
+      if (isDoublesEventName(match.event?.nome) || isDoublesCategoryName(match.category?.name)) {
+        continue;
+      }
       const participantIds = match.participants.map((participant) => participant.athleteId);
       const matchedAthleteIds = participantIds.filter((id) => athleteIds.includes(id));
       if (matchedAthleteIds.length === 0) {
