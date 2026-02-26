@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { Prisma, ScrapeStatus } from "@prisma/client";
+import { buildEventScrapePolicy } from "@cbtm/shared";
 import { PrismaReadService, PrismaService } from "./prisma.service";
 import { QueueService } from "./queue.service";
 
@@ -163,6 +164,30 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
     for (const [eventId, run] of latestByEventId.entries()) {
       if (recovered >= this.recoveryMaxEventsPerCycle) {
         break;
+      }
+
+      const event = await this.prismaRead.event.findUnique({
+        where: { id: eventId },
+        select: {
+          id: true,
+          concluido: true,
+          inicioInscricoes: true,
+          fimInscricoes: true,
+          inicioRealizacao: true,
+          fimRealizacao: true,
+          dataInicio: true,
+          dataFim: true,
+        },
+      });
+      if (!event) {
+        continue;
+      }
+      if (event.concluido) {
+        continue;
+      }
+      const policy = buildEventScrapePolicy(event, {});
+      if (!policy.autoSchedule) {
+        continue;
       }
 
       const warnings = this.extractWarningTexts(run.warnings);
