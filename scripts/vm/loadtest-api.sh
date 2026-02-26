@@ -27,11 +27,11 @@ const eventId = __ENV.EVENT_ID;
 export default function () {
   const pick = Math.random();
   let url = `${base}/events/${eventId}`;
-  if (pick < 0.15) {
+  if (pick < 0.08) {
     url = `${base}/events/${eventId}/efficiency`;
-  } else if (pick < 0.30) {
+  } else if (pick < 0.16) {
     url = `${base}/events/${eventId}/medalists`;
-  } else if (pick < 0.45) {
+  } else if (pick < 0.24) {
     url = `${base}/events/${eventId}/athletes?page=1&pageSize=100`;
   }
 
@@ -39,7 +39,7 @@ export default function () {
   check(res, {
     'status is 2xx/3xx/429': (r) => (r.status >= 200 && r.status < 400) || r.status === 429,
   });
-  sleep(0.2);
+  sleep(Math.random() * 2 + 1);
 }
 K6
 
