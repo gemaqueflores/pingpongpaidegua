@@ -14,6 +14,8 @@ fi
 sudo cp "$LIMITS_SRC" /etc/nginx/conf.d/pingpongpaidegua-limits.conf
 sudo cp "$SITE_SRC" /etc/nginx/sites-available/api-pingpongpaidegua
 sudo ln -sfn /etc/nginx/sites-available/api-pingpongpaidegua /etc/nginx/sites-enabled/api-pingpongpaidegua
+sudo mkdir -p /var/cache/nginx/api_microcache
+sudo chown -R www-data:www-data /var/cache/nginx
 
 sudo nginx -t
 sudo systemctl reload nginx
