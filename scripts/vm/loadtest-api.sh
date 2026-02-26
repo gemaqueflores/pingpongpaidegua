@@ -8,6 +8,7 @@ VUS="${VUS:-500}"
 
 SCRIPT="$(mktemp)"
 trap 'rm -f "$SCRIPT"' EXIT
+chmod 644 "$SCRIPT"
 
 cat >"$SCRIPT" <<'K6'
 import http from 'k6/http';
