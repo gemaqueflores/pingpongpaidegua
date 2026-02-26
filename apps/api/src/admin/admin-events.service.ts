@@ -156,6 +156,8 @@ export class AdminEventsService {
       },
     });
 
+    await this.invalidateReadModelCaches(event.id);
+
     if (event.concluido) {
       await this.queue.enqueueScrapeNow(event.id);
     } else {
@@ -355,6 +357,8 @@ export class AdminEventsService {
       },
     });
 
+    await this.invalidateReadModelCaches(event.id);
+
     if (!event.concluido) {
       await this.queue.enqueueScrape(event.id, "admin-update");
     } else if (!currentEvent.concluido && event.concluido) {
@@ -476,12 +480,15 @@ export class AdminEventsService {
   async markCompleted(id: number) {
     await this.ensureEvent(id);
 
-    return this.prisma.event.update({
+    const event = await this.prisma.event.update({
       where: { id },
       data: {
         concluido: true,
       },
     });
+
+    await this.invalidateReadModelCaches(event.id);
+    return event;
   }
 
   async scrapeNow(id: number, stage?: 1 | 2 | 3) {
@@ -921,5 +928,33 @@ export class AdminEventsService {
         throw new BadRequestException(`${entry.label} deve ser ímpar conforme regulamento.`);
       }
     }
+  }
+
+  private async invalidateReadModelCaches(eventId: number): Promise<void> {
+    const relatedEventIds = await this.resolveRelatedEventIdsForCacheInvalidation(eventId);
+    await this.prisma.readModelCache.deleteMany({
+      where: {
+        eventId: { in: relatedEventIds },
+      },
+    });
+  }
+
+  private async resolveRelatedEventIdsForCacheInvalidation(eventId: number): Promise<number[]> {
+    const merges = await this.prisma.eventMerge.findMany({
+      where: {
+        OR: [{ primaryEventId: eventId }, { secondaryEventId: eventId }],
+      },
+      select: {
+        primaryEventId: true,
+        secondaryEventId: true,
+      },
+    });
+
+    const ids = new Set<number>([eventId]);
+    for (const merge of merges) {
+      ids.add(merge.primaryEventId);
+      ids.add(merge.secondaryEventId);
+    }
+    return [...ids];
   }
 }
