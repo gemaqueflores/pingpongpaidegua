@@ -54,15 +54,16 @@ jobs:
             if [ -z "$APP_DIR" ]; then
               APP_DIR="$HOME/pingpongpaidegua"
             fi
+            export COMPOSE_PROJECT_NAME="pingpongpaidegua"
 
             cd "$APP_DIR"
             echo "Diretorio da aplicacao: $APP_DIR"
 
             if command -v docker >/dev/null 2>&1; then
               if command -v docker-compose >/dev/null 2>&1; then
-                COMPOSE_BIN="docker-compose"
+                COMPOSE_BIN="docker-compose -p $COMPOSE_PROJECT_NAME"
               elif docker compose version >/dev/null 2>&1; then
-                COMPOSE_BIN="docker compose"
+                COMPOSE_BIN="docker compose -p $COMPOSE_PROJECT_NAME"
               else
                 echo "Docker Compose nao encontrado na VM."
                 exit 1
@@ -131,11 +132,12 @@ jobs:
             if [ -z "$APP_DIR" ]; then
               APP_DIR="$HOME/pingpongpaidegua"
             fi
+            export COMPOSE_PROJECT_NAME="pingpongpaidegua"
             cd "$APP_DIR"
             if command -v docker-compose >/dev/null 2>&1; then
-              COMPOSE_BIN="docker-compose"
+              COMPOSE_BIN="docker-compose -p $COMPOSE_PROJECT_NAME"
             elif docker compose version >/dev/null 2>&1; then
-              COMPOSE_BIN="docker compose"
+              COMPOSE_BIN="docker compose -p $COMPOSE_PROJECT_NAME"
             else
               echo "Compose indisponivel no diagnostico."
               exit 0
