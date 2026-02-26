@@ -1611,7 +1611,7 @@ export class UserService {
         cbtmCategoryId: true,
       },
     });
-    const categoriesForMedalistList = categories.filter((category) => !isDoublesCategoryName(category.name));
+    const categoriesForMedalistList = categories;
     if (categoriesForMedalistList.length === 0) {
       return {
         eventId: scope.canonicalEventId,
