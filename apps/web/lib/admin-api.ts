@@ -70,6 +70,29 @@ export interface EfficiencyConfig {
   pesoBronze: number;
 }
 
+export interface AdminEventMergePayload {
+  primaryEventId: number;
+  secondaryEventId: number;
+  categorySuffix?: string;
+}
+
+export interface AdminEventMergeRow {
+  id: number;
+  primaryEventId: number;
+  secondaryEventId: number;
+  categorySuffix: string;
+  primaryEvent: {
+    id: number;
+    cbtmEventId: number;
+    nome: string;
+  };
+  secondaryEvent: {
+    id: number;
+    cbtmEventId: number;
+    nome: string;
+  };
+}
+
 export async function apiLogin(username: string, password: string) {
   const response = await fetchWithRecovery(`${API_BASE}/auth/login`, {
     method: "POST",
@@ -219,6 +242,31 @@ export async function apiUpdateEfficiencyConfig(payload: {
     body: JSON.stringify(payload),
   });
 
+  return handleResponse(response);
+}
+
+export async function apiGetEventMerges(): Promise<AdminEventMergeRow[]> {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events/merges`, {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  return handleResponse(response);
+}
+
+export async function apiCreateEventMerge(payload: AdminEventMergePayload): Promise<AdminEventMergeRow> {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events/merges`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+}
+
+export async function apiDeleteEventMerge(mergeId: number): Promise<{ success: true }> {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events/merges/${mergeId}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
   return handleResponse(response);
 }
 

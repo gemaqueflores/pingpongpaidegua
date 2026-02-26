@@ -5,16 +5,20 @@ import { useEffect, useMemo, useState } from "react";
 import {
   apiCreateEvent,
   apiDeleteEvent,
+  apiDeleteEventMerge,
   apiGetAdminEvents,
+  apiGetEventMerges,
   apiGetAthleteConflicts,
   apiGetEfficiencyConfig,
   apiGetScrapeRuns,
   apiMarkCompleted,
+  apiCreateEventMerge,
   apiResolveAthleteConflict,
   apiScrapeNow,
   apiUpdateEfficiencyConfig,
   apiUpdateEvent,
   type AdminEventRow,
+  type AdminEventMergeRow,
   type EfficiencyConfig,
   type EventLevel,
   type EventSituation,
@@ -332,6 +336,11 @@ export default function AdminPage() {
   const [pesoOuro, setPesoOuro] = useState("400");
   const [pesoPrata, setPesoPrata] = useState("240");
   const [pesoBronze, setPesoBronze] = useState("120");
+  const [eventMerges, setEventMerges] = useState<AdminEventMergeRow[]>([]);
+  const [mergePrimaryEventId, setMergePrimaryEventId] = useState("");
+  const [mergeSecondaryEventId, setMergeSecondaryEventId] = useState("");
+  const [mergeCategorySuffix, setMergeCategorySuffix] = useState(" -X");
+  const [savingMerge, setSavingMerge] = useState(false);
 
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
   const [nome, setNome] = useState("TMB Challenge Plus - Evento 5246");
@@ -395,6 +404,7 @@ export default function AdminPage() {
 
     void refreshEvents();
     void loadEfficiencyConfig();
+    void loadEventMerges();
   }, [router]);
 
   useEffect(() => {
@@ -541,6 +551,18 @@ export default function AdminPage() {
       });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadEventMerges() {
+    try {
+      const data = await apiGetEventMerges();
+      setEventMerges(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text: error instanceof Error ? error.message : "Falha ao carregar vínculos de eventos.",
+      });
     }
   }
 
@@ -853,6 +875,54 @@ export default function AdminPage() {
         type: "error",
         text: error instanceof Error ? error.message : "Falha ao excluir evento.",
       });
+    }
+  }
+
+  async function createEventMerge() {
+    const primaryEventId = Number(mergePrimaryEventId);
+    const secondaryEventId = Number(mergeSecondaryEventId);
+    if (!Number.isInteger(primaryEventId) || primaryEventId < 1) {
+      setNotice({ type: "error", text: "Selecione o evento principal do vínculo." });
+      return;
+    }
+    if (!Number.isInteger(secondaryEventId) || secondaryEventId < 1) {
+      setNotice({ type: "error", text: "Selecione o evento extra (secundário)." });
+      return;
+    }
+
+    setSavingMerge(true);
+    try {
+      await apiCreateEventMerge({
+        primaryEventId,
+        secondaryEventId,
+        categorySuffix: mergeCategorySuffix.trim() || " -X",
+      });
+      setNotice({ type: "success", text: "Vínculo de eventos salvo com sucesso." });
+      setMergeSecondaryEventId("");
+      await Promise.all([refreshEvents({ refreshSelectedDetails: false }), loadEventMerges()]);
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text: error instanceof Error ? error.message : "Falha ao salvar vínculo de eventos.",
+      });
+    } finally {
+      setSavingMerge(false);
+    }
+  }
+
+  async function removeEventMerge(mergeId: number) {
+    setSavingMerge(true);
+    try {
+      await apiDeleteEventMerge(mergeId);
+      setNotice({ type: "success", text: "Vínculo removido com sucesso." });
+      await Promise.all([refreshEvents({ refreshSelectedDetails: false }), loadEventMerges()]);
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text: error instanceof Error ? error.message : "Falha ao remover vínculo.",
+      });
+    } finally {
+      setSavingMerge(false);
     }
   }
 
@@ -1174,6 +1244,104 @@ export default function AdminPage() {
               Cancelar edição
             </button>
           ) : null}
+        </div>
+      </section>
+
+      <section className="card grid admin-card">
+        <h2>Associação de eventos (principal + extras)</h2>
+        <p style={{ marginTop: 0 }}>
+          Use esta seção para consolidar um evento principal com eventos extras (ex.: duplas e duplas mistas).
+        </p>
+        <div className="admin-form-row admin-form-row-event-main">
+          <label className="admin-field admin-field-grid">
+            <span>Evento principal</span>
+            <select
+              className="admin-input admin-input-level"
+              value={mergePrimaryEventId}
+              onChange={(event) => setMergePrimaryEventId(event.target.value)}
+            >
+              <option value="">Selecione</option>
+              {events.map((event) => (
+                <option key={`primary-${event.id}`} value={String(event.id)}>
+                  #{event.id} · CBTM {event.cbtmEventId} · {event.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-field admin-field-grid">
+            <span>Evento extra</span>
+            <select
+              className="admin-input admin-input-level"
+              value={mergeSecondaryEventId}
+              onChange={(event) => setMergeSecondaryEventId(event.target.value)}
+            >
+              <option value="">Selecione</option>
+              {events
+                .filter((event) => String(event.id) !== mergePrimaryEventId)
+                .map((event) => (
+                  <option key={`secondary-${event.id}`} value={String(event.id)}>
+                    #{event.id} · CBTM {event.cbtmEventId} · {event.nome}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="admin-field admin-field-grid">
+            <span>Sufixo de categoria</span>
+            <input
+              className="admin-input"
+              value={mergeCategorySuffix}
+              onChange={(event) => setMergeCategorySuffix(event.target.value)}
+              placeholder=" -X"
+            />
+          </label>
+        </div>
+        <div className="row admin-action-row">
+          <button className="admin-btn-primary" onClick={createEventMerge} disabled={savingMerge}>
+            {savingMerge ? "Salvando..." : "Associar evento"}
+          </button>
+        </div>
+
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>ID vínculo</th>
+                <th>Principal</th>
+                <th>Extra</th>
+                <th>Sufixo</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {eventMerges.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>Nenhum vínculo cadastrado.</td>
+                </tr>
+              ) : (
+                eventMerges.map((merge) => (
+                  <tr key={merge.id}>
+                    <td>{merge.id}</td>
+                    <td>
+                      #{merge.primaryEvent.id} · CBTM {merge.primaryEvent.cbtmEventId} · {merge.primaryEvent.nome}
+                    </td>
+                    <td>
+                      #{merge.secondaryEvent.id} · CBTM {merge.secondaryEvent.cbtmEventId} · {merge.secondaryEvent.nome}
+                    </td>
+                    <td>{merge.categorySuffix}</td>
+                    <td>
+                      <button
+                        className="admin-btn-secondary"
+                        onClick={() => removeEventMerge(merge.id)}
+                        disabled={savingMerge}
+                      >
+                        Remover
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 
