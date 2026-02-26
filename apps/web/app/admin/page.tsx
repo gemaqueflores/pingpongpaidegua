@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   apiCreateEvent,
   apiDeleteEvent,
@@ -341,6 +341,19 @@ export default function AdminPage() {
   const [mergeSecondaryEventId, setMergeSecondaryEventId] = useState("");
   const [mergeCategorySuffix, setMergeCategorySuffix] = useState(" -X");
   const [savingMerge, setSavingMerge] = useState(false);
+  const inferMergeSuffixFromEventName = useCallback((eventName: string): string => {
+    const normalized = eventName
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    if (normalized.includes("dupla mista")) {
+      return " - DUPLAS MISTAS";
+    }
+    if (normalized.includes("dupla")) {
+      return " - DUPLAS";
+    }
+    return " -X";
+  }, []);
 
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
   const [nome, setNome] = useState("TMB Challenge Plus - Evento 5246");
@@ -1273,7 +1286,14 @@ export default function AdminPage() {
             <select
               className="admin-input admin-input-level"
               value={mergeSecondaryEventId}
-              onChange={(event) => setMergeSecondaryEventId(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setMergeSecondaryEventId(value);
+                const selected = events.find((item) => String(item.id) === value);
+                if (selected) {
+                  setMergeCategorySuffix(inferMergeSuffixFromEventName(selected.nome));
+                }
+              }}
             >
               <option value="">Selecione</option>
               {events
@@ -1741,6 +1761,3 @@ export default function AdminPage() {
     </main>
   );
 }
-
-
-

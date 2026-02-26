@@ -12,6 +12,7 @@ import {
   computeMatchKey,
   getRoundSemanticOrder,
   isLikelyAthleteName,
+  normalizeDoublesPairName,
   normalizeText,
   parseBrazilianDateTime,
 } from "@cbtm/shared";
@@ -562,7 +563,7 @@ function parseRegistrations(
       continue;
     }
 
-    const athleteName = compactWhitespace(lines[0]);
+    const athleteName = normalizeDoublesPairName(compactWhitespace(lines[0]));
     const clubNameRaw = compactWhitespace(lines[1]);
     const clubName = clubNameRaw || "SEM CLUBE";
     const inlineCategoryName = cleanCategoryDisplayName(compactWhitespace(lines[2] ?? ""));
@@ -1036,8 +1037,8 @@ function parseCardBasedMatches(
       continue;
     }
 
-    const athleteAName = compactWhitespace(athleteANameRaw);
-    const athleteBName = compactWhitespace(athleteBNameRaw);
+    const athleteAName = normalizeDoublesPairName(compactWhitespace(athleteANameRaw));
+    const athleteBName = normalizeDoublesPairName(compactWhitespace(athleteBNameRaw));
     const athleteARefType = parseParticipantRefType(athleteAName);
     const athleteBRefType = parseParticipantRefType(athleteBName);
     const athleteANameNormalized = normalizeText(athleteAName);
@@ -1182,7 +1183,8 @@ function parseGroupMatches(
 
     const limit = Math.min(scoreTokens.length, pairs.length);
     for (let i = 0; i < limit; i += 1) {
-      const [athleteAName, athleteBName] = pairs[i];
+      const athleteAName = normalizeDoublesPairName(pairs[i][0]);
+      const athleteBName = normalizeDoublesPairName(pairs[i][1]);
       const scoreRaw = compactWhitespace(scoreTokens[i]);
 
       const athleteANormalizedName = normalizeText(athleteAName);
@@ -1338,7 +1340,13 @@ function parseEliminationMatches(
   }
 
   const matches: ParsedMatch[] = [];
-  let currentPairs = parsed.teams.map((pair) => [compactWhitespace(pair[0]), compactWhitespace(pair[1])] as [string, string]);
+  let currentPairs = parsed.teams.map(
+    (pair) =>
+      [normalizeDoublesPairName(compactWhitespace(pair[0])), normalizeDoublesPairName(compactWhitespace(pair[1]))] as [
+        string,
+        string,
+      ],
+  );
 
   for (let roundIndex = 0; roundIndex < parsed.results.length; roundIndex += 1) {
     const roundResults = parsed.results[roundIndex];
@@ -1352,8 +1360,8 @@ function parseEliminationMatches(
     for (let matchIndex = 0; matchIndex < roundResults.length; matchIndex += 1) {
       const [scoreA, scoreB, meta] = roundResults[matchIndex];
       const pair = currentPairs[matchIndex] ?? ["", ""];
-      const athleteAName = compactWhitespace(pair[0]);
-      const athleteBName = compactWhitespace(pair[1]);
+      const athleteAName = normalizeDoublesPairName(compactWhitespace(pair[0]));
+      const athleteBName = normalizeDoublesPairName(compactWhitespace(pair[1]));
 
       if (!athleteAName || !athleteBName) {
         winners.push("");
@@ -1433,7 +1441,10 @@ function parseEliminationMatches(
 
     const nextPairs: Array<[string, string]> = [];
     for (let i = 0; i < winners.length; i += 2) {
-      nextPairs.push([compactWhitespace(winners[i] ?? ""), compactWhitespace(winners[i + 1] ?? "")]);
+      nextPairs.push([
+        normalizeDoublesPairName(compactWhitespace(winners[i] ?? "")),
+        normalizeDoublesPairName(compactWhitespace(winners[i + 1] ?? "")),
+      ]);
     }
     currentPairs = nextPairs;
   }

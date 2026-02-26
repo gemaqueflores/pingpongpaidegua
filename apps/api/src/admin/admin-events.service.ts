@@ -230,7 +230,10 @@ export class AdminEventsService {
 
     const [primary, secondary] = await Promise.all([
       this.prisma.event.findUnique({ where: { id: input.primaryEventId }, select: { id: true } }),
-      this.prisma.event.findUnique({ where: { id: input.secondaryEventId }, select: { id: true } }),
+      this.prisma.event.findUnique({
+        where: { id: input.secondaryEventId },
+        select: { id: true, nome: true },
+      }),
     ]);
 
     if (!primary) {
@@ -240,7 +243,7 @@ export class AdminEventsService {
       throw new NotFoundException("Evento especial nao encontrado.");
     }
 
-    const suffix = String(input.categorySuffix ?? " -X").trim() || " -X";
+    const suffix = this.resolveMergeCategorySuffix(input.categorySuffix, secondary.nome);
 
     const linkAsSecondary = await this.prisma.eventMerge.findFirst({
       where: {
@@ -289,6 +292,22 @@ export class AdminEventsService {
       where: { id: mergeId },
     });
     return { success: true };
+  }
+
+  private resolveMergeCategorySuffix(inputSuffix: string | undefined, secondaryEventName: string | null): string {
+    const normalizedInput = String(inputSuffix ?? "").trim();
+    if (normalizedInput) {
+      return normalizedInput.startsWith("-") ? ` ${normalizedInput}` : normalizedInput;
+    }
+
+    const eventName = normalizeText(String(secondaryEventName ?? ""));
+    if (eventName.includes("dupla mista")) {
+      return " - DUPLAS MISTAS";
+    }
+    if (eventName.includes("dupla")) {
+      return " - DUPLAS";
+    }
+    return " -X";
   }
 
   async updateEvent(id: number, dto: UpdateAdminEventDto) {

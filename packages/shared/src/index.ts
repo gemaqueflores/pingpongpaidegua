@@ -746,6 +746,57 @@ export function normalizeAthleteName(input: string | null | undefined): string {
     .trim();
 }
 
+export function isDoublesLikeLabel(input: string | null | undefined): boolean {
+  const normalized = normalizeText(input).replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return false;
+  }
+  return /\bdupla(?:s)?\b/.test(normalized);
+}
+
+export function normalizeDoublesPairName(input: string | null | undefined): string {
+  const value = compactWhitespace(input);
+  if (!value.includes("#")) {
+    return value;
+  }
+
+  const parts = value
+    .split("#")
+    .map((part) => compactWhitespace(part))
+    .filter(Boolean);
+
+  if (parts.length < 2) {
+    return value;
+  }
+
+  const deduped = new Map<string, string>();
+  for (const part of parts) {
+    const key = normalizeText(part);
+    if (!key || deduped.has(key)) {
+      continue;
+    }
+    deduped.set(key, part);
+  }
+
+  const sorted = [...deduped.entries()].sort((a, b) => a[0].localeCompare(b[0], "pt-BR"));
+  if (sorted.length < 2) {
+    return value;
+  }
+
+  return sorted.map(([, display]) => display).join(" # ");
+}
+
+export function shouldNormalizeDoublesPairName(
+  eventName: string | null | undefined,
+  categoryName: string | null | undefined,
+  athleteName: string | null | undefined,
+): boolean {
+  if (!compactWhitespace(athleteName).includes("#")) {
+    return false;
+  }
+  return isDoublesLikeLabel(eventName) || isDoublesLikeLabel(categoryName);
+}
+
 export function resolveAthleteIndexInMatch(
   match: MatchPerformanceInput,
   athlete: AthletePerformanceInput,
