@@ -1644,13 +1644,19 @@ export class ScrapeProcessor {
       .map((warning) => String(warning ?? "").trim())
       .filter(Boolean);
 
-    const persisted = new Set<string>();
+    const persistedCritical = new Set<string>();
+    const persistedHigh = new Set<string>();
+    const persistedMedium = new Set<string>();
     let conflictAthleteCount = 0;
     let mergeWarningCount = 0;
     let droppedNoise = 0;
+    const aggregatedNoise = new Map<string, number>();
     const conflictByCategory = new Map<string, number>();
     let postScrapeBacklog: number | null = null;
     let postScrapeResolved: number | null = null;
+    const addNoise = (key: string) => {
+      aggregatedNoise.set(key, (aggregatedNoise.get(key) ?? 0) + 1);
+    };
 
     for (const warning of normalized) {
       const text = warning.toLowerCase();
@@ -1677,11 +1683,13 @@ export class ScrapeProcessor {
         const categoryMatch = warning.match(/^Conflito de atleta \((.+?)\) em /i);
         const categoryLabel = compactWhitespace(categoryMatch?.[1] ?? "CATEGORIA_DESCONHECIDA");
         conflictByCategory.set(categoryLabel, (conflictByCategory.get(categoryLabel) ?? 0) + 1);
+        addNoise("conflito_de_atleta_detalhe");
         continue;
       }
 
       if (text.startsWith("merge-warning: conflito de participantes")) {
         mergeWarningCount += 1;
+        addNoise("merge_warning_detalhe");
         continue;
       }
 
@@ -1691,6 +1699,13 @@ export class ScrapeProcessor {
         text.startsWith("inscricoes gaps top10")
       ) {
         droppedNoise += 1;
+        if (text.startsWith("resultados diagnostico")) {
+          addNoise("resultados_diagnostico");
+        } else if (text.startsWith("inscricoes reconciliacao")) {
+          addNoise("inscricoes_reconciliacao");
+        } else {
+          addNoise("inscricoes_gaps_top10");
+        }
         continue;
       }
 
@@ -1703,10 +1718,52 @@ export class ScrapeProcessor {
 
       if (!isActionable) {
         droppedNoise += 1;
+        addNoise("nao_acionavel");
         continue;
       }
 
+      if (text.includes("post_scrape_summary") || text.includes("guardrail_registration_drop")) {
+        persistedCritical.add(warning);
+        continue;
+      }
+      if (severity === "high") {
+        persistedHigh.add(warning);
+        continue;
+      }
+      persistedMedium.add(warning);
+    }
+
+    const persisted = new Set<string>();
+    for (const warning of persistedCritical.values()) {
       persisted.add(warning);
+    }
+
+    const parseLimit = (raw: string | undefined, fallback: number, min: number, max: number): number => {
+      const parsed = Number(raw ?? String(fallback));
+      if (!Number.isFinite(parsed)) {
+        return fallback;
+      }
+      return Math.max(min, Math.min(max, Math.floor(parsed)));
+    };
+    const highLimit = parseLimit(process.env.SCRAPE_PERSISTED_WARNINGS_HIGH_MAX, 30, 5, 200);
+    const mediumLimit = parseLimit(process.env.SCRAPE_PERSISTED_WARNINGS_MEDIUM_MAX, 40, 10, 300);
+    const highSorted = [...persistedHigh.values()].sort((a, b) =>
+      a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
+    );
+    const mediumSorted = [...persistedMedium.values()].sort((a, b) =>
+      a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
+    );
+    for (const warning of highSorted.slice(0, highLimit)) {
+      persisted.add(warning);
+    }
+    for (const warning of mediumSorted.slice(0, mediumLimit)) {
+      persisted.add(warning);
+    }
+    const severityTrimmed = Math.max(0, highSorted.length - highLimit) + Math.max(0, mediumSorted.length - mediumLimit);
+    if (severityTrimmed > 0) {
+      persisted.add(
+        `WARNINGS_SEVERIDADE_TRUNCADOS: ${severityTrimmed} item(ns) de alta/media severidade truncados por limite de persistencia.`,
+      );
     }
 
     const pendingConflictCount = postScrapeBacklog ?? conflictAthleteCount;
@@ -1737,6 +1794,16 @@ export class ScrapeProcessor {
       persisted.add(
         `MERGE_WARNING_PARTICIPANTES: ${mergeWarningCount} conflito(s) de participantes detectados durante merge.`,
       );
+    }
+
+    if (aggregatedNoise.size > 0) {
+      const noiseSummary = [...aggregatedNoise.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR", { sensitivity: "base" }))
+        .map(([key, count]) => `${key}=${count}`)
+        .join(" | ");
+      if (noiseSummary) {
+        persisted.add(`WARNINGS_AGREGADOS_RUIDO: ${noiseSummary}.`);
+      }
     }
 
     if (droppedNoise > 0) {

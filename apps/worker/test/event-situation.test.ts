@@ -119,7 +119,7 @@ test("buildEventScrapePolicy segue ciclo de vida para blocos de captura", () => 
   assert.equal(inProgress.captureGrupos, false);
   assert.equal(inProgress.captureResultados, true);
   assert.equal(inProgress.fetchEliminatoria, false);
-  assert.equal(inProgress.recommendedIntervalMs, 20 * 60 * 1000);
+  assert.equal(inProgress.recommendedIntervalMs, 30 * 60 * 1000);
 
   const publishedGrids = buildEventScrapePolicy(
     {

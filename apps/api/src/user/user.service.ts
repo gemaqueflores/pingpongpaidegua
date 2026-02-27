@@ -1,5 +1,6 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import {
+  buildEventScrapePolicy,
   compactWhitespace,
   EventSituation,
   MatchPerformanceInput,
@@ -50,8 +51,9 @@ const DEFAULT_EFFICIENCY_WEIGHTS = {
 } as const;
 const DEFAULT_USER_LIST_PAGE_SIZE = Number(process.env.USER_LIST_DEFAULT_PAGE_SIZE ?? "500");
 const MAX_USER_LIST_PAGE_SIZE = Number(process.env.USER_LIST_MAX_PAGE_SIZE ?? "2000");
-const ACTIVE_EVENT_CACHE_MAX_AGE_MS = Number(process.env.ACTIVE_EVENT_CACHE_MAX_AGE_MS ?? "120000");
-const INACTIVE_EVENT_CACHE_MAX_AGE_MS = Number(process.env.INACTIVE_EVENT_CACHE_MAX_AGE_MS ?? "1800000");
+const SCRAPE_CACHE_MARGIN_MS = Number(process.env.SCRAPE_CACHE_MARGIN_MS ?? "600000");
+const SCRAPE_CACHE_MIN_AGE_MS = Number(process.env.SCRAPE_CACHE_MIN_AGE_MS ?? "60000");
+const SCRAPE_CACHE_FALLBACK_AGE_MS = Number(process.env.SCRAPE_CACHE_FALLBACK_AGE_MS ?? "1800000");
 
 type PaginationWindow = {
   skip: number;
@@ -5391,18 +5393,16 @@ export class UserService {
       return false;
     }
 
-    const situation = computeEventSituation({
+    const policy = buildEventScrapePolicy({
       ...event,
     });
-    const isActive =
-      !event.concluido &&
-      (situation === "INSCRICOES_ABERTAS" ||
-        situation === "POS_INSCRICOES_PRE_EVENTO" ||
-        situation === "GRADES_PUBLICADAS_PRE_JOGO" ||
-        situation === "EM_ANDAMENTO");
+    const intervalMs = policy.recommendedIntervalMs;
+    const dynamicMaxAgeMs =
+      typeof intervalMs === "number" && intervalMs > 0
+        ? Math.max(SCRAPE_CACHE_MIN_AGE_MS, intervalMs - SCRAPE_CACHE_MARGIN_MS)
+        : SCRAPE_CACHE_FALLBACK_AGE_MS;
 
-    const maxAgeMs = isActive ? ACTIVE_EVENT_CACHE_MAX_AGE_MS : INACTIVE_EVENT_CACHE_MAX_AGE_MS;
-    return Date.now() - cachedUpdatedAt.getTime() <= Math.max(10_000, maxAgeMs);
+    return Date.now() - cachedUpdatedAt.getTime() <= Math.max(10_000, dynamicMaxAgeMs);
   }
 
   private async persistReadModelCachePayload(

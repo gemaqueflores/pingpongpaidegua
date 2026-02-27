@@ -217,7 +217,7 @@ export function buildEventScrapePolicy(
     INSCRICOES_ABERTAS: 6 * 60 * 60 * 1000,
     POS_INSCRICOES_PRE_EVENTO: 3 * 60 * 60 * 1000,
     GRADES_PUBLICADAS_PRE_JOGO: 45 * 60 * 1000,
-    EM_ANDAMENTO: 20 * 60 * 1000,
+    EM_ANDAMENTO: 30 * 60 * 1000,
     ...options.intervalBySituationMs,
   } satisfies Partial<Record<EventSituation, number>>;
   const situation = computeEventSituation(input, now);
