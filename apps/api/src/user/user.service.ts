@@ -1,5 +1,6 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import {
+  compactWhitespace,
   EventSituation,
   MatchPerformanceInput,
   SummaryOrderBy,
@@ -314,6 +315,13 @@ function isEfficiencyEligibleCategoryName(categoryName: string | null | undefine
   void categoryName;
   // Regra vigente: categorias de rating (R*) tambem participam dos quadros/listas de eficiencia.
   return true;
+}
+
+function splitPairNameParts(name: string | null | undefined): string[] {
+  return compactWhitespace(name)
+    .split("#")
+    .map((part: string) => compactWhitespace(part))
+    .filter(Boolean);
 }
 
 function isDoublesCategoryName(categoryName: string | null | undefined): boolean {
@@ -3196,74 +3204,99 @@ export class UserService {
       throw new NotFoundException("Atleta nao encontrado");
     }
 
-    const matches = await this.prisma.match.findMany({
-      where: {
-        eventId: { in: scope.allEventIds },
-        participants: {
-          some: { athleteId: rawAthleteId },
+    const athleteNameKeys = this.buildAthleteNameKeys(athlete.nameDisplay, athlete.nameNormalized);
+
+    const matchSelect = {
+      id: true,
+      eventId: true,
+      categoryId: true,
+      cbtmMatchId: true,
+      phase: true,
+      round: true,
+      tableNumber: true,
+      matchDatetime: true,
+      scoreRaw: true,
+      setsJson: true,
+      scoreFinal: true,
+      scoreSets: true,
+      sourceFlags: true,
+      p1Sets: true,
+      p2Sets: true,
+      winnerIndex: true,
+      scorePlayers: true,
+      sourceUrl: true,
+      fetchedAt: true,
+      matchKey: true,
+      event: {
+        select: {
+          id: true,
+          cbtmEventId: true,
+          nome: true,
+          nivel: true,
+          dataInicio: true,
+          dataFim: true,
+          concluido: true,
         },
       },
-      select: {
-        id: true,
-        eventId: true,
-        categoryId: true,
-        cbtmMatchId: true,
-        phase: true,
-        round: true,
-        tableNumber: true,
-        matchDatetime: true,
-        scoreRaw: true,
-        setsJson: true,
-        scoreFinal: true,
-        scoreSets: true,
-        sourceFlags: true,
-        p1Sets: true,
-        p2Sets: true,
-        winnerIndex: true,
-        scorePlayers: true,
-        sourceUrl: true,
-        fetchedAt: true,
-        matchKey: true,
-        event: {
-          select: {
-            id: true,
-            cbtmEventId: true,
-            nome: true,
-            nivel: true,
-            dataInicio: true,
-            dataFim: true,
-            concluido: true,
-          },
+      category: {
+        select: {
+          id: true,
+          name: true,
+          cbtmCategoryId: true,
         },
-        category: {
-          select: {
-            id: true,
-            name: true,
-            cbtmCategoryId: true,
-          },
-        },
-        participants: {
-          select: {
-            athleteId: true,
-            athlete: {
-              select: {
-                id: true,
-                nameDisplay: true,
-                club: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
+      },
+      participants: {
+        select: {
+          athleteId: true,
+          athlete: {
+            select: {
+              id: true,
+              nameDisplay: true,
+              club: {
+                select: {
+                  id: true,
+                  name: true,
                 },
               },
             },
           },
         },
       },
+    } as const;
+
+    const directMatches = await this.prisma.match.findMany({
+      where: {
+        eventId: { in: scope.allEventIds },
+        participants: {
+          some: { athleteId: rawAthleteId },
+        },
+      },
+      select: matchSelect,
     });
 
-    const matchSummaries = (matches as unknown as MatchWithRelations[])
-      .map((match) => this.buildAthleteSummaryMatch(match, rawAthleteId))
+    const projectedDoublesMatches = await this.prisma.match.findMany({
+      where: {
+        eventId: { in: scope.allEventIds },
+        participants: {
+          some: {
+            athlete: {
+              nameDisplay: {
+                contains: "#",
+              },
+            },
+          },
+        },
+      },
+      select: matchSelect,
+    });
+
+    const combinedMatchesById = new Map<number, MatchWithRelations>();
+    for (const match of [...directMatches, ...projectedDoublesMatches] as unknown as MatchWithRelations[]) {
+      combinedMatchesById.set(match.id, match);
+    }
+
+    const matchSummaries = [...combinedMatchesById.values()]
+      .map((match) => this.buildAthleteSummaryMatch(match, rawAthleteId, athleteNameKeys))
       .filter((match): match is AthleteSummaryMatch => Boolean(match));
 
     const deduplicated = this.deduplicateMatches(matchSummaries);
@@ -3819,12 +3852,20 @@ export class UserService {
     };
   }
 
-  private buildAthleteSummaryMatch(match: MatchWithRelations, athleteId: number): AthleteSummaryMatch | null {
+  private buildAthleteSummaryMatch(
+    match: MatchWithRelations,
+    athleteId: number,
+    athleteNameKeys?: Set<string>,
+  ): AthleteSummaryMatch | null {
     const participants = match.participants.map((participant) => participant.athlete);
     const ordered = this.resolveOrderedPlayers(match.scorePlayers, participants);
 
-    const athleteIndex =
+    let athleteIndex: 0 | 1 | null =
       ordered.players[0]?.id === athleteId ? 0 : ordered.players[1]?.id === athleteId ? 1 : null;
+
+    if (athleteIndex === null && athleteNameKeys && athleteNameKeys.size > 0) {
+      athleteIndex = this.resolveProjectedAthleteIndexFromPair(ordered.players, athleteNameKeys);
+    }
 
     if (athleteIndex === null && !participants.some((participant) => participant.id === athleteId)) {
       return null;
@@ -3887,9 +3928,9 @@ export class UserService {
       matchKey: match.matchKey,
       gameId: this.extractGameIdFromRound(match.round),
       athlete:
-        athletePlayer && athletePlayer.id
+        athletePlayer && (athletePlayer.id || athleteIndex !== null)
           ? {
-              id: athletePlayer.id,
+              id: athleteId,
               name: athletePlayer.name,
             }
           : null,
@@ -3903,6 +3944,53 @@ export class UserService {
             }
           : null,
     };
+  }
+
+  private buildAthleteNameKeys(nameDisplay: string, nameNormalized?: string | null): Set<string> {
+    const keys = new Set<string>();
+    const fullDisplay = compactWhitespace(nameDisplay);
+    const reducedDisplay = toReducedName(fullDisplay);
+    const candidates = [fullDisplay, reducedDisplay, nameNormalized ?? null];
+    for (const candidate of candidates) {
+      const compact = compactWhitespace(candidate);
+      if (!compact) {
+        continue;
+      }
+      const normalized = normalizeAthleteName(compact);
+      if (normalized) {
+        keys.add(normalized);
+      }
+    }
+    return keys;
+  }
+
+  private resolveProjectedAthleteIndexFromPair(
+    players: [AthleteSummaryPlayer | null, AthleteSummaryPlayer | null],
+    athleteNameKeys: Set<string>,
+  ): 0 | 1 | null {
+    const containsAthlete = (playerName: string | null | undefined): boolean => {
+      const parts = splitPairNameParts(playerName);
+      if (parts.length < 2) {
+        return false;
+      }
+      for (const part of parts) {
+        const normalized = normalizeAthleteName(part);
+        if (normalized && athleteNameKeys.has(normalized)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const p0 = containsAthlete(players[0]?.name);
+    const p1 = containsAthlete(players[1]?.name);
+    if (p0 && !p1) {
+      return 0;
+    }
+    if (p1 && !p0) {
+      return 1;
+    }
+    return null;
   }
 
   private parseScorePlayers(raw: Prisma.JsonValue | null):
