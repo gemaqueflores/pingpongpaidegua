@@ -50,6 +50,8 @@ const DEFAULT_EFFICIENCY_WEIGHTS = {
 } as const;
 const DEFAULT_USER_LIST_PAGE_SIZE = Number(process.env.USER_LIST_DEFAULT_PAGE_SIZE ?? "500");
 const MAX_USER_LIST_PAGE_SIZE = Number(process.env.USER_LIST_MAX_PAGE_SIZE ?? "2000");
+const ACTIVE_EVENT_CACHE_MAX_AGE_MS = Number(process.env.ACTIVE_EVENT_CACHE_MAX_AGE_MS ?? "120000");
+const INACTIVE_EVENT_CACHE_MAX_AGE_MS = Number(process.env.INACTIVE_EVENT_CACHE_MAX_AGE_MS ?? "1800000");
 
 type PaginationWindow = {
   skip: number;
@@ -1615,7 +1617,7 @@ export class UserService {
 
   async listEventEfficiency(eventId: number) {
     const scope = await this.resolveEventScope(eventId);
-    await this.ensureEvent(scope.canonicalEventId);
+    const event = await this.ensureEvent(scope.canonicalEventId);
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
     const cacheKey = this.buildReadModelKey("event-efficiency-v1", scope.canonicalEventId);
     const readCache = this.getReadModelCacheReader();
@@ -1629,7 +1631,8 @@ export class UserService {
     if (
       cached &&
       cached.payload &&
-      (latestReliableRunId === null || cached.sourceScrapeRunId === latestReliableRunId)
+      (latestReliableRunId === null || cached.sourceScrapeRunId === latestReliableRunId) &&
+      this.isReadCacheFresh(event, cached.updatedAt)
     ) {
       return cached.payload;
     }
@@ -1671,7 +1674,7 @@ export class UserService {
     };
   }> {
     const scope = await this.resolveEventScope(eventId);
-    await this.ensureEvent(scope.canonicalEventId);
+    const event = await this.ensureEvent(scope.canonicalEventId);
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
     const cacheKey = this.buildReadModelKey("event-medalists-v1", scope.canonicalEventId);
     const readCache = this.getReadModelCacheReader();
@@ -1684,7 +1687,8 @@ export class UserService {
     if (
       cached &&
       cached.payload &&
-      (latestReliableRunId === null || cached.sourceScrapeRunId === latestReliableRunId)
+      (latestReliableRunId === null || cached.sourceScrapeRunId === latestReliableRunId) &&
+      this.isReadCacheFresh(event, cached.updatedAt)
     ) {
       return cached.payload;
     }
@@ -5287,16 +5291,16 @@ export class UserService {
     | {
         findUnique: (args: {
           where: { key: string };
-          select: { sourceScrapeRunId: true; payload: true };
-        }) => Promise<{ sourceScrapeRunId: number | null; payload: unknown } | null>;
+          select: { sourceScrapeRunId: true; payload: true; updatedAt: true };
+        }) => Promise<{ sourceScrapeRunId: number | null; payload: unknown; updatedAt: Date } | null>;
       }
     | null {
     return ((this.prisma as unknown as { readModelCache?: unknown }).readModelCache ?? null) as
       | {
-          findUnique: (args: {
-            where: { key: string };
-            select: { sourceScrapeRunId: true; payload: true };
-          }) => Promise<{ sourceScrapeRunId: number | null; payload: unknown } | null>;
+        findUnique: (args: {
+          where: { key: string };
+          select: { sourceScrapeRunId: true; payload: true; updatedAt: true };
+        }) => Promise<{ sourceScrapeRunId: number | null; payload: unknown; updatedAt: Date } | null>;
         }
       | null;
   }
@@ -5344,12 +5348,12 @@ export class UserService {
       | {
           findUnique: (args: {
             where: { key: string };
-            select: { sourceScrapeRunId: true; payload: true };
-          }) => Promise<{ sourceScrapeRunId: number | null; payload: unknown } | null>;
+            select: { sourceScrapeRunId: true; payload: true; updatedAt: true };
+          }) => Promise<{ sourceScrapeRunId: number | null; payload: unknown; updatedAt: Date } | null>;
         }
       | null,
     key: string,
-  ): Promise<{ sourceScrapeRunId: number | null; payload: T | null } | null> {
+  ): Promise<{ sourceScrapeRunId: number | null; payload: T | null; updatedAt: Date | null } | null> {
     if (!readCache) {
       return null;
     }
@@ -5358,6 +5362,7 @@ export class UserService {
       select: {
         sourceScrapeRunId: true,
         payload: true,
+        updatedAt: true,
       },
     });
     if (!cached) {
@@ -5366,7 +5371,38 @@ export class UserService {
     return {
       sourceScrapeRunId: cached.sourceScrapeRunId ?? null,
       payload: (cached.payload ?? null) as T | null,
+      updatedAt: cached.updatedAt ?? null,
     };
+  }
+
+  private isReadCacheFresh(
+    event: {
+      concluido: boolean;
+      inicioInscricoes: Date | null;
+      fimInscricoes: Date | null;
+      inicioRealizacao: Date | null;
+      fimRealizacao: Date | null;
+      dataInicio: Date | null;
+      dataFim: Date | null;
+    },
+    cachedUpdatedAt: Date | null,
+  ): boolean {
+    if (!cachedUpdatedAt) {
+      return false;
+    }
+
+    const situation = computeEventSituation({
+      ...event,
+    });
+    const isActive =
+      !event.concluido &&
+      (situation === "INSCRICOES_ABERTAS" ||
+        situation === "POS_INSCRICOES_PRE_EVENTO" ||
+        situation === "GRADES_PUBLICADAS_PRE_JOGO" ||
+        situation === "EM_ANDAMENTO");
+
+    const maxAgeMs = isActive ? ACTIVE_EVENT_CACHE_MAX_AGE_MS : INACTIVE_EVENT_CACHE_MAX_AGE_MS;
+    return Date.now() - cachedUpdatedAt.getTime() <= Math.max(10_000, maxAgeMs);
   }
 
   private async persistReadModelCachePayload(
