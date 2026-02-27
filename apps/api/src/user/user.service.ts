@@ -1616,19 +1616,80 @@ export class UserService {
   async listEventEfficiency(eventId: number) {
     const scope = await this.resolveEventScope(eventId);
     await this.ensureEvent(scope.canonicalEventId);
-    const response = await this.computeEfficiencyRanking({ eventIds: scope.allEventIds });
-    return {
-      eventId: scope.canonicalEventId,
-      ...response,
-    };
+    const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
+    const cacheKey = this.buildReadModelKey("event-efficiency-v1", scope.canonicalEventId);
+    const readCache = this.getReadModelCacheReader();
+    const writeCache = this.getReadModelCacheWriter();
+    const cached = await this.loadReadModelCachePayload<{
+      eventId: number;
+      weights: { pesoOuro: number; pesoPrata: number; pesoBronze: number };
+      ranking: ClubEfficiencyRow[];
+    }>(readCache, cacheKey);
+
+    if (
+      cached &&
+      cached.payload &&
+      (latestReliableRunId === null || cached.sourceScrapeRunId === latestReliableRunId)
+    ) {
+      return cached.payload;
+    }
+
+    try {
+      const response = await this.computeEfficiencyRanking({ eventIds: scope.allEventIds });
+      const payload = {
+        eventId: scope.canonicalEventId,
+        ...response,
+      };
+      await this.persistReadModelCachePayload(writeCache, {
+        key: cacheKey,
+        kind: "event-efficiency",
+        eventId: scope.canonicalEventId,
+        sourceScrapeRunId: latestReliableRunId,
+        payload,
+      });
+      return payload;
+    } catch (error) {
+      if (cached?.payload) {
+        return {
+          ...cached.payload,
+          _meta: {
+            isStale: true,
+            staleReason: "compute_failed",
+          },
+        };
+      }
+      throw error;
+    }
   }
 
   async listEventCategoryMedalists(eventId: number): Promise<{
     eventId: number;
     categories: EventCategoryMedalistRow[];
+    _meta?: {
+      isStale: boolean;
+      staleReason: "compute_failed";
+    };
   }> {
     const scope = await this.resolveEventScope(eventId);
     await this.ensureEvent(scope.canonicalEventId);
+    const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
+    const cacheKey = this.buildReadModelKey("event-medalists-v1", scope.canonicalEventId);
+    const readCache = this.getReadModelCacheReader();
+    const writeCache = this.getReadModelCacheWriter();
+    const cached = await this.loadReadModelCachePayload<{
+      eventId: number;
+      categories: EventCategoryMedalistRow[];
+    }>(readCache, cacheKey);
+
+    if (
+      cached &&
+      cached.payload &&
+      (latestReliableRunId === null || cached.sourceScrapeRunId === latestReliableRunId)
+    ) {
+      return cached.payload;
+    }
+
+    try {
 
     const categories = await this.prisma.category.findMany({
       where: {
@@ -1645,10 +1706,18 @@ export class UserService {
     });
     const categoriesForMedalistList = categories;
     if (categoriesForMedalistList.length === 0) {
-      return {
+      const payload = {
         eventId: scope.canonicalEventId,
         categories: [],
       };
+      await this.persistReadModelCachePayload(writeCache, {
+        key: cacheKey,
+        kind: "event-medalists",
+        eventId: scope.canonicalEventId,
+        sourceScrapeRunId: latestReliableRunId,
+        payload,
+      });
+      return payload;
     }
 
     const categoryIds = categoriesForMedalistList.map((category) => category.id);
@@ -1898,10 +1967,30 @@ export class UserService {
       };
     });
 
-    return {
+    const payload = {
       eventId: scope.canonicalEventId,
       categories: categoriesWithMedalists,
     };
+    await this.persistReadModelCachePayload(writeCache, {
+      key: cacheKey,
+      kind: "event-medalists",
+      eventId: scope.canonicalEventId,
+      sourceScrapeRunId: latestReliableRunId,
+      payload,
+    });
+    return payload;
+    } catch (error) {
+      if (cached?.payload) {
+        return {
+          ...cached.payload,
+          _meta: {
+            isStale: true,
+            staleReason: "compute_failed",
+          },
+        };
+      }
+      throw error;
+    }
   }
 
   async listGlobalEfficiency() {
@@ -5194,10 +5283,162 @@ export class UserService {
     return keyParts.join("|");
   }
 
+  private getReadModelCacheReader():
+    | {
+        findUnique: (args: {
+          where: { key: string };
+          select: { sourceScrapeRunId: true; payload: true };
+        }) => Promise<{ sourceScrapeRunId: number | null; payload: unknown } | null>;
+      }
+    | null {
+    return ((this.prisma as unknown as { readModelCache?: unknown }).readModelCache ?? null) as
+      | {
+          findUnique: (args: {
+            where: { key: string };
+            select: { sourceScrapeRunId: true; payload: true };
+          }) => Promise<{ sourceScrapeRunId: number | null; payload: unknown } | null>;
+        }
+      | null;
+  }
+
+  private getReadModelCacheWriter():
+    | {
+        upsert: (args: {
+          where: { key: string };
+          create: {
+            key: string;
+            kind: string;
+            eventId: number;
+            sourceScrapeRunId: number | null;
+            payload: Prisma.InputJsonValue;
+          };
+          update: {
+            sourceScrapeRunId: number | null;
+            payload: Prisma.InputJsonValue;
+          };
+        }) => Promise<unknown>;
+      }
+    | null {
+    return ((this.prismaWrite as unknown as { readModelCache?: unknown }).readModelCache ?? null) as
+      | {
+          upsert: (args: {
+            where: { key: string };
+            create: {
+              key: string;
+              kind: string;
+              eventId: number;
+              sourceScrapeRunId: number | null;
+              payload: Prisma.InputJsonValue;
+            };
+            update: {
+              sourceScrapeRunId: number | null;
+              payload: Prisma.InputJsonValue;
+            };
+          }) => Promise<unknown>;
+        }
+      | null;
+  }
+
+  private async loadReadModelCachePayload<T>(
+    readCache:
+      | {
+          findUnique: (args: {
+            where: { key: string };
+            select: { sourceScrapeRunId: true; payload: true };
+          }) => Promise<{ sourceScrapeRunId: number | null; payload: unknown } | null>;
+        }
+      | null,
+    key: string,
+  ): Promise<{ sourceScrapeRunId: number | null; payload: T | null } | null> {
+    if (!readCache) {
+      return null;
+    }
+    const cached = await readCache.findUnique({
+      where: { key },
+      select: {
+        sourceScrapeRunId: true,
+        payload: true,
+      },
+    });
+    if (!cached) {
+      return null;
+    }
+    return {
+      sourceScrapeRunId: cached.sourceScrapeRunId ?? null,
+      payload: (cached.payload ?? null) as T | null,
+    };
+  }
+
+  private async persistReadModelCachePayload(
+    writeCache:
+      | {
+          upsert: (args: {
+            where: { key: string };
+            create: {
+              key: string;
+              kind: string;
+              eventId: number;
+              sourceScrapeRunId: number | null;
+              payload: Prisma.InputJsonValue;
+            };
+            update: {
+              sourceScrapeRunId: number | null;
+              payload: Prisma.InputJsonValue;
+            };
+          }) => Promise<unknown>;
+        }
+      | null,
+    input: {
+      key: string;
+      kind: string;
+      eventId: number;
+      sourceScrapeRunId: number | null;
+      payload: unknown;
+    },
+  ): Promise<void> {
+    if (!writeCache) {
+      return;
+    }
+
+    await writeCache.upsert({
+      where: { key: input.key },
+      create: {
+        key: input.key,
+        kind: input.kind,
+        eventId: input.eventId,
+        sourceScrapeRunId: input.sourceScrapeRunId,
+        payload: input.payload as Prisma.InputJsonValue,
+      },
+      update: {
+        sourceScrapeRunId: input.sourceScrapeRunId,
+        payload: input.payload as Prisma.InputJsonValue,
+      },
+    });
+  }
+
   private async getLatestReliableScrapeRunId(eventId: number): Promise<number | null> {
     const latest = await this.prisma.scrapeRun.findFirst({
       where: {
         eventId,
+        status: { in: ["SUCCESS", "PARTIAL"] },
+        finishedAt: { not: null },
+      },
+      orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+      select: {
+        id: true,
+      },
+    });
+
+    return latest?.id ?? null;
+  }
+
+  private async getLatestReliableScrapeRunIdForScope(eventIds: number[]): Promise<number | null> {
+    if (eventIds.length === 0) {
+      return null;
+    }
+    const latest = await this.prisma.scrapeRun.findFirst({
+      where: {
+        eventId: { in: eventIds },
         status: { in: ["SUCCESS", "PARTIAL"] },
         finishedAt: { not: null },
       },

@@ -10,6 +10,8 @@ export class ReadModelPrewarmService {
 
     const baseUrl = config.readModelPrewarmApiBaseUrl.replace(/\/$/, "");
     const eventUrl = `${baseUrl}/events/${eventId}`;
+    const efficiencyUrl = `${baseUrl}/events/${eventId}/efficiency`;
+    const medalistsUrl = `${baseUrl}/events/${eventId}/medalists`;
 
     try {
       await this.fetchWithTimeout(eventUrl, config.readModelPrewarmTimeoutMs);
@@ -20,6 +22,24 @@ export class ReadModelPrewarmService {
         error: String(error),
       });
       return;
+    }
+    try {
+      await this.fetchWithTimeout(efficiencyUrl, config.readModelPrewarmTimeoutMs);
+    } catch (error) {
+      log("warn", "Falha no prewarm da eficiencia do evento", {
+        eventId,
+        url: efficiencyUrl,
+        error: String(error),
+      });
+    }
+    try {
+      await this.fetchWithTimeout(medalistsUrl, config.readModelPrewarmTimeoutMs);
+    } catch (error) {
+      log("warn", "Falha no prewarm dos medalhistas do evento", {
+        eventId,
+        url: medalistsUrl,
+        error: String(error),
+      });
     }
 
     const athleteRows = await prisma.athlete.findMany({
@@ -64,6 +84,9 @@ export class ReadModelPrewarmService {
 
     log("info", "Prewarm read-model concluido", {
       eventId,
+      eventSummary: true,
+      eventEfficiency: true,
+      eventMedalists: true,
       athleteSummaries: athleteIds.length,
       concurrency,
     });
