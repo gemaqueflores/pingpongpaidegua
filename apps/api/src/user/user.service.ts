@@ -324,6 +324,10 @@ function splitPairNameParts(name: string | null | undefined): string[] {
     .filter(Boolean);
 }
 
+function isCompositePairName(name: string | null | undefined): boolean {
+  return compactWhitespace(name).includes("#");
+}
+
 function isDoublesCategoryName(categoryName: string | null | undefined): boolean {
   const normalized = normalizeText(categoryName ?? "");
   if (!normalized) {
@@ -616,6 +620,7 @@ export class UserService {
           athlete: {
             select: {
               id: true,
+              nameDisplay: true,
               nameNormalized: true,
             },
           },
@@ -641,6 +646,9 @@ export class UserService {
 
     const participantNamesByEvent = new Map<number, Set<string>>();
     for (const row of participants) {
+      if (isCompositePairName(row.athlete.nameDisplay)) {
+        continue;
+      }
       const normalizedName = normalizeAthleteName(row.athlete.nameNormalized);
       if (!normalizedName) {
         continue;
@@ -1430,10 +1438,21 @@ export class UserService {
       where: {
         eventId: { in: scope.allEventIds },
         createdFromWarning: false,
-        nameDisplay: {
-          contains: search || undefined,
-          mode: "insensitive",
-        },
+        AND: [
+          {
+            nameDisplay: {
+              not: {
+                contains: "#",
+              },
+            },
+          },
+          {
+            nameDisplay: {
+              contains: search || undefined,
+              mode: "insensitive",
+            },
+          },
+        ],
       },
       select: {
         id: true,
@@ -1532,6 +1551,11 @@ export class UserService {
       where: {
         eventId: { in: scope.allEventIds },
         createdFromWarning: false,
+        nameDisplay: {
+          not: {
+            contains: "#",
+          },
+        },
         clubId: { in: clubIds },
         categories: categoryId
           ? {
@@ -3027,6 +3051,11 @@ export class UserService {
         eventId: { in: scope.allEventIds },
         clubId,
         createdFromWarning: false,
+        nameDisplay: {
+          not: {
+            contains: "#",
+          },
+        },
         categories: categoryId
           ? {
               some: {

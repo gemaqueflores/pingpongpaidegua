@@ -96,11 +96,12 @@ async function waitForRunCompletion(
 
 async function enqueueStage(queue: Queue, eventInternalId: number, stage: 1 | 2 | 3): Promise<void> {
   const reason = `scrape-now-force:stage-${stage}`;
+  const safeReason = reason.replace(/[^a-zA-Z0-9_-]/g, "-");
   await queue.add(
     "scrape-event",
     { eventId: eventInternalId, reason },
     {
-      jobId: `qg-${eventInternalId}-${reason}-${Date.now()}`,
+      jobId: `qg-${eventInternalId}-${safeReason}-${Date.now()}`,
       removeOnComplete: true,
       removeOnFail: 100,
     },
@@ -109,11 +110,12 @@ async function enqueueStage(queue: Queue, eventInternalId: number, stage: 1 | 2 
 
 async function enqueuePostReprocess(queue: Queue, eventInternalId: number): Promise<void> {
   const reason = "post-scrape-reprocess";
+  const safeReason = reason.replace(/[^a-zA-Z0-9_-]/g, "-");
   await queue.add(
     "scrape-event",
     { eventId: eventInternalId, reason },
     {
-      jobId: `qg-${eventInternalId}-${reason}-${Date.now()}`,
+      jobId: `qg-${eventInternalId}-${safeReason}-${Date.now()}`,
       removeOnComplete: true,
       removeOnFail: 100,
     },
@@ -303,4 +305,3 @@ main().catch((error) => {
   console.error(String(error?.stack ?? error?.message ?? error));
   process.exit(1);
 });
-
