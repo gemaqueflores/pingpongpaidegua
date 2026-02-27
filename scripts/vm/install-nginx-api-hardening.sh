@@ -17,6 +17,12 @@ sudo ln -sfn /etc/nginx/sites-available/api-pingpongpaidegua /etc/nginx/sites-en
 sudo mkdir -p /var/cache/nginx/api_microcache
 sudo chown -R www-data:www-data /var/cache/nginx
 
+# Ajustes de capacidade para suportar maior concorrencia sem estourar workers.
+sudo sed -i -E 's/worker_connections[[:space:]]+[0-9]+;/worker_connections 4096;/' /etc/nginx/nginx.conf
+if ! sudo grep -q 'worker_rlimit_nofile' /etc/nginx/nginx.conf; then
+  sudo sed -i '/^pid \/run\/nginx.pid;/a worker_rlimit_nofile 65535;' /etc/nginx/nginx.conf
+fi
+
 sudo nginx -t
 sudo systemctl reload nginx
 sudo systemctl is-active nginx

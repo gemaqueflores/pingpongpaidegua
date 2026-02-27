@@ -52,6 +52,7 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async runChecks(): Promise<void> {
+    await this.autoConcludeExpiredEvents();
     await this.checkDatabase();
     await this.checkQueueAndRecover();
     if (this.recoveryEnabled) {
@@ -66,6 +67,42 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.error(
         `Healthcheck de banco falhou: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      );
+    }
+  }
+
+  private async autoConcludeExpiredEvents(): Promise<void> {
+    const now = new Date();
+    try {
+      const updated = await this.prisma.event.updateMany({
+        where: {
+          concluido: false,
+          OR: [
+            {
+              fimRealizacao: {
+                not: null,
+                lt: now,
+              },
+            },
+            {
+              fimRealizacao: null,
+              dataFim: {
+                not: null,
+                lt: now,
+              },
+            },
+          ],
+        },
+        data: {
+          concluido: true,
+        },
+      });
+      if (updated.count > 0) {
+        this.logger.log(`Eventos concluidos automaticamente por data encerrada: ${updated.count}.`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Falha ao concluir eventos por data: ${error instanceof Error ? error.message : "erro desconhecido"}`,
       );
     }
   }

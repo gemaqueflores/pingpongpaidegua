@@ -14,9 +14,44 @@ function parseEventIds(raw: string | undefined): number[] {
     .filter((value) => Number.isFinite(value) && value > 0);
 }
 
+async function autoConcludeExpiredEvents(): Promise<number> {
+  const now = new Date();
+  const updated = await prisma.event.updateMany({
+    where: {
+      concluido: false,
+      OR: [
+        {
+          fimRealizacao: {
+            not: null,
+            lt: now,
+          },
+        },
+        {
+          fimRealizacao: null,
+          dataFim: {
+            not: null,
+            lt: now,
+          },
+        },
+      ],
+    },
+    data: {
+      concluido: true,
+    },
+  });
+  return Number(updated.count ?? 0);
+}
+
 async function run(): Promise<void> {
   await prisma.$connect();
   const processor = new ScrapeProcessor();
+
+  const autoConcluded = await autoConcludeExpiredEvents();
+  if (autoConcluded > 0) {
+    log("info", "Run-once concluiu eventos automaticamente por data de realizacao", {
+      count: autoConcluded,
+    });
+  }
 
   const forcedEventIds = parseEventIds(process.env.SCRAPE_EVENT_IDS);
   const where =

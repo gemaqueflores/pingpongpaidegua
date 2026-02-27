@@ -3,6 +3,11 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-$HOME/pingpongpaidegua}"
 PROJECT_NAME="${COMPOSE_PROJECT_NAME:-pingpongpaidegua}"
+RUNTIME_DIR="$APP_DIR/.runtime"
+LOG_FILE="$RUNTIME_DIR/ppg-recover.log"
+RECOVERY_COOLDOWN_SECONDS="${RECOVERY_COOLDOWN_SECONDS:-600}"
+RECOVERY_FAILURE_WINDOW_SECONDS="${RECOVERY_FAILURE_WINDOW_SECONDS:-3600}"
+RECOVERY_MAX_FAILURES="${RECOVERY_MAX_FAILURES:-6}"
 
 if [[ ! -d "$APP_DIR" ]]; then
   echo "Diretorio da aplicacao nao encontrado: $APP_DIR" >&2
@@ -15,6 +20,7 @@ if [[ ! -f "$APP_DIR/scripts/vm/ppg-recover.sh" ]]; then
 fi
 
 sudo install -m 755 "$APP_DIR/scripts/vm/ppg-recover.sh" /usr/local/bin/ppg-recover.sh
+mkdir -p "$RUNTIME_DIR"
 
 tmp_cron="$(mktemp)"
 crontab -l > "$tmp_cron" 2>/dev/null || true
@@ -23,11 +29,10 @@ grep -v '/usr/local/bin/ppg-recover.sh' "$tmp_cron" | grep -v 'COMPOSE_PROJECT_N
 
 {
   cat "${tmp_cron}.next"
-  echo "@reboot COMPOSE_PROJECT_NAME=$PROJECT_NAME APP_DIR=$APP_DIR /usr/local/bin/ppg-recover.sh >/tmp/ppg-recover.log 2>&1"
-  echo "*/2 * * * * COMPOSE_PROJECT_NAME=$PROJECT_NAME APP_DIR=$APP_DIR /usr/local/bin/ppg-recover.sh >/tmp/ppg-recover.log 2>&1"
+  echo "@reboot COMPOSE_PROJECT_NAME=$PROJECT_NAME APP_DIR=$APP_DIR RECOVERY_COOLDOWN_SECONDS=$RECOVERY_COOLDOWN_SECONDS RECOVERY_FAILURE_WINDOW_SECONDS=$RECOVERY_FAILURE_WINDOW_SECONDS RECOVERY_MAX_FAILURES=$RECOVERY_MAX_FAILURES /usr/local/bin/ppg-recover.sh >>$LOG_FILE 2>&1"
+  echo "*/2 * * * * COMPOSE_PROJECT_NAME=$PROJECT_NAME APP_DIR=$APP_DIR RECOVERY_COOLDOWN_SECONDS=$RECOVERY_COOLDOWN_SECONDS RECOVERY_FAILURE_WINDOW_SECONDS=$RECOVERY_FAILURE_WINDOW_SECONDS RECOVERY_MAX_FAILURES=$RECOVERY_MAX_FAILURES /usr/local/bin/ppg-recover.sh >>$LOG_FILE 2>&1"
 } | crontab -
 
 rm -f "$tmp_cron" "${tmp_cron}.next"
 
 echo "Self-heal instalado com sucesso."
-

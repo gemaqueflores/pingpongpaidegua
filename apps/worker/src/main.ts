@@ -1,4 +1,4 @@
-import { buildEventScrapePolicy, shouldRunEventAutoScrape } from "@cbtm/shared";
+import { buildEventScrapePolicy, computeEventSituation, shouldRunEventAutoScrape } from "@cbtm/shared";
 import { Queue, Worker } from "bullmq";
 import { config } from "./config";
 import { log } from "./logger";
@@ -13,6 +13,34 @@ type ScrapeJobData = {
   dryRun?: boolean;
   sourceScrapeJobId?: string;
 };
+
+async function autoConcludeExpiredEvents(): Promise<number> {
+  const now = new Date();
+  const updated = await prisma.event.updateMany({
+    where: {
+      concluido: false,
+      OR: [
+        {
+          fimRealizacao: {
+            not: null,
+            lt: now,
+          },
+        },
+        {
+          fimRealizacao: null,
+          dataFim: {
+            not: null,
+            lt: now,
+          },
+        },
+      ],
+    },
+    data: {
+      concluido: true,
+    },
+  });
+  return Number(updated.count ?? 0);
+}
 
 async function bootstrap(): Promise<void> {
   await prisma.$connect();
@@ -64,6 +92,13 @@ async function bootstrap(): Promise<void> {
     "scrape-event",
     async (job) => {
       if (job.name === "scan-open-events") {
+        const autoConcluded = await autoConcludeExpiredEvents();
+        if (autoConcluded > 0) {
+          log("info", "Eventos concluidos automaticamente por data de realizacao", {
+            count: autoConcluded,
+          });
+        }
+
         const queueCounts = await queue.getJobCounts("waiting", "active", "delayed");
         const pendingJobs =
           Number(queueCounts.waiting ?? 0) +
@@ -75,6 +110,17 @@ async function bootstrap(): Promise<void> {
             maxPendingJobs: config.autoScrapeMaxPendingJobs,
           });
           return;
+        }
+        const pendingScrapeJobs = await queue.getJobs(["waiting", "active", "delayed"], 0, 500, false);
+        const pendingEventIds = new Set<number>();
+        for (const pendingJob of pendingScrapeJobs) {
+          if (pendingJob.name !== "scrape-event") {
+            continue;
+          }
+          const pendingEventId = Number((pendingJob.data as ScrapeJobData | undefined)?.eventId ?? 0);
+          if (Number.isInteger(pendingEventId) && pendingEventId > 0) {
+            pendingEventIds.add(pendingEventId);
+          }
         }
 
         const events = await prisma.event.findMany({
@@ -92,11 +138,24 @@ async function bootstrap(): Promise<void> {
         });
 
         let eligibleEvents = 0;
+        let cappedByScanLimit = 0;
         let concludedBlocked = 0;
         let skippedByInterval = 0;
+        let skippedByPendingQueue = 0;
+        const dueCandidates: Array<{
+          id: number;
+          reason: string;
+          recommendedIntervalMs: number | null;
+          priority: number;
+          startTs: number;
+        }> = [];
         for (const event of events) {
           if (event.concluido) {
             concludedBlocked += 1;
+            continue;
+          }
+          if (pendingEventIds.has(event.id)) {
+            skippedByPendingQueue += 1;
             continue;
           }
           const policy = buildEventScrapePolicy(event, {
@@ -112,16 +171,53 @@ async function bootstrap(): Promise<void> {
           }
 
           eligibleEvents += 1;
-          const intervalBucket = Math.max(policy.recommendedIntervalMs ?? config.refreshMs, 1);
+          const situation = computeEventSituation({
+            inicioInscricoes: event.inicioInscricoes,
+            fimInscricoes: event.fimInscricoes,
+            inicioRealizacao: event.inicioRealizacao,
+            fimRealizacao: event.fimRealizacao,
+            dataInicio: event.dataInicio,
+            dataFim: event.dataFim,
+          });
+          const priority =
+            situation === "EM_ANDAMENTO"
+              ? 0
+              : situation === "GRADES_PUBLICADAS_PRE_JOGO"
+                ? 1
+                : situation === "POS_INSCRICOES_PRE_EVENTO"
+                  ? 2
+                  : situation === "INSCRICOES_ABERTAS"
+                    ? 3
+                    : 4;
+          dueCandidates.push({
+            id: event.id,
+            reason: `scheduled-auto-${policy.reason}`,
+            recommendedIntervalMs: policy.recommendedIntervalMs,
+            priority,
+            startTs: event.dataInicio ? new Date(event.dataInicio).getTime() : Number.MAX_SAFE_INTEGER,
+          });
+        }
+
+        dueCandidates.sort((left, right) => {
+          if (left.priority !== right.priority) return left.priority - right.priority;
+          if (left.startTs !== right.startTs) return left.startTs - right.startTs;
+          return left.id - right.id;
+        });
+
+        const maxEnqueuedPerScan = Math.max(1, config.autoScrapeMaxEnqueuedPerScan);
+        const selectedCandidates = dueCandidates.slice(0, maxEnqueuedPerScan);
+        cappedByScanLimit = Math.max(0, dueCandidates.length - selectedCandidates.length);
+        for (const candidate of selectedCandidates) {
+          const intervalBucket = Math.max(candidate.recommendedIntervalMs ?? config.refreshMs, 1);
           const scheduledBucket = Math.floor(Date.now() / intervalBucket);
           await queue.add(
             "scrape-event",
             {
-              eventId: event.id,
-              reason: `scheduled-auto-${policy.reason}`,
+              eventId: candidate.id,
+              reason: candidate.reason,
             },
             {
-              jobId: `event-${event.id}-scheduled-${scheduledBucket}`,
+              jobId: `event-${candidate.id}-scheduled-${scheduledBucket}`,
             },
           );
         }
@@ -131,6 +227,10 @@ async function bootstrap(): Promise<void> {
           eligibleEvents,
           concludedBlocked,
           skippedByInterval,
+          skippedByPendingQueue,
+          enqueuedEvents: selectedCandidates.length,
+          cappedByScanLimit,
+          maxEnqueuedPerScan,
         });
         return;
       }

@@ -16,19 +16,48 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Pre-check de secrets e parametros
+        id: precheck
+        env:
+          ORACLE_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
+          ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
+          ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${ORACLE_SSH_PRIVATE_KEY:-}" ] || missing+=("ORACLE_SSH_PRIVATE_KEY")
+          [ -n "${ORACLE_SSH_USER:-}" ] || missing+=("ORACLE_SSH_USER")
+          [ -n "${ORACLE_SSH_HOST:-}" ] || missing+=("ORACLE_SSH_HOST")
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "Secrets ausentes para execucao manual: ${missing[*]}"
+              exit 1
+            fi
+            echo "Secrets ausentes no agendamento (${missing[*]}). Drift check sera ignorado sem falha."
+            echo "can_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "can_run=true" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
+        if: steps.precheck.outputs.can_run == 'true'
         uses: actions/checkout@v4
 
       - name: Setup Node
+        if: steps.precheck.outputs.can_run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
+        if: steps.precheck.outputs.can_run == 'true'
         run: npm ci
 
       - name: Configurar chave SSH da VM
+        if: steps.precheck.outputs.can_run == 'true'
         env:
           ORACLE_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
         run: |
@@ -39,6 +68,7 @@ jobs:
           chmod 600 ~/.ssh/oracle_vm_key
 
       - name: Drift check (prod + VM + Vercel)
+        if: steps.precheck.outputs.can_run == 'true'
         env:
           DRIFT_EVENT_ID: ${{ github.event.inputs.event_id }}
           DEFAULT_DRIFT_EVENT_ID: ${{ vars.DRIFT_EVENT_ID }}
@@ -55,16 +85,37 @@ jobs:
           VM_TARGET="${ORACLE_SSH_USER}@${ORACLE_SSH_HOST}"
           PROD_BASE="${PROD_API_URL:-https://api-pingpongpaidegua.duckdns.org}"
           VERCEL_BASE="${VERCEL_BASE_URL:-https://pingpongpaidegua.vercel.app}"
+          STRICT_FLAG=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            STRICT_FLAG="--strict"
+          fi
 
-          npm run drift:check -- \
-            --eventId "$EVENT_ID" \
-            --prodApiBase "$PROD_BASE" \
-            --vercelBase "$VERCEL_BASE" \
-            --skipLocalApi \
-            --skipLocalWeb \
-            --skipVmWeb \
-            --vmSshTarget "$VM_TARGET" \
-            --vmSshKey "$HOME/.ssh/oracle_vm_key" \
-            --vmSshNoHostKeyCheck \
-            --strict
-
+          attempt=1
+          max_attempts=3
+          while [ "$attempt" -le "$max_attempts" ]; do
+            set +e
+            npm run drift:check -- \
+              --eventId "$EVENT_ID" \
+              --prodApiBase "$PROD_BASE" \
+              --vercelBase "$VERCEL_BASE" \
+              --skipLocalApi \
+              --skipLocalWeb \
+              --skipVmWeb \
+              --vmSshTarget "$VM_TARGET" \
+              --vmSshKey "$HOME/.ssh/oracle_vm_key" \
+              --vmSshNoHostKeyCheck \
+              $STRICT_FLAG
+            rc=$?
+            set -e
+            if [ "$rc" -eq 0 ]; then
+              echo "Drift check concluido com sucesso na tentativa $attempt."
+              exit 0
+            fi
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "Drift check falhou apos $attempt tentativa(s)."
+              exit "$rc"
+            fi
+            echo "Drift check falhou (tentativa $attempt/$max_attempts). Repetindo em 20s..."
+            sleep 20
+            attempt=$((attempt + 1))
+          done

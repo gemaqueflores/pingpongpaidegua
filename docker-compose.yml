@@ -2,6 +2,21 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    stop_grace_period: 90s
+    command:
+      - postgres
+      - -c
+      - max_connections=80
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - checkpoint_timeout=15min
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - max_wal_size=2GB
+      - -c
+      - wal_compression=on
     environment:
       POSTGRES_DB: cbtm
       POSTGRES_USER: postgres
@@ -14,7 +29,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     logging:
       driver: "json-file"
       options:
@@ -24,14 +43,34 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    stop_grace_period: 30s
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --tcp-backlog
+      - "511"
+      - --save
+      - "300"
+      - "100"
+      - --save
+      - "60"
+      - "10000"
+      - --maxmemory
+      - "128mb"
+      - --maxmemory-policy
+      - "noeviction"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     logging:
       driver: "json-file"
       options:
@@ -62,9 +101,9 @@ services:
       HEALTH_MONITOR_RECOVERY_COOLDOWN_MS: 1800000
       HEALTH_MONITOR_RECOVERY_MAX_EVENTS_PER_CYCLE: 1
       NODE_OPTIONS: --max-old-space-size=384
-      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm}
-      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm}
-      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm}
+      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=15&pool_timeout=20&connect_timeout=10}
+      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=10&pool_timeout=20&connect_timeout=10}
+      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=15&pool_timeout=20&connect_timeout=10}
       REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
@@ -72,7 +111,11 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:4000/ || exit 1"]
       interval: 15s
@@ -91,9 +134,9 @@ services:
       dockerfile: docker/worker.Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm}
-      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm}
-      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm}
+      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=10&pool_timeout=20&connect_timeout=10}
+      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=6&pool_timeout=20&connect_timeout=10}
+      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=10&pool_timeout=20&connect_timeout=10}
       REDIS_URL: redis://redis:6379
       SCRAPER_MODE: live
       SCRAPER_EVENT_URL: https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID={EVENT_ID}
@@ -108,6 +151,10 @@ services:
       DB_RETRY_ATTEMPTS: 5
       DB_RETRY_DELAY_MS: 1000
       NODE_OPTIONS: --max-old-space-size=768
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     depends_on:
       postgres:
         condition: service_healthy
