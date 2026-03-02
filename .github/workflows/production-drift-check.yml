@@ -39,6 +39,19 @@ jobs:
             exit 0
           fi
 
+          mkdir -p ~/.ssh
+          printf '%s\n' "$ORACLE_SSH_PRIVATE_KEY" > ~/.ssh/oracle_vm_key
+          chmod 600 ~/.ssh/oracle_vm_key
+          if ! ssh -i ~/.ssh/oracle_vm_key -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$ORACLE_SSH_USER@$ORACLE_SSH_HOST" "echo ok" >/dev/null 2>&1; then
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "Falha de conectividade SSH com a VM."
+              exit 1
+            fi
+            echo "VM indisponivel para SSH no agendamento. Drift check sera ignorado sem falha."
+            echo "can_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           echo "can_run=true" >> "$GITHUB_OUTPUT"
 
       - name: Checkout

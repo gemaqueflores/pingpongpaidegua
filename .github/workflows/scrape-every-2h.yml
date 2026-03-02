@@ -18,12 +18,13 @@ jobs:
       SCRAPE_EVENT_IDS: ${{ github.event.inputs.event_ids }}
     steps:
       - name: Validar secrets de SSH
+        id: precheck
         env:
           ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
           ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
           ORACLE_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
         run: |
-          set -e
+          set -euo pipefail
           missing=()
 
           [ -n "$ORACLE_SSH_HOST" ] || missing+=("ORACLE_SSH_HOST")
@@ -31,14 +32,33 @@ jobs:
           [ -n "$ORACLE_SSH_PRIVATE_KEY" ] || missing+=("ORACLE_SSH_PRIVATE_KEY")
 
           if [ "${#missing[@]}" -gt 0 ]; then
-            echo "Secrets ausentes/vazios: ${missing[*]}"
-            echo "Configure em Settings > Secrets and variables > Actions."
-            exit 1
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "Secrets ausentes/vazios: ${missing[*]}"
+              exit 1
+            fi
+            echo "Secrets ausentes no agendamento (${missing[*]}). Scrape sera ignorado sem falha."
+            echo "can_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$ORACLE_SSH_PRIVATE_KEY" > ~/.ssh/oracle_vm_key
+          chmod 600 ~/.ssh/oracle_vm_key
+          if ! ssh -i ~/.ssh/oracle_vm_key -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$ORACLE_SSH_USER@$ORACLE_SSH_HOST" "echo ok" >/dev/null 2>&1; then
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "Falha de conectividade SSH com a VM."
+              exit 1
+            fi
+            echo "VM indisponivel para SSH no agendamento. Scrape sera ignorado sem falha."
+            echo "can_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           echo "Secrets obrigatorios de SSH OK."
+          echo "can_run=true" >> "$GITHUB_OUTPUT"
 
       - name: Rodar scrape remoto na VM Oracle
+        if: steps.precheck.outputs.can_run == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.ORACLE_SSH_HOST }}
@@ -124,7 +144,7 @@ jobs:
             fi
 
       - name: Diagnostico rapido de saude (VM)
-        if: always()
+        if: always() && steps.precheck.outputs.can_run == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.ORACLE_SSH_HOST }}
@@ -153,7 +173,7 @@ jobs:
             curl -fsS http://localhost:4000/ || true
 
       - name: Falha da automacao de scrape
-        if: failure()
+        if: failure() && steps.precheck.outputs.can_run == 'true'
         run: |
           echo "Workflow de scrape falhou."
           echo "Revise logs do passo SSH e do diagnostico de saude."

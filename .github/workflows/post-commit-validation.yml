@@ -12,38 +12,20 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Pre-check de secrets
-        id: precheck
-        env:
-          PROD_API_URL: ${{ secrets.PROD_API_URL }}
-        run: |
-          set -euo pipefail
-          if [ -z "${PROD_API_URL:-}" ]; then
-            echo "PROD_API_URL ausente. Validacao sera ignorada para evitar falso negativo."
-            echo "can_run=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "can_run=true" >> "$GITHUB_OUTPUT"
-
       - name: Checkout
-        if: steps.precheck.outputs.can_run == 'true'
         uses: actions/checkout@v4
 
       - name: Setup Node
-        if: steps.precheck.outputs.can_run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
-        if: steps.precheck.outputs.can_run == 'true'
         run: npm ci
 
       - name: Validate production API
-        if: steps.precheck.outputs.can_run == 'true'
         env:
-          PROD_API_URL: ${{ secrets.PROD_API_URL }}
           VALIDATE_EVENT_ID: ${{ vars.VALIDATE_EVENT_ID }}
         run: |
           set -euo pipefail
