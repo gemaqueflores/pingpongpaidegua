@@ -1,0 +1,25 @@
+# VCS / CI
+.git
+.github
+
+# Local / generated
+node_modules
+**/node_modules
+dist
+tmp
+*.log
+
+# Monorepo services not needed for web build artifact upload
+apps/api
+apps/worker
+docker
+fixtures
+scripts
+prisma
+packages
+
+# Local editor/runtime files
+.vscode
+.idea
+.DS_Store
+Thumbs.db

@@ -59,6 +59,7 @@ jobs:
 
       - name: Rodar scrape remoto na VM Oracle
         if: steps.precheck.outputs.can_run == 'true'
+        continue-on-error: ${{ github.event_name == 'schedule' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.ORACLE_SSH_HOST }}
@@ -177,7 +178,7 @@ jobs:
             curl -fsS http://localhost:4000/ || true
 
       - name: Falha da automacao de scrape
-        if: failure() && steps.precheck.outputs.can_run == 'true'
+        if: failure() && steps.precheck.outputs.can_run == 'true' && github.event_name == 'workflow_dispatch'
         run: |
           echo "Workflow de scrape falhou."
           echo "Revise logs do passo SSH e do diagnostico de saude."
