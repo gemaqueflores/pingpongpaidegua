@@ -37,6 +37,18 @@ interface UpsertOptions {
   processRegistrations?: boolean;
 }
 
+interface DatasetScopeStats {
+  enabled: boolean;
+  reason: string;
+  eligibleClubsCount: number;
+  registrationsBefore: number;
+  registrationsAfter: number;
+  matchesBefore: number;
+  matchesAfter: number;
+  categoriesBefore: number;
+  categoriesAfter: number;
+}
+
 interface CachedClub {
   id: number;
   name: string;
@@ -815,6 +827,143 @@ export class UpsertService {
   private static readonly REGISTRATION_SYNC_MIN_CATEGORY_COVERAGE = 0.85;
   private static readonly REGISTRATION_SYNC_PREVIOUS_RUN_LOOKBACK = 30;
 
+  private shouldApplyParenseScope(eventLevel: EventLevel | null, eventName: string | null): boolean {
+    if (eventLevel === "COPA" || eventLevel === "NACIONAL") {
+      return true;
+    }
+    const normalizedName = normalizeText(String(eventName ?? ""));
+    return normalizedName.includes("brasileirao") || normalizedName.includes("copa");
+  }
+
+  private async applyParenseEligibilityScope(input: {
+    eventLevel: EventLevel | null;
+    eventName: string | null;
+    dataset: ParsedDataset;
+    warnings: string[];
+  }): Promise<{ dataset: ParsedDataset; stats: DatasetScopeStats }> {
+    const enabled = this.shouldApplyParenseScope(input.eventLevel, input.eventName);
+    const baseStats: DatasetScopeStats = {
+      enabled,
+      reason: enabled ? "evento_copa_ou_nacional" : "nao_aplicavel",
+      eligibleClubsCount: 0,
+      registrationsBefore: input.dataset.registrations.length,
+      registrationsAfter: input.dataset.registrations.length,
+      matchesBefore: input.dataset.matches.length,
+      matchesAfter: input.dataset.matches.length,
+      categoriesBefore: input.dataset.categories.length,
+      categoriesAfter: input.dataset.categories.length,
+    };
+
+    if (!enabled) {
+      return { dataset: input.dataset, stats: baseStats };
+    }
+
+    const eligibleClubRows = await prisma.athlete.findMany({
+      where: {
+        event: {
+          nivel: { in: ["ESTADUAL", "OPEN"] },
+        },
+      },
+      distinct: ["clubId"],
+      select: {
+        club: {
+          select: {
+            normalizedName: true,
+          },
+        },
+      },
+    });
+    const eligibleClubNames = new Set(
+      eligibleClubRows
+        .map((row) => normalizeText(row.club.normalizedName))
+        .filter(Boolean),
+    );
+
+    if (eligibleClubNames.size === 0) {
+      input.warnings.push(
+        "ESCOPO_PARAOPEBA: sem clubes elegiveis (ESTADUAL/OPEN) encontrados; filtro ignorado.",
+      );
+      return {
+        dataset: input.dataset,
+        stats: {
+          ...baseStats,
+          reason: "sem_clubes_elegiveis",
+        },
+      };
+    }
+
+    const scopedRegistrations = input.dataset.registrations.filter((registration) =>
+      eligibleClubNames.has(normalizeText(registration.clubNormalizedName || registration.clubName)),
+    );
+    const eligibleAthleteNames = new Set(
+      scopedRegistrations
+        .map((registration) => normalizeText(registration.athleteNormalizedName || registration.athleteName))
+        .filter(Boolean),
+    );
+
+    const scopedMatches = input.dataset.matches.filter((match) => {
+      const athleteAName = normalizeText(match.athleteANormalizedName || match.athleteAName);
+      const athleteBName = normalizeText(match.athleteBNormalizedName || match.athleteBName);
+      const athleteClubA = normalizeText(match.athleteAClubNormalizedName ?? "");
+      const athleteClubB = normalizeText(match.athleteBClubNormalizedName ?? "");
+      const byAthlete = eligibleAthleteNames.has(athleteAName) || eligibleAthleteNames.has(athleteBName);
+      const byClub =
+        (athleteClubA && eligibleClubNames.has(athleteClubA)) ||
+        (athleteClubB && eligibleClubNames.has(athleteClubB));
+      return Boolean(byAthlete || byClub);
+    });
+
+    const scopedCategoryIds = new Set<string>();
+    const scopedCategoryNames = new Set<string>();
+    for (const registration of scopedRegistrations) {
+      if (registration.categoryId) {
+        scopedCategoryIds.add(String(registration.categoryId));
+      }
+      const key = normalizeText(registration.categoryNormalizedName || registration.categoryName);
+      if (key) {
+        scopedCategoryNames.add(key);
+      }
+    }
+    for (const match of scopedMatches) {
+      if (match.categoryId) {
+        scopedCategoryIds.add(String(match.categoryId));
+      }
+      const key = normalizeText(match.categoryNormalizedName || match.categoryName);
+      if (key) {
+        scopedCategoryNames.add(key);
+      }
+    }
+
+    const scopedCategories = input.dataset.categories.filter((category) => {
+      if (category.categoryId && scopedCategoryIds.has(String(category.categoryId))) {
+        return true;
+      }
+      const key = normalizeText(category.categoryNormalizedName || category.categoryName);
+      return Boolean(key && scopedCategoryNames.has(key));
+    });
+
+    input.warnings.push(
+      `ESCOPO_PARAOPEBA: filtro aplicado para ${input.eventLevel ?? "NIVEL_DESCONHECIDO"}; clubes elegiveis=${eligibleClubNames.size}; registros ${input.dataset.registrations.length}->${scopedRegistrations.length}; jogos ${input.dataset.matches.length}->${scopedMatches.length}; categorias ${input.dataset.categories.length}->${scopedCategories.length}.`,
+    );
+
+    return {
+      dataset: {
+        ...input.dataset,
+        categories: scopedCategories,
+        registrations: scopedRegistrations,
+        matches: scopedMatches,
+      },
+      stats: {
+        ...baseStats,
+        reason: "filtro_aplicado",
+        eligibleClubsCount: eligibleClubNames.size,
+        registrationsAfter: scopedRegistrations.length,
+        matchesAfter: scopedMatches.length,
+        categoriesAfter: scopedCategories.length,
+      },
+    };
+  }
+
   private deduplicateCrossCategoryHashMatches(input: {
     matches: ParsedMatch[];
     categoriesByCbtmId: Map<string, CachedCategory>;
@@ -963,6 +1112,7 @@ export class UpsertService {
     const event = await prisma.event.findUnique({
       where: { id: eventId },
       select: {
+        nome: true,
         nivel: true,
         concluido: true,
         inicioInscricoes: true,
@@ -982,6 +1132,13 @@ export class UpsertService {
       dataInicio: event?.dataInicio ?? null,
       dataFim: event?.dataFim ?? null,
     });
+    const scopeResult = await this.applyParenseEligibilityScope({
+      eventLevel: event?.nivel ?? null,
+      eventName: event?.nome ?? null,
+      dataset,
+      warnings,
+    });
+    dataset = scopeResult.dataset;
     const allowAutoCreateWarningAthlete =
       config.conflictAutoCreateWarningAthleteEnabled &&
       Boolean(event?.concluido);
