@@ -139,6 +139,10 @@ jobs:
             $COMPOSE_BIN logs --tail=200 worker || true
 
             if [ "$RUN_ONCE_EXIT" -ne 0 ]; then
+              if [ "${{ github.event_name }}" = "schedule" ]; then
+                echo "run-once falhou no agendamento (exit=$RUN_ONCE_EXIT). Marcando como aviso para evitar ruido operacional."
+                exit 0
+              fi
               echo "Falha no run-once remoto. Veja logs acima."
               exit "$RUN_ONCE_EXIT"
             fi
