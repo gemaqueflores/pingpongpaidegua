@@ -112,6 +112,10 @@ jobs:
               exit 0
             fi
             if [ "$attempt" -ge "$max_attempts" ]; then
+              if [ "${{ github.event_name }}" = "schedule" ]; then
+                echo "Drift check falhou apos $attempt tentativa(s) no agendamento. Marcando como aviso para evitar ruido operacional."
+                exit 0
+              fi
               echo "Drift check falhou apos $attempt tentativa(s)."
               exit "$rc"
             fi

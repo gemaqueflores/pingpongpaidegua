@@ -45,7 +45,7 @@ jobs:
           username: ${{ secrets.ORACLE_SSH_USER }}
           key: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
           port: ${{ secrets.ORACLE_SSH_PORT || 22 }}
-          command_timeout: 45m
+          command_timeout: 60m
           script_stop: true
           envs: SCRAPE_EVENT_IDS
           script: |
@@ -76,36 +76,43 @@ jobs:
             $COMPOSE_BIN up -d --no-recreate postgres redis
             $COMPOSE_BIN ps
 
-            RUN_ONCE_CMD="node apps/worker/dist/run-once.js"
+            RUN_ONCE_CMD="node /workspace/apps/worker/dist/run-once.js"
             echo "Comando de run-once: $RUN_ONCE_CMD (one-shot container)"
             echo "Diagnostico rapido do worker (one-shot):"
-            $COMPOSE_BIN run --rm worker sh -lc "node -v && pwd && ls -la apps/worker/dist | sed -n '1,80p'" || true
+            $COMPOSE_BIN run --rm --no-deps worker sh -lc "node -v && pwd && ls -la /workspace/apps/worker/dist | sed -n '1,80p'" || true
 
             echo "Checkpoint: preparando execucao do run-once"
             RUN_ONCE_EXIT=0
             SCRAPE_IDS="${SCRAPE_EVENT_IDS:-}"
-            set +e
-            if [ -n "$SCRAPE_IDS" ]; then
-              echo "SCRAPE_EVENT_IDS=$SCRAPE_IDS"
-              $COMPOSE_BIN run --rm -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD"
-              RUN_ONCE_EXIT=$?
-            else
-              $COMPOSE_BIN run --rm worker sh -lc "$RUN_ONCE_CMD"
-              RUN_ONCE_EXIT=$?
-            fi
-
-            if [ "$RUN_ONCE_EXIT" -ne 0 ]; then
-              echo "Primeira tentativa do run-once falhou (exit=$RUN_ONCE_EXIT). Tentando novamente em 15s..."
-              sleep 15
+            max_attempts=3
+            attempt=1
+            while [ "$attempt" -le "$max_attempts" ]; do
+              set +e
               if [ -n "$SCRAPE_IDS" ]; then
-                $COMPOSE_BIN run --rm -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD"
+                echo "SCRAPE_EVENT_IDS=$SCRAPE_IDS"
+                $COMPOSE_BIN run --rm --no-deps -e SCRAPE_EVENT_IDS="$SCRAPE_IDS" worker sh -lc "$RUN_ONCE_CMD"
                 RUN_ONCE_EXIT=$?
               else
-                $COMPOSE_BIN run --rm worker sh -lc "$RUN_ONCE_CMD"
+                $COMPOSE_BIN run --rm --no-deps worker sh -lc "$RUN_ONCE_CMD"
                 RUN_ONCE_EXIT=$?
               fi
-            fi
-            set -e
+              set -e
+
+              if [ "$RUN_ONCE_EXIT" -eq 0 ]; then
+                echo "run-once concluido com sucesso na tentativa $attempt."
+                break
+              fi
+
+              if [ "$attempt" -ge "$max_attempts" ]; then
+                echo "run-once falhou apos $attempt tentativa(s)."
+                break
+              fi
+
+              retry_sleep=$((attempt * 20))
+              echo "run-once falhou (tentativa $attempt/$max_attempts, exit=$RUN_ONCE_EXIT). Repetindo em ${retry_sleep}s..."
+              sleep "$retry_sleep"
+              attempt=$((attempt + 1))
+            done
 
             echo "Checkpoint: execucao finalizada"
             echo "run-once exit code: $RUN_ONCE_EXIT"
