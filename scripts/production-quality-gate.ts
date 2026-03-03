@@ -21,6 +21,45 @@ type GateResult = {
   eliminatoriaCount: number;
 };
 
+type EventMedalistCategory = {
+  categoryId: number;
+  diagnostics?: { status?: string | null } | null;
+  medalists?: Array<{ athleteId: number; medalha: "ouro" | "prata" | "bronze" }>;
+};
+
+function normalizeRoundLabel(input: string | null | undefined): string {
+  return String(input ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function isFinalRoundLabel(round: string | null | undefined): boolean {
+  const normalized = normalizeRoundLabel(round);
+  return /\bfinal\b/.test(normalized) && !normalized.includes("semi");
+}
+
+function isSemifinalRoundLabel(round: string | null | undefined): boolean {
+  const normalized = normalizeRoundLabel(round);
+  return normalized.includes("semi");
+}
+
+function resolveScorePlayersAthleteIds(scorePlayers: unknown): number[] {
+  if (!Array.isArray(scorePlayers)) {
+    return [];
+  }
+  return scorePlayers
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+      const athleteIdRaw = (item as { athleteId?: unknown }).athleteId;
+      const athleteId = Number(athleteIdRaw);
+      return Number.isFinite(athleteId) ? athleteId : null;
+    })
+    .filter((value): value is number => value !== null);
+}
+
 function parseArgs(argv: string[]): Args {
   let cbtmEventId = 0;
   let stage3Attempts = 3;
@@ -213,6 +252,114 @@ async function evaluateGate(prisma: PrismaClient, eventInternalId: number): Prom
   }
   if (eliminatoriaFromAudit > 0 || eliminatoriaCount > 0) {
     reasons.push(`eliminatoria_detectada=${Math.max(eliminatoriaFromAudit, eliminatoriaCount)}`);
+  }
+
+  // Guardrail semantico de podio:
+  // ouro/prata precisam bater com vencedor/perdedor da final quando houver final publicada com score_players confiavel.
+  // bronzes devem conter os perdedores das semifinais quando houver duas semis validas.
+  const medalistsEndpoint = await fetch(`http://api:4000/events/${eventInternalId}/medalists`).then((response) => {
+    if (!response.ok) {
+      throw new Error(`Falha ao consultar medalhistas do evento ${eventInternalId}: HTTP ${response.status}`);
+    }
+    return response.json() as Promise<{ categories?: EventMedalistCategory[] }>;
+  });
+
+  const categoryPayloadMap = new Map<number, EventMedalistCategory>(
+    (Array.isArray(medalistsEndpoint.categories) ? medalistsEndpoint.categories : []).map((category) => [
+      Number(category.categoryId),
+      category,
+    ]),
+  );
+
+  const matches = await prisma.match.findMany({
+    where: {
+      eventId: eventInternalId,
+      phase: { in: ["GRUPOS", "RESULTADOS"] },
+    },
+    select: {
+      id: true,
+      categoryId: true,
+      round: true,
+      winnerIndex: true,
+      scorePlayers: true,
+    },
+  });
+
+  const matchesByCategoryId = new Map<number, typeof matches>();
+  for (const match of matches) {
+    const bucket = matchesByCategoryId.get(match.categoryId) ?? [];
+    bucket.push(match);
+    matchesByCategoryId.set(match.categoryId, bucket);
+  }
+
+  let podiumFinalMismatches = 0;
+  let podiumSemifinalMismatches = 0;
+  let diagnosticsNotOk = 0;
+
+  for (const [categoryId, payload] of categoryPayloadMap.entries()) {
+    if (payload.diagnostics?.status && payload.diagnostics.status !== "ok") {
+      diagnosticsNotOk += 1;
+    }
+
+    const categoryMatches = matchesByCategoryId.get(categoryId) ?? [];
+    if (categoryMatches.length === 0) {
+      continue;
+    }
+
+    const finals = categoryMatches
+      .filter((match) => isFinalRoundLabel(match.round))
+      .sort((left, right) => right.id - left.id);
+    if (finals.length > 0) {
+      const final = finals[0];
+      if (final.winnerIndex === 0 || final.winnerIndex === 1) {
+        const scorePlayers = resolveScorePlayersAthleteIds(final.scorePlayers);
+        if (scorePlayers.length >= 2) {
+          const championExpected = scorePlayers[final.winnerIndex];
+          const viceExpected = scorePlayers[1 - final.winnerIndex];
+          const ouroFound = payload.medalists?.find((medalist) => medalist.medalha === "ouro")?.athleteId ?? null;
+          const prataFound = payload.medalists?.find((medalist) => medalist.medalha === "prata")?.athleteId ?? null;
+          if (ouroFound !== championExpected || prataFound !== viceExpected) {
+            podiumFinalMismatches += 1;
+          }
+        }
+      }
+    }
+
+    const semifinals = categoryMatches.filter(
+      (match) =>
+        isSemifinalRoundLabel(match.round) &&
+        (match.winnerIndex === 0 || match.winnerIndex === 1) &&
+        resolveScorePlayersAthleteIds(match.scorePlayers).length >= 2,
+    );
+    if (semifinals.length >= 2) {
+      const expectedBronze = new Set<number>();
+      for (const semifinal of semifinals) {
+        const scorePlayers = resolveScorePlayersAthleteIds(semifinal.scorePlayers);
+        if (scorePlayers.length < 2 || semifinal.winnerIndex === null) {
+          continue;
+        }
+        expectedBronze.add(scorePlayers[1 - semifinal.winnerIndex]);
+      }
+      if (expectedBronze.size > 0) {
+        const foundBronze = new Set<number>(
+          (payload.medalists ?? []).filter((medalist) => medalist.medalha === "bronze").map((medalist) => medalist.athleteId),
+        );
+        const allSemifinalLosersPresent = [...expectedBronze].every((athleteId) => foundBronze.has(athleteId));
+        if (!allSemifinalLosersPresent) {
+          podiumSemifinalMismatches += 1;
+        }
+      }
+    }
+  }
+
+  if (podiumFinalMismatches > 0) {
+    reasons.push(`podium_final_mismatches=${podiumFinalMismatches}`);
+  }
+  if (podiumSemifinalMismatches > 0) {
+    reasons.push(`podium_semifinal_mismatches=${podiumSemifinalMismatches}`);
+  }
+  if (diagnosticsNotOk > 0) {
+    reasons.push(`medalists_diagnostics_not_ok=${diagnosticsNotOk}`);
   }
 
   return {
