@@ -16,6 +16,7 @@
     "smoke:live": "npm run build --workspace @cbtm/shared && npm run build --workspace @cbtm/parser && cross-env SMOKE_MODE=live tsx scripts/smoke-test.ts",
     "audit:event": "tsx scripts/audit-event-integrity.ts",
     "quality:gate": "tsx scripts/production-quality-gate.ts",
+    "ops:autonomy-check": "tsx scripts/autonomy-sanity-check.ts",
     "drift:check": "tsx scripts/drift-check.ts",
     "validate:update:local": "tsx scripts/validate-update.ts --target=local",
     "validate:update:prod": "tsx scripts/validate-update.ts --target=prod",
