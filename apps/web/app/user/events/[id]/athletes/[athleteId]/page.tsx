@@ -159,6 +159,14 @@ function resolveGameOrderId(match: SummaryMatch): number {
   return match.id;
 }
 
+function resolveMatchTimestamp(match: SummaryMatch): number | null {
+  if (!match.matchDatetime) {
+    return null;
+  }
+  const timestamp = new Date(match.matchDatetime).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
 function toReducedName(name: string | null | undefined): string {
   const tokens = String(name ?? "")
     .trim()
@@ -354,6 +362,15 @@ export default function AthleteSummaryPage() {
       const rightHasResult = hasMatchResult(right);
       if (leftHasResult !== rightHasResult) {
         return leftHasResult ? 1 : -1;
+      }
+
+      const leftTimestamp = resolveMatchTimestamp(left);
+      const rightTimestamp = resolveMatchTimestamp(right);
+      if (leftTimestamp !== null && rightTimestamp !== null && leftTimestamp !== rightTimestamp) {
+        return sortMode === "recent" ? rightTimestamp - leftTimestamp : leftTimestamp - rightTimestamp;
+      }
+      if (leftTimestamp !== null || rightTimestamp !== null) {
+        return leftTimestamp !== null ? -1 : 1;
       }
 
       const leftGameId = resolveGameOrderId(left);

@@ -727,6 +727,28 @@ export function computeCategoryClassificationSummaries(
     .map(([categoryId, categoryMatches]) => {
       const first = categoryMatches[0];
       const parsedCategoryMatches = categoryMatches.map(toParsedMatch);
+      const structuralParticipants = new Set<string>();
+      const structuralGroupRounds = new Set<string>();
+      let hasEliminationStructure = false;
+      for (const match of categoryMatches) {
+        structuralParticipants.add(toStandingKey(match.players[0], 0));
+        structuralParticipants.add(toStandingKey(match.players[1], 1));
+        if (isGroupRoundMatch(match)) {
+          structuralGroupRounds.add(extractGroupKeyFromRound(match.round));
+          continue;
+        }
+        const roundStage = toRoundStage(match.round);
+        const hasRealPlayers = Boolean(
+          match.players[0]?.name ||
+            match.players[0]?.athleteId ||
+            match.players[1]?.name ||
+            match.players[1]?.athleteId,
+        );
+        if (roundStage !== "outro" && hasRealPlayers) {
+          hasEliminationStructure = true;
+        }
+      }
+
       const walkoverLosersInGroups = collectGroupWalkoverLoserKeys({
         matches: categoryMatches,
         parsedMatches: parsedCategoryMatches,
@@ -776,16 +798,13 @@ export function computeCategoryClassificationSummaries(
       }
 
       const participants = new Set<string>();
-      const groupRounds = new Set<string>();
       let hasDecisiveEliminationData = false;
 
       for (const match of effectiveCategoryMatches) {
         const groupMatch = isGroupRoundMatch(match);
         participants.add(toStandingKey(match.players[0], 0));
         participants.add(toStandingKey(match.players[1], 1));
-        if (groupMatch) {
-          groupRounds.add(extractGroupKeyFromRound(match.round));
-        } else {
+        if (!groupMatch) {
           const roundStage = toRoundStage(match.round);
           const hasRealPlayers = Boolean(
             match.players[0]?.name ||
@@ -799,11 +818,11 @@ export function computeCategoryClassificationSummaries(
         }
       }
 
-      const hasGroupData = groupRounds.size > 0;
+      const hasGroupData = structuralGroupRounds.size > 0;
       const isSingleGroup =
         hasGroupData &&
-        ((groupRounds.size === 1 && !hasDecisiveEliminationData) ||
-          (participants.size > 0 && participants.size <= 5));
+        ((structuralGroupRounds.size === 1 && !hasEliminationStructure) ||
+          (structuralParticipants.size > 0 && structuralParticipants.size <= 5 && !hasEliminationStructure));
       if (!isSingleGroup && hasPendingMatches && !hasDecisiveEliminationData) {
         return {
           categoryId,

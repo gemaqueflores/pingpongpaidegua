@@ -372,7 +372,7 @@ test("classificacao retorna 33 quando atleta só jogou grupos e houve eliminator
   assert.equal(classification.reason, "nao_classificado_fase_de_grupos");
 });
 
-test("categoria com menos de 5 atletas e jogos de grupo usa classificacao de grupo unico", () => {
+test("categoria com grupos + eliminatoria deve classificar por eliminatoria mesmo com <=5 participantes efetivos", () => {
   const matches: CategoryAnalyticsMatch[] = [
     createMatch({
       phase: "GRUPOS",
@@ -398,8 +398,81 @@ test("categoria com menos de 5 atletas e jogos de grupo usa classificacao de gru
   ];
 
   const classification = computeCategoryClassificationSummaries(matches, { athleteId: 10 })[0];
-  assert.equal(classification.mode, "grupo_unico");
-  assert.ok(typeof classification.position === "number");
+  assert.equal(classification.mode, "eliminatoria");
+  assert.equal(classification.position, 33);
+  assert.equal(classification.reason, "nao_classificado_fase_de_grupos");
+});
+
+test("RHM com semifinal/final define prata como perdedor da final (nao pelo grupo unico)", () => {
+  const matches: CategoryAnalyticsMatch[] = [
+    createMatch({
+      phase: "GRUPOS",
+      round: "RHM - Grupo 01",
+      players: [{ athleteId: 100, name: "LUCAS SERRAO" }, { athleteId: 101, name: "JOSE SILVA" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+      sets: [
+        { p1: 11, p2: 0 },
+        { p1: 11, p2: 0 },
+        { p1: 11, p2: 0 },
+      ],
+    }),
+    createMatch({
+      phase: "GRUPOS",
+      round: "RHM - Grupo 01",
+      players: [{ athleteId: 102, name: "ARNALDO SOUTO" }, { athleteId: 101, name: "JOSE SILVA" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+      sets: [
+        { p1: 11, p2: 0 },
+        { p1: 11, p2: 0 },
+        { p1: 11, p2: 0 },
+      ],
+    }),
+    createMatch({
+      phase: "GRUPOS",
+      round: "RHM - Grupo 01",
+      players: [{ athleteId: 100, name: "LUCAS SERRAO" }, { athleteId: 102, name: "ARNALDO SOUTO" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 1 },
+    }),
+    createMatch({
+      phase: "GRUPOS",
+      round: "RHM - Grupo 02",
+      players: [{ athleteId: 103, name: "BRUNO GARCIA" }, { athleteId: 104, name: "NALDO SILVA" }],
+      winnerIndex: 1,
+      setsResult: { p1Sets: 0, p2Sets: 3 },
+    }),
+    createMatch({
+      phase: "ELIMINATORIA",
+      round: "RHM - Semi Final",
+      players: [{ athleteId: 100, name: "LUCAS SERRAO" }, { athleteId: 103, name: "BRUNO GARCIA" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 2 },
+    }),
+    createMatch({
+      phase: "ELIMINATORIA",
+      round: "RHM - Semi Final",
+      players: [{ athleteId: 102, name: "ARNALDO SOUTO" }, { athleteId: 104, name: "NALDO SILVA" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      phase: "ELIMINATORIA",
+      round: "RHM - Final",
+      players: [{ athleteId: 100, name: "LUCAS SERRAO" }, { athleteId: 102, name: "ARNALDO SOUTO" }],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 2 },
+    }),
+  ];
+
+  const champion = computeCategoryClassificationSummaries(matches, { athleteId: 100 })[0];
+  const vice = computeCategoryClassificationSummaries(matches, { athleteId: 102 })[0];
+  const semiLoser = computeCategoryClassificationSummaries(matches, { athleteId: 104 })[0];
+
+  assert.equal(champion.position, 1);
+  assert.equal(vice.position, 2);
+  assert.equal(semiLoser.position, 3);
 });
 
 test("empate simples entre 2 atletas em grupo unico resolve por confronto direto", () => {
