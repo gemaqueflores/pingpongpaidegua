@@ -24,7 +24,16 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
     1,
     Number(process.env.HEALTH_MONITOR_RECOVERY_MAX_EVENTS_PER_CYCLE ?? "3"),
   );
+  private readonly recoveryMaxAttemptsPerEvent = Math.max(
+    1,
+    Number(process.env.HEALTH_MONITOR_RECOVERY_MAX_ATTEMPTS_PER_EVENT ?? "6"),
+  );
+  private readonly recoveryAttemptWindowMs = Math.max(
+    this.recoveryCooldownMs,
+    Number(process.env.HEALTH_MONITOR_RECOVERY_ATTEMPT_WINDOW_MS ?? "21600000"),
+  );
   private readonly lastRecoveryByEventId = new Map<number, number>();
+  private readonly recoveryAttemptsByEventId = new Map<number, { count: number; startedAt: number }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -58,6 +67,7 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
     if (this.recoveryEnabled) {
       await this.recoverStaleLocks();
       await this.recoverDegradedScrapes();
+      await this.recoverStaleEventData();
     }
   }
 
@@ -236,18 +246,115 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
       if (Date.now() - lastRecoveryAt < this.recoveryCooldownMs) {
         continue;
       }
+      if (!this.canAttemptRecovery(eventId)) {
+        continue;
+      }
 
       const hasPending = await this.queueService.hasPendingScrapeJobForEvent(eventId);
       if (hasPending) {
         continue;
       }
-
-      await this.queueService.enqueueScrapeNow(eventId, 3);
+      const warningText = warnings.join("\n").toLowerCase();
+      const shouldPrioritizePostReprocess =
+        warningText.includes("conflito_de_atleta_pendente") ||
+        warningText.includes("auditoria_conflitos_pendentes");
+      if (shouldPrioritizePostReprocess) {
+        await this.queueService.enqueuePostScrapeReprocess(eventId);
+      } else {
+        await this.queueService.enqueueScrapeNow(eventId, 3);
+      }
       this.lastRecoveryByEventId.set(eventId, Date.now());
+      this.registerRecoveryAttempt(eventId);
       recovered += 1;
       this.logger.warn(
-        `Autorecuperacao acionada para evento ${eventId} (run #${run.id}, status=${run.status}) via stage 3.`,
+        `Autorecuperacao acionada para evento ${eventId} (run #${run.id}, status=${run.status}) via ${
+          shouldPrioritizePostReprocess ? "post-scrape-reprocess" : "stage 3"
+        }.`,
       );
+    }
+  }
+
+  private canAttemptRecovery(eventId: number): boolean {
+    const now = Date.now();
+    const current = this.recoveryAttemptsByEventId.get(eventId);
+    if (!current || now - current.startedAt > this.recoveryAttemptWindowMs) {
+      this.recoveryAttemptsByEventId.set(eventId, { count: 0, startedAt: now });
+      return true;
+    }
+    if (current.count >= this.recoveryMaxAttemptsPerEvent) {
+      this.logger.error(
+        `Autorecuperacao pausada para evento ${eventId}: limite de ${this.recoveryMaxAttemptsPerEvent} tentativa(s) em ${Math.round(
+          this.recoveryAttemptWindowMs / 60000,
+        )}min.`,
+      );
+      return false;
+    }
+    return true;
+  }
+
+  private registerRecoveryAttempt(eventId: number): void {
+    const now = Date.now();
+    const current = this.recoveryAttemptsByEventId.get(eventId);
+    if (!current || now - current.startedAt > this.recoveryAttemptWindowMs) {
+      this.recoveryAttemptsByEventId.set(eventId, { count: 1, startedAt: now });
+      return;
+    }
+    this.recoveryAttemptsByEventId.set(eventId, {
+      count: current.count + 1,
+      startedAt: current.startedAt,
+    });
+  }
+
+  private async recoverStaleEventData(): Promise<void> {
+    const now = new Date();
+    const events = await this.prismaRead.event.findMany({
+      where: {
+        concluido: false,
+      },
+      select: {
+        id: true,
+        lastScrapeAt: true,
+        inicioInscricoes: true,
+        fimInscricoes: true,
+        inicioRealizacao: true,
+        fimRealizacao: true,
+        dataInicio: true,
+        dataFim: true,
+      },
+    });
+
+    let enqueued = 0;
+    for (const event of events) {
+      if (enqueued >= this.recoveryMaxEventsPerCycle) {
+        break;
+      }
+      const policy = buildEventScrapePolicy(event, { now });
+      if (!policy.autoSchedule) {
+        continue;
+      }
+      const intervalMs = Math.max(30 * 60 * 1000, policy.recommendedIntervalMs ?? 30 * 60 * 1000);
+      const maxStalenessMs = intervalMs * 2;
+      const stale =
+        !event.lastScrapeAt || now.getTime() - event.lastScrapeAt.getTime() > maxStalenessMs;
+      if (!stale) {
+        continue;
+      }
+      const lastRecoveryAt = this.lastRecoveryByEventId.get(event.id) ?? 0;
+      if (Date.now() - lastRecoveryAt < this.recoveryCooldownMs) {
+        continue;
+      }
+      if (!this.canAttemptRecovery(event.id)) {
+        continue;
+      }
+      const hasPending = await this.queueService.hasPendingScrapeJobForEvent(event.id);
+      if (hasPending) {
+        continue;
+      }
+      await this.queueService.enqueueScrape(event.id, "auto-recovery:stale-data");
+      this.lastRecoveryByEventId.set(event.id, Date.now());
+      this.registerRecoveryAttempt(event.id);
+      enqueued += 1;
+      this.logger.warn(`Autorecuperacao por stale data acionada para evento ${event.id}.`);
     }
   }
 }

@@ -69,7 +69,7 @@ export const config = {
     process.env.POST_SCRAPE_CONFLICT_SCAN_MULTIPLIER ?? "4",
   ),
   scrapeStrictQualityGateEnabled:
-    process.env.SCRAPE_STRICT_QUALITY_GATE_ENABLED === "true",
+    process.env.SCRAPE_STRICT_QUALITY_GATE_ENABLED !== "false",
   scrapeStrictRequireZeroPendingConflicts:
     process.env.SCRAPE_STRICT_REQUIRE_ZERO_PENDING_CONFLICTS !== "false",
   scrapeStrictRequireZeroNoCandidateConflicts:
