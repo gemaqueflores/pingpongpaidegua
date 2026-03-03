@@ -28,6 +28,10 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
     1,
     Number(process.env.HEALTH_MONITOR_RECOVERY_MAX_ATTEMPTS_PER_EVENT ?? "6"),
   );
+  private readonly recoveryEscalateAfterConsecutiveDegraded = Math.max(
+    2,
+    Number(process.env.HEALTH_MONITOR_RECOVERY_ESCALATE_AFTER_CONSECUTIVE_DEGRADED ?? "2"),
+  );
   private readonly recoveryAttemptWindowMs = Math.max(
     this.recoveryCooldownMs,
     Number(process.env.HEALTH_MONITOR_RECOVERY_ATTEMPT_WINDOW_MS ?? "21600000"),
@@ -254,11 +258,41 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
       if (hasPending) {
         continue;
       }
+      const recentRuns = await this.prismaRead.scrapeRun.findMany({
+        where: { eventId },
+        orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+        select: {
+          status: true,
+          warnings: true,
+          extractionStats: true,
+        },
+        take: 3,
+      });
+      let consecutiveDegraded = 0;
+      for (const recentRun of recentRuns) {
+        const recentWarnings = this.extractWarningTexts(recentRun.warnings);
+        if (
+          this.shouldRecoverRun({
+            status: recentRun.status,
+            warnings: recentWarnings,
+            extractionStats: recentRun.extractionStats,
+          })
+        ) {
+          consecutiveDegraded += 1;
+          continue;
+        }
+        break;
+      }
+      const shouldEscalateToStage2 =
+        consecutiveDegraded >= this.recoveryEscalateAfterConsecutiveDegraded;
+
       const warningText = warnings.join("\n").toLowerCase();
       const shouldPrioritizePostReprocess =
         warningText.includes("conflito_de_atleta_pendente") ||
         warningText.includes("auditoria_conflitos_pendentes");
-      if (shouldPrioritizePostReprocess) {
+      if (shouldEscalateToStage2) {
+        await this.queueService.enqueueScrapeNow(eventId, 2);
+      } else if (shouldPrioritizePostReprocess) {
         await this.queueService.enqueuePostScrapeReprocess(eventId);
       } else {
         await this.queueService.enqueueScrapeNow(eventId, 3);
@@ -268,7 +302,11 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
       recovered += 1;
       this.logger.warn(
         `Autorecuperacao acionada para evento ${eventId} (run #${run.id}, status=${run.status}) via ${
-          shouldPrioritizePostReprocess ? "post-scrape-reprocess" : "stage 3"
+          shouldEscalateToStage2
+            ? `stage 2 (escalado apos ${consecutiveDegraded} run(s) degradados)`
+            : shouldPrioritizePostReprocess
+              ? "post-scrape-reprocess"
+              : "stage 3"
         }.`,
       );
     }
