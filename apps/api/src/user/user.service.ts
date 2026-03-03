@@ -15,6 +15,7 @@ import {
   normalizeAthleteName,
   normalizeText,
   normalizeRegistrationScope,
+  resolveEventScrapeIntervalOverridesFromEnv,
   type RegistrationScope,
 } from "@cbtm/shared";
 import { Prisma } from "@prisma/client";
@@ -54,6 +55,7 @@ const MAX_USER_LIST_PAGE_SIZE = Number(process.env.USER_LIST_MAX_PAGE_SIZE ?? "2
 const SCRAPE_CACHE_MARGIN_MS = Number(process.env.SCRAPE_CACHE_MARGIN_MS ?? "600000");
 const SCRAPE_CACHE_MIN_AGE_MS = Number(process.env.SCRAPE_CACHE_MIN_AGE_MS ?? "60000");
 const SCRAPE_CACHE_FALLBACK_AGE_MS = Number(process.env.SCRAPE_CACHE_FALLBACK_AGE_MS ?? "1800000");
+const SCRAPE_INTERVAL_BY_SITUATION_MS = resolveEventScrapeIntervalOverridesFromEnv(process.env);
 
 type PaginationWindow = {
   skip: number;
@@ -5395,6 +5397,8 @@ export class UserService {
 
     const policy = buildEventScrapePolicy({
       ...event,
+    }, {
+      intervalBySituationMs: SCRAPE_INTERVAL_BY_SITUATION_MS,
     });
     const intervalMs = policy.recommendedIntervalMs;
     const dynamicMaxAgeMs =

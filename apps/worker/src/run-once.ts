@@ -83,6 +83,7 @@ async function run(): Promise<void> {
 
   for (const event of events) {
     const policy = buildEventScrapePolicy(event, {
+      intervalBySituationMs: config.scrapeIntervalBySituationMs,
     });
     if (!policy.autoSchedule) {
       continue;

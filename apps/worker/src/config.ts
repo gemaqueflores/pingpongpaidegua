@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import path from "node:path";
+import { resolveEventScrapeIntervalOverridesFromEnv } from "@cbtm/shared";
 
 dotenv.config();
 
@@ -82,4 +83,5 @@ export const config = {
     process.env.STAGE3_PRUNE_STALE_MATCHES !== "false",
   autoScrapeMaxPendingJobs: Number(process.env.SCRAPER_AUTO_SCRAPE_MAX_PENDING_JOBS ?? "20"),
   autoScrapeMaxEnqueuedPerScan: Number(process.env.SCRAPER_AUTO_MAX_ENQUEUED_PER_SCAN ?? "3"),
+  scrapeIntervalBySituationMs: resolveEventScrapeIntervalOverridesFromEnv(process.env),
 };

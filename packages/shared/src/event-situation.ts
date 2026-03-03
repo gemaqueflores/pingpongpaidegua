@@ -41,6 +41,19 @@ export interface EventAutoScheduleDecision {
   waitMs: number;
 }
 
+export type EventScrapeIntervalOverrides = Partial<Record<EventSituation, number>>;
+
+export const DEFAULT_EVENT_SCRAPE_INTERVAL_MS: Readonly<Record<
+  "PRE_INSCRICOES" | "INSCRICOES_ABERTAS" | "POS_INSCRICOES_PRE_EVENTO" | "GRADES_PUBLICADAS_PRE_JOGO" | "EM_ANDAMENTO",
+  number
+>> = {
+  PRE_INSCRICOES: 5 * 60 * 60 * 1000,
+  INSCRICOES_ABERTAS: 6 * 60 * 60 * 1000,
+  POS_INSCRICOES_PRE_EVENTO: 3 * 60 * 60 * 1000,
+  GRADES_PUBLICADAS_PRE_JOGO: 45 * 60 * 1000,
+  EM_ANDAMENTO: 30 * 60 * 1000,
+};
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function isBusinessDay(date: Date): boolean {
@@ -109,6 +122,29 @@ function toDate(value: Date | string | null | undefined): Date | null {
 
   const parsed = value instanceof Date ? value : new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parsePositiveMs(raw: string | undefined): number | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+  return Math.trunc(parsed);
+}
+
+export function resolveEventScrapeIntervalOverridesFromEnv(
+  env: Record<string, string | undefined>,
+): EventScrapeIntervalOverrides {
+  return {
+    PRE_INSCRICOES: parsePositiveMs(env.SCRAPE_INTERVAL_PRE_INSCRICOES_MS),
+    INSCRICOES_ABERTAS: parsePositiveMs(env.SCRAPE_INTERVAL_INSCRICOES_ABERTAS_MS),
+    POS_INSCRICOES_PRE_EVENTO: parsePositiveMs(env.SCRAPE_INTERVAL_POS_INSCRICOES_PRE_EVENTO_MS),
+    GRADES_PUBLICADAS_PRE_JOGO: parsePositiveMs(env.SCRAPE_INTERVAL_GRADES_PUBLICADAS_PRE_JOGO_MS),
+    EM_ANDAMENTO: parsePositiveMs(env.SCRAPE_INTERVAL_EM_ANDAMENTO_MS),
+  };
 }
 
 export function resolveEventTimeline(input: EventSituationInput): EventTimelineResolved {
@@ -206,20 +242,16 @@ export function buildEventScrapePolicy(
   options: {
     now?: Date;
     isManualForce?: boolean;
-    intervalBySituationMs?: Partial<Record<EventSituation, number>>;
+    intervalBySituationMs?: EventScrapeIntervalOverrides;
   } = {},
 ): EventScrapePolicy {
   const now = options.now ?? new Date();
   const isManualForce = options.isManualForce ?? false;
   const timeline = resolveEventTimeline(input);
   const intervalBySituationMs = {
-    PRE_INSCRICOES: 5 * 60 * 60 * 1000,
-    INSCRICOES_ABERTAS: 6 * 60 * 60 * 1000,
-    POS_INSCRICOES_PRE_EVENTO: 3 * 60 * 60 * 1000,
-    GRADES_PUBLICADAS_PRE_JOGO: 45 * 60 * 1000,
-    EM_ANDAMENTO: 30 * 60 * 1000,
+    ...DEFAULT_EVENT_SCRAPE_INTERVAL_MS,
     ...options.intervalBySituationMs,
-  } satisfies Partial<Record<EventSituation, number>>;
+  } satisfies EventScrapeIntervalOverrides;
   const situation = computeEventSituation(input, now);
 
   if (isManualForce) {

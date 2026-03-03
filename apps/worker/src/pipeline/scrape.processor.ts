@@ -286,7 +286,8 @@ export class ScrapeProcessor {
         ...eventContentFlags,
       },
       {
-      isManualForce: forceScrape,
+        isManualForce: forceScrape,
+        intervalBySituationMs: config.scrapeIntervalBySituationMs,
       },
     );
 

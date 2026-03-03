@@ -159,6 +159,7 @@ async function bootstrap(): Promise<void> {
             continue;
           }
           const policy = buildEventScrapePolicy(event, {
+            intervalBySituationMs: config.scrapeIntervalBySituationMs,
           });
           if (!policy.autoSchedule) {
             continue;
@@ -322,6 +323,7 @@ async function bootstrap(): Promise<void> {
   log("info", "Worker iniciado", {
     mode: config.scraperMode,
     refreshMs: config.refreshMs,
+    scrapeIntervalBySituationMs: config.scrapeIntervalBySituationMs,
     rawCaptureCleanupEnabled: config.rawCaptureCleanupEnabled,
     rawCaptureCleanupEveryMs: config.rawCaptureCleanupEveryMs,
   });

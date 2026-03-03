@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { Prisma, ScrapeStatus } from "@prisma/client";
-import { buildEventScrapePolicy } from "@cbtm/shared";
+import { buildEventScrapePolicy, resolveEventScrapeIntervalOverridesFromEnv } from "@cbtm/shared";
 import { PrismaReadService, PrismaService } from "./prisma.service";
 import { QueueService } from "./queue.service";
 
@@ -38,6 +38,7 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
   );
   private readonly lastRecoveryByEventId = new Map<number, number>();
   private readonly recoveryAttemptsByEventId = new Map<number, { count: number; startedAt: number }>();
+  private readonly scrapeIntervalBySituationMs = resolveEventScrapeIntervalOverridesFromEnv(process.env);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -236,7 +237,9 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
       if (event.concluido) {
         continue;
       }
-      const policy = buildEventScrapePolicy(event, {});
+      const policy = buildEventScrapePolicy(event, {
+        intervalBySituationMs: this.scrapeIntervalBySituationMs,
+      });
       if (!policy.autoSchedule) {
         continue;
       }
@@ -366,7 +369,10 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
       if (enqueued >= this.recoveryMaxEventsPerCycle) {
         break;
       }
-      const policy = buildEventScrapePolicy(event, { now });
+      const policy = buildEventScrapePolicy(event, {
+        now,
+        intervalBySituationMs: this.scrapeIntervalBySituationMs,
+      });
       if (!policy.autoSchedule) {
         continue;
       }
