@@ -83,5 +83,6 @@ export const config = {
     process.env.STAGE3_PRUNE_STALE_MATCHES !== "false",
   autoScrapeMaxPendingJobs: Number(process.env.SCRAPER_AUTO_SCRAPE_MAX_PENDING_JOBS ?? "20"),
   autoScrapeMaxEnqueuedPerScan: Number(process.env.SCRAPER_AUTO_MAX_ENQUEUED_PER_SCAN ?? "3"),
+  scrapeRunRetentionLimit: Number(process.env.SCRAPE_RUN_RETENTION_LIMIT ?? "5"),
   scrapeIntervalBySituationMs: resolveEventScrapeIntervalOverridesFromEnv(process.env),
 };

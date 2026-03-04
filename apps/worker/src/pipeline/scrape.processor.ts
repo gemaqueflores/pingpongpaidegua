@@ -212,7 +212,6 @@ export class ScrapeProcessor {
   private readonly upsertService = new UpsertService();
   private static readonly MANUAL_FORCE_LOCK_RETRY_ATTEMPTS = 20;
   private static readonly MANUAL_FORCE_LOCK_RETRY_DELAY_MS = 3000;
-  private static readonly SCRAPE_RUN_RETENTION_LIMIT = 5;
 
   private async withDbRetry<T>(operation: () => Promise<T>, step: string): Promise<T> {
     let lastError: unknown;
@@ -396,7 +395,7 @@ export class ScrapeProcessor {
         );
 
         await this.withDbRetry(
-          () => this.pruneOldScrapeRuns(eventId, ScrapeProcessor.SCRAPE_RUN_RETENTION_LIMIT),
+          () => this.pruneOldScrapeRuns(eventId, config.scrapeRunRetentionLimit),
           "scrapeRun.prune:stage1",
         );
 
@@ -428,7 +427,7 @@ export class ScrapeProcessor {
           );
 
           await this.withDbRetry(
-            () => this.pruneOldScrapeRuns(eventId, ScrapeProcessor.SCRAPE_RUN_RETENTION_LIMIT),
+            () => this.pruneOldScrapeRuns(eventId, config.scrapeRunRetentionLimit),
             "scrapeRun.prune:stage1:error",
           );
         } catch (updateError) {
@@ -588,7 +587,7 @@ export class ScrapeProcessor {
         );
 
         await this.withDbRetry(
-          () => this.pruneOldScrapeRuns(eventId, ScrapeProcessor.SCRAPE_RUN_RETENTION_LIMIT),
+          () => this.pruneOldScrapeRuns(eventId, config.scrapeRunRetentionLimit),
           "scrapeRun.prune:idempotent",
         );
         return;
@@ -844,7 +843,7 @@ export class ScrapeProcessor {
       );
 
       await this.withDbRetry(
-        () => this.pruneOldScrapeRuns(eventId, ScrapeProcessor.SCRAPE_RUN_RETENTION_LIMIT),
+        () => this.pruneOldScrapeRuns(eventId, config.scrapeRunRetentionLimit),
         "scrapeRun.prune:success",
       );
 
@@ -879,7 +878,7 @@ export class ScrapeProcessor {
         );
 
         await this.withDbRetry(
-          () => this.pruneOldScrapeRuns(eventId, ScrapeProcessor.SCRAPE_RUN_RETENTION_LIMIT),
+          () => this.pruneOldScrapeRuns(eventId, config.scrapeRunRetentionLimit),
           "scrapeRun.prune:error",
         );
       } catch (updateError) {
@@ -1746,8 +1745,8 @@ export class ScrapeProcessor {
       }
       return Math.max(min, Math.min(max, Math.floor(parsed)));
     };
-    const highLimit = parseLimit(process.env.SCRAPE_PERSISTED_WARNINGS_HIGH_MAX, 30, 5, 200);
-    const mediumLimit = parseLimit(process.env.SCRAPE_PERSISTED_WARNINGS_MEDIUM_MAX, 40, 10, 300);
+    const highLimit = parseLimit(process.env.SCRAPE_PERSISTED_WARNINGS_HIGH_MAX, 15, 5, 120);
+    const mediumLimit = parseLimit(process.env.SCRAPE_PERSISTED_WARNINGS_MEDIUM_MAX, 20, 5, 180);
     const highSorted = [...persistedHigh.values()].sort((a, b) =>
       a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
     );
@@ -1813,10 +1812,10 @@ export class ScrapeProcessor {
       );
     }
 
-    const parsedMaxPersisted = Number(process.env.SCRAPE_PERSISTED_WARNINGS_MAX ?? "120");
+    const parsedMaxPersisted = Number(process.env.SCRAPE_PERSISTED_WARNINGS_MAX ?? "60");
     const maxPersisted = Number.isFinite(parsedMaxPersisted)
-      ? Math.max(20, Math.floor(parsedMaxPersisted))
-      : 120;
+      ? Math.max(10, Math.floor(parsedMaxPersisted))
+      : 60;
     const sorted = [...persisted.values()].sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
     if (sorted.length <= maxPersisted) {
       return sorted;
@@ -2453,7 +2452,7 @@ export class ScrapeProcessor {
       );
 
       await this.withDbRetry(
-        () => this.pruneOldScrapeRuns(eventId, ScrapeProcessor.SCRAPE_RUN_RETENTION_LIMIT),
+        () => this.pruneOldScrapeRuns(eventId, config.scrapeRunRetentionLimit),
         "scrapeRun.prune:post-scrape-reprocess",
       );
 
