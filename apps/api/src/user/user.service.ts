@@ -2293,11 +2293,6 @@ export class UserService {
   }
 
   async getClubEfficiencyCareer(clubId: number) {
-    const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
-    if (!eligibleClubIds.has(clubId)) {
-      throw new NotFoundException("Clube nao elegivel para eficiencia de carreira");
-    }
-
     const now = Date.now();
     const cacheHit = this.clubEfficiencyCache.get(clubId);
     if (cacheHit && cacheHit.expiresAt > now) {
@@ -3731,15 +3726,10 @@ export class UserService {
     if (!normalizedKey) {
       throw new NotFoundException("Atleta nao encontrado");
     }
-    const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
-    if (eligibleClubIds.size === 0) {
-      throw new NotFoundException("Atleta nao encontrado");
-    }
 
     const athletesByKey = await this.prisma.athlete.findMany({
       where: {
         createdFromWarning: false,
-        clubId: { in: [...eligibleClubIds] },
         OR: [
           { nameNormalized: normalizedKey },
           { nameNormalized: legacyNormalizedKey },
@@ -3764,7 +3754,6 @@ export class UserService {
         : await this.prisma.athlete.findMany({
             where: {
               createdFromWarning: false,
-              clubId: { in: [...eligibleClubIds] },
               OR: [
                 {
                   nameNormalized: {
