@@ -999,9 +999,15 @@ export class ScrapeProcessor {
 
   private async pruneOldScrapeRuns(eventId: number, keepLatest: number): Promise<void> {
     const keep = Math.max(1, keepLatest);
+    const retentionDays = Number.isFinite(config.scrapeRunRetentionDays)
+      ? Math.max(0, Math.floor(config.scrapeRunRetentionDays))
+      : 45;
+    const retentionCutoff =
+      retentionDays > 0 ? new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000) : null;
+
     const runs = await prisma.scrapeRun.findMany({
       where: { eventId },
-      select: { id: true },
+      select: { id: true, startedAt: true },
       orderBy: [{ startedAt: "desc" }, { id: "desc" }],
     });
 
@@ -1009,7 +1015,10 @@ export class ScrapeProcessor {
       return;
     }
 
-    const idsToDelete = runs.slice(keep).map((run) => run.id);
+    const candidates = runs.slice(keep);
+    const idsToDelete = candidates
+      .filter((run) => (retentionCutoff ? run.startedAt < retentionCutoff : true))
+      .map((run) => run.id);
     if (idsToDelete.length === 0) {
       return;
     }
@@ -1036,7 +1045,9 @@ export class ScrapeProcessor {
     log("info", "Retencao de scrape runs aplicada", {
       eventId,
       kept: keep,
+      retentionDays,
       deleted: idsToDelete.length,
+      candidates: candidates.length,
     });
   }
 

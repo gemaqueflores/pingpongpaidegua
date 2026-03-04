@@ -84,5 +84,6 @@ export const config = {
   autoScrapeMaxPendingJobs: Number(process.env.SCRAPER_AUTO_SCRAPE_MAX_PENDING_JOBS ?? "20"),
   autoScrapeMaxEnqueuedPerScan: Number(process.env.SCRAPER_AUTO_MAX_ENQUEUED_PER_SCAN ?? "3"),
   scrapeRunRetentionLimit: Number(process.env.SCRAPE_RUN_RETENTION_LIMIT ?? "5"),
+  scrapeRunRetentionDays: Number(process.env.SCRAPE_RUN_RETENTION_DAYS ?? "45"),
   scrapeIntervalBySituationMs: resolveEventScrapeIntervalOverridesFromEnv(process.env),
 };
