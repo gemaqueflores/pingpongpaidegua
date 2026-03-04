@@ -41,6 +41,7 @@ interface DatasetScopeStats {
   enabled: boolean;
   reason: string;
   eligibleClubsCount: number;
+  eligibleCategoriesCount: number;
   registrationsBefore: number;
   registrationsAfter: number;
   matchesBefore: number;
@@ -159,6 +160,23 @@ interface ObservedRegistrationPair {
 
 function inc(target: Record<string, number>, key: string): void {
   target[key] = (target[key] ?? 0) + 1;
+}
+
+function buildParsedCategoryKey(input: {
+  categoryId: string | null | undefined;
+  categoryNormalizedName: string | null | undefined;
+  categoryName: string | null | undefined;
+}): string | null {
+  const categoryId = compactWhitespace(input.categoryId ?? "");
+  if (categoryId) {
+    return `id:${categoryId}`;
+  }
+  const normalized =
+    normalizeText(input.categoryNormalizedName) || normalizeText(input.categoryName) || null;
+  if (!normalized) {
+    return null;
+  }
+  return `name:${normalized}`;
 }
 
 function conflictCacheKey(context: string, shortNameNormalized: string): string {
@@ -846,6 +864,7 @@ export class UpsertService {
       enabled,
       reason: enabled ? "evento_copa_ou_nacional" : "nao_aplicavel",
       eligibleClubsCount: 0,
+      eligibleCategoriesCount: 0,
       registrationsBefore: input.dataset.registrations.length,
       registrationsAfter: input.dataset.registrations.length,
       matchesBefore: input.dataset.matches.length,
@@ -892,16 +911,37 @@ export class UpsertService {
       };
     }
 
-    const scopedRegistrations = input.dataset.registrations.filter((registration) =>
-      eligibleClubNames.has(normalizeText(registration.clubNormalizedName || registration.clubName)),
-    );
     const eligibleAthleteNames = new Set(
-      scopedRegistrations
+      input.dataset.registrations
+        .filter((registration) =>
+          eligibleClubNames.has(normalizeText(registration.clubNormalizedName || registration.clubName)),
+        )
         .map((registration) => normalizeText(registration.athleteNormalizedName || registration.athleteName))
         .filter(Boolean),
     );
 
-    const scopedMatches = input.dataset.matches.filter((match) => {
+    const eligibleCategoryKeys = new Set<string>();
+    for (const registration of input.dataset.registrations) {
+      const athleteName = normalizeText(registration.athleteNormalizedName || registration.athleteName);
+      const clubName = normalizeText(registration.clubNormalizedName || registration.clubName);
+      const isEligible =
+        (athleteName && eligibleAthleteNames.has(athleteName)) ||
+        (clubName && eligibleClubNames.has(clubName));
+      if (!isEligible) {
+        continue;
+      }
+      const key = buildParsedCategoryKey({
+        categoryId: registration.categoryId ?? null,
+        categoryNormalizedName: registration.categoryNormalizedName ?? null,
+        categoryName: registration.categoryName ?? null,
+      });
+      if (key) {
+        eligibleCategoryKeys.add(key);
+      }
+    }
+
+    // Fallback: se o payload de inscricoes vier incompleto, usa confrontos para marcar categorias elegiveis.
+    for (const match of input.dataset.matches) {
       const athleteAName = normalizeText(match.athleteANormalizedName || match.athleteAName);
       const athleteBName = normalizeText(match.athleteBNormalizedName || match.athleteBName);
       const athleteClubA = normalizeText(match.athleteAClubNormalizedName ?? "");
@@ -910,40 +950,62 @@ export class UpsertService {
       const byClub =
         (athleteClubA && eligibleClubNames.has(athleteClubA)) ||
         (athleteClubB && eligibleClubNames.has(athleteClubB));
-      return Boolean(byAthlete || byClub);
+      if (!Boolean(byAthlete || byClub)) {
+        continue;
+      }
+      const key = buildParsedCategoryKey({
+        categoryId: match.categoryId ?? null,
+        categoryNormalizedName: match.categoryNormalizedName ?? null,
+        categoryName: match.categoryName ?? null,
+      });
+      if (key) {
+        eligibleCategoryKeys.add(key);
+      }
+    }
+
+    if (eligibleCategoryKeys.size === 0) {
+      input.warnings.push(
+        "ESCOPO_PARAOPEBA: nenhuma categoria elegivel identificada no payload; filtro ignorado para evitar perda de integridade.",
+      );
+      return {
+        dataset: input.dataset,
+        stats: {
+          ...baseStats,
+          reason: "sem_categorias_elegiveis",
+          eligibleClubsCount: eligibleClubNames.size,
+        },
+      };
+    }
+
+    const scopedRegistrations = input.dataset.registrations.filter((registration) => {
+      const key = buildParsedCategoryKey({
+        categoryId: registration.categoryId ?? null,
+        categoryNormalizedName: registration.categoryNormalizedName ?? null,
+        categoryName: registration.categoryName ?? null,
+      });
+      return Boolean(key && eligibleCategoryKeys.has(key));
     });
 
-    const scopedCategoryIds = new Set<string>();
-    const scopedCategoryNames = new Set<string>();
-    for (const registration of scopedRegistrations) {
-      if (registration.categoryId) {
-        scopedCategoryIds.add(String(registration.categoryId));
-      }
-      const key = normalizeText(registration.categoryNormalizedName || registration.categoryName);
-      if (key) {
-        scopedCategoryNames.add(key);
-      }
-    }
-    for (const match of scopedMatches) {
-      if (match.categoryId) {
-        scopedCategoryIds.add(String(match.categoryId));
-      }
-      const key = normalizeText(match.categoryNormalizedName || match.categoryName);
-      if (key) {
-        scopedCategoryNames.add(key);
-      }
-    }
+    const scopedMatches = input.dataset.matches.filter((match) => {
+      const key = buildParsedCategoryKey({
+        categoryId: match.categoryId ?? null,
+        categoryNormalizedName: match.categoryNormalizedName ?? null,
+        categoryName: match.categoryName ?? null,
+      });
+      return Boolean(key && eligibleCategoryKeys.has(key));
+    });
 
     const scopedCategories = input.dataset.categories.filter((category) => {
-      if (category.categoryId && scopedCategoryIds.has(String(category.categoryId))) {
-        return true;
-      }
-      const key = normalizeText(category.categoryNormalizedName || category.categoryName);
-      return Boolean(key && scopedCategoryNames.has(key));
+      const key = buildParsedCategoryKey({
+        categoryId: category.categoryId ?? null,
+        categoryNormalizedName: category.categoryNormalizedName ?? null,
+        categoryName: category.categoryName ?? null,
+      });
+      return Boolean(key && eligibleCategoryKeys.has(key));
     });
 
     input.warnings.push(
-      `ESCOPO_PARAOPEBA: filtro aplicado para ${input.eventLevel ?? "NIVEL_DESCONHECIDO"}; clubes elegiveis=${eligibleClubNames.size}; registros ${input.dataset.registrations.length}->${scopedRegistrations.length}; jogos ${input.dataset.matches.length}->${scopedMatches.length}; categorias ${input.dataset.categories.length}->${scopedCategories.length}.`,
+      `ESCOPO_PARAOPEBA: filtro por categoria elegivel aplicado para ${input.eventLevel ?? "NIVEL_DESCONHECIDO"}; clubes elegiveis=${eligibleClubNames.size}; categorias elegiveis=${eligibleCategoryKeys.size}; registros ${input.dataset.registrations.length}->${scopedRegistrations.length}; jogos ${input.dataset.matches.length}->${scopedMatches.length}; categorias ${input.dataset.categories.length}->${scopedCategories.length}.`,
     );
 
     return {
@@ -957,6 +1019,7 @@ export class UpsertService {
         ...baseStats,
         reason: "filtro_aplicado",
         eligibleClubsCount: eligibleClubNames.size,
+        eligibleCategoriesCount: eligibleCategoryKeys.size,
         registrationsAfter: scopedRegistrations.length,
         matchesAfter: scopedMatches.length,
         categoriesAfter: scopedCategories.length,
