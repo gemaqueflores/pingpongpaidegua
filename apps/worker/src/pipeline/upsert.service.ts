@@ -1004,6 +1004,41 @@ export class UpsertService {
       return Boolean(key && eligibleCategoryKeys.has(key));
     });
 
+    // Guardrail de integridade: se o recorte zerar confrontos publicados, preserva o dataset
+    // original para evitar perda total de resultados em payloads parciais/incompletos.
+    if (input.dataset.matches.length > 0 && scopedMatches.length === 0) {
+      input.warnings.push(
+        "ESCOPO_PARAOPEBA: filtro por categoria elegivel resultou em 0 confrontos; filtro ignorado para preservar integridade.",
+      );
+      return {
+        dataset: input.dataset,
+        stats: {
+          ...baseStats,
+          reason: "fallback_integridade_zero_confrontos",
+          eligibleClubsCount: eligibleClubNames.size,
+          eligibleCategoriesCount: eligibleCategoryKeys.size,
+        },
+      };
+    }
+
+    // Guardrail adicional para queda extrema em confrontos (payload de inscricoes incompleto).
+    const matchRetentionRatio =
+      input.dataset.matches.length > 0 ? scopedMatches.length / input.dataset.matches.length : 1;
+    if (input.dataset.matches.length >= 100 && matchRetentionRatio < 0.05) {
+      input.warnings.push(
+        `ESCOPO_PARAOPEBA: recorte extremo de confrontos (${scopedMatches.length}/${input.dataset.matches.length}); filtro ignorado para preservar integridade.`,
+      );
+      return {
+        dataset: input.dataset,
+        stats: {
+          ...baseStats,
+          reason: "fallback_integridade_queda_extrema",
+          eligibleClubsCount: eligibleClubNames.size,
+          eligibleCategoriesCount: eligibleCategoryKeys.size,
+        },
+      };
+    }
+
     input.warnings.push(
       `ESCOPO_PARAOPEBA: filtro por categoria elegivel aplicado para ${input.eventLevel ?? "NIVEL_DESCONHECIDO"}; clubes elegiveis=${eligibleClubNames.size}; categorias elegiveis=${eligibleCategoryKeys.size}; registros ${input.dataset.registrations.length}->${scopedRegistrations.length}; jogos ${input.dataset.matches.length}->${scopedMatches.length}; categorias ${input.dataset.categories.length}->${scopedCategories.length}.`,
     );
