@@ -215,6 +215,13 @@ type EventCategoryMedalistRow = {
   };
 };
 
+type CategoryAthleteRef = {
+  athleteId: number;
+  athleteName: string;
+  clubId: number | null;
+  clubName: string | null;
+};
+
 type OfficialCategoryAuditRow = {
   categoryId: string;
   categoryName: string;
@@ -325,6 +332,19 @@ function isEfficiencyEligibleCategoryName(categoryName: string | null | undefine
   void categoryName;
   // Regra vigente: categorias de rating (R*) tambem participam dos quadros/listas de eficiencia.
   return true;
+}
+
+function pushUniqueCategoryAthlete(
+  bucket: Map<number, CategoryAthleteRef>,
+  athlete: CategoryAthleteRef,
+): void {
+  if (!Number.isFinite(athlete.athleteId) || athlete.athleteId <= 0) {
+    return;
+  }
+  if (bucket.has(athlete.athleteId)) {
+    return;
+  }
+  bucket.set(athlete.athleteId, athlete);
 }
 
 function splitPairNameParts(name: string | null | undefined): string[] {
@@ -1643,7 +1663,7 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
-    const cacheKey = this.buildReadModelKey("event-efficiency-v1", scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey("event-efficiency-v2", scope.canonicalEventId);
     const readCache = this.getReadModelCacheReader();
     const writeCache = this.getReadModelCacheWriter();
     const cached = await this.loadReadModelCachePayload<{
@@ -1699,9 +1719,8 @@ export class UserService {
   }> {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
-    const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
-    const cacheKey = this.buildReadModelKey("event-medalists-v1", scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey("event-medalists-v2", scope.canonicalEventId);
     const readCache = this.getReadModelCacheReader();
     const writeCache = this.getReadModelCacheWriter();
     const cached = await this.loadReadModelCachePayload<{
@@ -1758,7 +1777,6 @@ export class UserService {
           athlete: {
             eventId: { in: scope.allEventIds },
             createdFromWarning: false,
-            ...(eligibleClubIds.size > 0 ? { clubId: { in: [...eligibleClubIds] } } : { clubId: -1 }),
           },
         },
         select: {
@@ -1843,15 +1861,13 @@ export class UserService {
       }
     }
 
-    const athletesByCategory = new Map<
-      number,
-      Map<number, { athleteId: number; athleteName: string; clubName: string | null }>
-    >();
+    const athletesByCategory = new Map<number, Map<number, CategoryAthleteRef>>();
     for (const row of athleteCategories) {
-      const bucket = athletesByCategory.get(row.categoryId) ?? new Map<number, { athleteId: number; athleteName: string; clubName: string | null }>();
-      bucket.set(row.athlete.id, {
+      const bucket = athletesByCategory.get(row.categoryId) ?? new Map<number, CategoryAthleteRef>();
+      pushUniqueCategoryAthlete(bucket, {
         athleteId: row.athlete.id,
         athleteName: row.athlete.nameDisplay,
+        clubId: null,
         clubName: row.athlete.club?.name ?? null,
       });
       athletesByCategory.set(row.categoryId, bucket);
@@ -1866,6 +1882,20 @@ export class UserService {
       const bucket = fullCategoryMatchesMap.get(match.categoryId) ?? [];
       bucket.push(analytics);
       fullCategoryMatchesMap.set(match.categoryId, bucket);
+
+      const athletesBucket = athletesByCategory.get(match.categoryId) ?? new Map<number, CategoryAthleteRef>();
+      for (const participant of match.participants) {
+        if (participant.athlete.createdFromWarning) {
+          continue;
+        }
+        pushUniqueCategoryAthlete(athletesBucket, {
+          athleteId: participant.athlete.id,
+          athleteName: participant.athlete.nameDisplay,
+          clubId: participant.athlete.club?.id ?? null,
+          clubName: participant.athlete.club?.name ?? null,
+        });
+      }
+      athletesByCategory.set(match.categoryId, athletesBucket);
     }
 
     const medalOrder: Record<"ouro" | "prata" | "bronze", number> = {
@@ -2169,19 +2199,15 @@ export class UserService {
       }),
     ]);
 
-    const categoryAthletesMap = new Map<
-      number,
-      Map<number, { athleteId: number; athleteName: string; clubId: number }>
-    >();
+    const categoryAthletesMap = new Map<number, Map<number, CategoryAthleteRef>>();
 
     for (const item of athleteCategories) {
-      const bucket =
-        categoryAthletesMap.get(item.categoryId) ??
-        new Map<number, { athleteId: number; athleteName: string; clubId: number }>();
-      bucket.set(item.athlete.id, {
+      const bucket = categoryAthletesMap.get(item.categoryId) ?? new Map<number, CategoryAthleteRef>();
+      pushUniqueCategoryAthlete(bucket, {
         athleteId: item.athlete.id,
         athleteName: item.athlete.nameDisplay,
         clubId: item.athlete.clubId,
+        clubName: null,
       });
       categoryAthletesMap.set(item.categoryId, bucket);
     }
@@ -2195,6 +2221,23 @@ export class UserService {
       const bucket = fullCategoryMatchesMap.get(match.categoryId) ?? [];
       bucket.push(analytics);
       fullCategoryMatchesMap.set(match.categoryId, bucket);
+
+      const athletesBucket = categoryAthletesMap.get(match.categoryId) ?? new Map<number, CategoryAthleteRef>();
+      for (const participant of match.participants) {
+        if (participant.athlete.createdFromWarning) {
+          continue;
+        }
+        if (!eligibleClubIds.has(participant.athlete.clubId)) {
+          continue;
+        }
+        pushUniqueCategoryAthlete(athletesBucket, {
+          athleteId: participant.athlete.id,
+          athleteName: participant.athlete.nameDisplay,
+          clubId: participant.athlete.clubId,
+          clubName: participant.athlete.club?.name ?? null,
+        });
+      }
+      categoryAthletesMap.set(match.categoryId, athletesBucket);
     }
 
     for (const categoryId of categoryIds) {
@@ -2254,7 +2297,11 @@ export class UserService {
           continue;
         }
 
-        const clubId = athleteClubByAthleteId.get(athlete.athleteId) ?? athlete.clubId;
+        const fallbackClubId = typeof athlete.clubId === "number" ? athlete.clubId : null;
+        const clubId = athleteClubByAthleteId.get(athlete.athleteId) ?? fallbackClubId;
+        if (!clubId) {
+          continue;
+        }
         const row = rowsByClubId.get(clubId);
         if (!row) {
           continue;
@@ -2448,15 +2495,14 @@ export class UserService {
         })
       : [];
 
-    const clubAthletesInCategory = new Map<
-      number,
-      Array<{ athleteId: number; athleteName: string }>
-    >();
+    const clubAthletesInCategory = new Map<number, Map<number, CategoryAthleteRef>>();
     for (const row of athleteCategories) {
-      const athletes = clubAthletesInCategory.get(row.categoryId) ?? [];
-      athletes.push({
+      const athletes = clubAthletesInCategory.get(row.categoryId) ?? new Map<number, CategoryAthleteRef>();
+      pushUniqueCategoryAthlete(athletes, {
         athleteId: row.athlete.id,
         athleteName: row.athlete.nameDisplay,
+        clubId: clubId,
+        clubName: null,
       });
       clubAthletesInCategory.set(row.categoryId, athletes);
     }
@@ -2472,6 +2518,20 @@ export class UserService {
       const bucket = fullCategoryMatchesMap.get(match.categoryId) ?? [];
       bucket.push(analytics);
       fullCategoryMatchesMap.set(match.categoryId, bucket);
+
+      const athletes = clubAthletesInCategory.get(match.categoryId) ?? new Map<number, CategoryAthleteRef>();
+      for (const participant of match.participants) {
+        if (participant.athlete.createdFromWarning || participant.athlete.clubId !== clubId) {
+          continue;
+        }
+        pushUniqueCategoryAthlete(athletes, {
+          athleteId: participant.athlete.id,
+          athleteName: participant.athlete.nameDisplay,
+          clubId: participant.athlete.clubId,
+          clubName: participant.athlete.club?.name ?? null,
+        });
+      }
+      clubAthletesInCategory.set(match.categoryId, athletes);
     }
 
     const athleteNameByGroupKey = new Map<string, string>();
@@ -2522,7 +2582,7 @@ export class UserService {
     const medalistDedup = new Set<string>();
 
     for (const category of eligibleCategories) {
-      const categoryAthletes = clubAthletesInCategory.get(category.id) ?? [];
+      const categoryAthletes = [...(clubAthletesInCategory.get(category.id)?.values() ?? [])];
       if (categoryAthletes.length === 0) continue;
       const categoryMatches = fullCategoryMatchesMap.get(category.id) ?? [];
       const woDisqualifiedAthleteIds = collectWalkoverLoserAthleteIds(categoryMatches);
