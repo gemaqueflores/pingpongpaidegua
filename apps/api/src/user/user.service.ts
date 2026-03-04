@@ -56,6 +56,10 @@ const SCRAPE_CACHE_MARGIN_MS = Number(process.env.SCRAPE_CACHE_MARGIN_MS ?? "600
 const SCRAPE_CACHE_MIN_AGE_MS = Number(process.env.SCRAPE_CACHE_MIN_AGE_MS ?? "60000");
 const SCRAPE_CACHE_FALLBACK_AGE_MS = Number(process.env.SCRAPE_CACHE_FALLBACK_AGE_MS ?? "1800000");
 const SCRAPE_INTERVAL_BY_SITUATION_MS = resolveEventScrapeIntervalOverridesFromEnv(process.env);
+const STATE_CIRCUIT_EVENT_LEVELS = ["ESTADUAL", "OPEN"] as const;
+const STATE_CIRCUIT_ELIGIBILITY_CACHE_TTL_MS = Number(
+  process.env.STATE_CIRCUIT_ELIGIBILITY_CACHE_TTL_MS ?? "300000",
+);
 
 type PaginationWindow = {
   skip: number;
@@ -494,6 +498,12 @@ export class UserService {
       data: unknown;
     }
   >();
+  private stateCircuitEligibilityCache:
+    | {
+        expiresAt: number;
+        clubIds: Set<number>;
+      }
+    | null = null;
   private eventMergeCache:
     | {
         expiresAt: number;
@@ -1439,11 +1449,16 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     await this.ensureEvent(scope.canonicalEventId);
     const pagination = resolvePaginationWindow(pageRaw, pageSizeRaw);
+    const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
+    if (eligibleClubIds.size === 0) {
+      return [];
+    }
 
     const athletes = await this.prisma.athlete.findMany({
       where: {
         eventId: { in: scope.allEventIds },
         createdFromWarning: false,
+        clubId: { in: [...eligibleClubIds] },
         AND: [
           {
             nameDisplay: {
@@ -1515,12 +1530,17 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     await this.ensureEvent(scope.canonicalEventId);
     const pagination = resolvePaginationWindow(pageRaw, pageSizeRaw);
+    const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
+    if (eligibleClubIds.size === 0) {
+      return [];
+    }
     if (categoryId) {
       await this.ensureCategoryOfEvent(scope.allEventIds, categoryId);
     }
 
     const clubs = await this.prisma.club.findMany({
       where: {
+        id: { in: [...eligibleClubIds] },
         name: {
           contains: search || undefined,
           mode: "insensitive",
@@ -1679,6 +1699,7 @@ export class UserService {
   }> {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
+    const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
     const cacheKey = this.buildReadModelKey("event-medalists-v1", scope.canonicalEventId);
     const readCache = this.getReadModelCacheReader();
@@ -1737,6 +1758,7 @@ export class UserService {
           athlete: {
             eventId: { in: scope.allEventIds },
             createdFromWarning: false,
+            ...(eligibleClubIds.size > 0 ? { clubId: { in: [...eligibleClubIds] } } : { clubId: -1 }),
           },
         },
         select: {
@@ -2016,10 +2038,17 @@ export class UserService {
   }
 
   private async computeEfficiencyRanking(input: { eventIds?: number[] }) {
+    const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
+    if (eligibleClubIds.size === 0) {
+      return { weights: await this.getEfficiencyWeights(), ranking: [] as ClubEfficiencyRow[] };
+    }
+
     const hasScopedEvents = Array.isArray(input.eventIds) && input.eventIds.length > 0;
     const eventFilter = hasScopedEvents ? { eventId: { in: input.eventIds } } : {};
+    const eligibleClubFilter = { clubId: { in: [...eligibleClubIds] } };
     const athleteFilter = {
       ...eventFilter,
+      ...eligibleClubFilter,
       createdFromWarning: false,
     };
     const categoryFilter =
@@ -2036,6 +2065,7 @@ export class UserService {
       this.getEfficiencyWeights(),
       this.prisma.club.findMany({
         where: {
+          id: { in: [...eligibleClubIds] },
           athletes: {
             some: {
               ...athleteFilter,
@@ -2263,6 +2293,11 @@ export class UserService {
   }
 
   async getClubEfficiencyCareer(clubId: number) {
+    const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
+    if (!eligibleClubIds.has(clubId)) {
+      throw new NotFoundException("Clube nao elegivel para eficiencia de carreira");
+    }
+
     const now = Date.now();
     const cacheHit = this.clubEfficiencyCache.get(clubId);
     if (cacheHit && cacheHit.expiresAt > now) {
@@ -3116,6 +3151,10 @@ export class UserService {
   async listClubAthletes(eventId: number, clubId: number, categoryId: number | null) {
     const scope = await this.resolveEventScope(eventId);
     await this.ensureEvent(scope.canonicalEventId);
+    const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
+    if (!eligibleClubIds.has(clubId)) {
+      throw new NotFoundException("Clube nao encontrado para o evento");
+    }
     if (categoryId) {
       await this.ensureCategoryOfEvent(scope.allEventIds, categoryId);
     }
@@ -3614,10 +3653,15 @@ export class UserService {
     const trimmedSearch = search.trim();
     const normalizedSearch = normalizeAthleteName(trimmedSearch);
     const pagination = resolvePaginationWindow(pageRaw, pageSizeRaw);
+    const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
+    if (eligibleClubIds.size === 0) {
+      return [];
+    }
 
     const athletes = await this.prisma.athlete.findMany({
       where: {
         createdFromWarning: false,
+        clubId: { in: [...eligibleClubIds] },
         nameDisplay: {
           contains: trimmedSearch || undefined,
           mode: "insensitive",
@@ -3687,10 +3731,15 @@ export class UserService {
     if (!normalizedKey) {
       throw new NotFoundException("Atleta nao encontrado");
     }
+    const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
+    if (eligibleClubIds.size === 0) {
+      throw new NotFoundException("Atleta nao encontrado");
+    }
 
     const athletesByKey = await this.prisma.athlete.findMany({
       where: {
         createdFromWarning: false,
+        clubId: { in: [...eligibleClubIds] },
         OR: [
           { nameNormalized: normalizedKey },
           { nameNormalized: legacyNormalizedKey },
@@ -3715,6 +3764,7 @@ export class UserService {
         : await this.prisma.athlete.findMany({
             where: {
               createdFromWarning: false,
+              clubId: { in: [...eligibleClubIds] },
               OR: [
                 {
                   nameNormalized: {
@@ -5407,6 +5457,34 @@ export class UserService {
         : SCRAPE_CACHE_FALLBACK_AGE_MS;
 
     return Date.now() - cachedUpdatedAt.getTime() <= Math.max(10_000, dynamicMaxAgeMs);
+  }
+
+  private async getStateCircuitEligibleClubIds(): Promise<Set<number>> {
+    const now = Date.now();
+    if (this.stateCircuitEligibilityCache && this.stateCircuitEligibilityCache.expiresAt > now) {
+      return this.stateCircuitEligibilityCache.clubIds;
+    }
+
+    const clubs = await this.prisma.club.findMany({
+      where: {
+        athletes: {
+          some: {
+            createdFromWarning: false,
+            event: {
+              nivel: { in: [...STATE_CIRCUIT_EVENT_LEVELS] },
+            },
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    const clubIds = new Set<number>(clubs.map((club) => club.id));
+    this.stateCircuitEligibilityCache = {
+      expiresAt: now + Math.max(30_000, STATE_CIRCUIT_ELIGIBILITY_CACHE_TTL_MS),
+      clubIds,
+    };
+    return clubIds;
   }
 
   private async persistReadModelCachePayload(
