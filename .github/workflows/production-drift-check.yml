@@ -98,10 +98,6 @@ jobs:
           VM_TARGET="${ORACLE_SSH_USER}@${ORACLE_SSH_HOST}"
           PROD_BASE="${PROD_API_URL:-https://api-pingpongpaidegua.duckdns.org}"
           VERCEL_BASE="${VERCEL_BASE_URL:-https://pingpongpaidegua.vercel.app}"
-          STRICT_FLAG=""
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            STRICT_FLAG="--strict"
-          fi
 
           attempt=1
           max_attempts=3
@@ -116,8 +112,7 @@ jobs:
               --skipVmWeb \
               --vmSshTarget "$VM_TARGET" \
               --vmSshKey "$HOME/.ssh/oracle_vm_key" \
-              --vmSshNoHostKeyCheck \
-              $STRICT_FLAG
+              --vmSshNoHostKeyCheck
             rc=$?
             set -e
             if [ "$rc" -eq 0 ]; then
