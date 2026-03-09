@@ -51,6 +51,10 @@ function isRatingCategory(categoryName: string, sortBasis?: "rating" | "ranking"
   return categoryName.trim().toUpperCase().startsWith("R");
 }
 
+function skippedCategoryMessage(): string {
+  return "Há menos do que 3 registros para esta categoria.";
+}
+
 export default function GroupSimulatorPage() {
   const params = useParams<{ id: string }>();
   const eventId = Number(params.id);
@@ -232,7 +236,30 @@ export default function GroupSimulatorPage() {
                 <div className="sim-category-grid">
                     {visibleCategories.map((category) => (
                       <article key={category.categoryId} className="sim-category-card">
-                        {(() => {
+                        {category.status === "skipped" ? (
+                          <>
+                            <div className="sim-category-card-header">
+                              <h3>{category.categoryName}</h3>
+                            </div>
+                            <p>
+                              Atletas Simulados: <strong>{category.registration.considered}</strong> | Inscritos:{" "}
+                              <strong>{category.registration.confirmed}</strong> | Pré-inscritos:{" "}
+                              <strong>{category.registration.preInscrito}</strong>
+                            </p>
+                            <p className="warn" style={{ marginTop: 0 }}>{skippedCategoryMessage()}</p>
+                            {category.warnings.length > 0 ? (
+                              <details>
+                                <summary>Diagnóstico</summary>
+                                <ul>
+                                  {category.warnings.map((warning, index) => (
+                                    <li key={`${category.categoryId}-warning-${index}`}>{warning}</li>
+                                  ))}
+                                </ul>
+                              </details>
+                            ) : null}
+                          </>
+                        ) : (
+                        (() => {
                           const useRatingPoints = isRatingCategory(
                             category.categoryName,
                             category.stats?.sortBasis,
@@ -335,7 +362,8 @@ export default function GroupSimulatorPage() {
                         </div>
                             </>
                           );
-                        })()}
+                        })()
+                        )}
                       </article>
                     ))}
                 </div>

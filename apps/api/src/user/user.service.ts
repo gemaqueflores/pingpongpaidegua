@@ -2936,18 +2936,6 @@ export class UserService {
         eventId: { in: scope.allEventIds },
         id: categoryId ?? undefined,
         OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
-        ...(categoryId === null
-          ? {
-              athletes: {
-                some: {
-                  athlete: {
-                    eventId: { in: scope.allEventIds },
-                    createdFromWarning: false,
-                  },
-                },
-              },
-            }
-          : {}),
       },
       orderBy: [{ name: "asc" }],
       select: {
@@ -2987,7 +2975,6 @@ export class UserService {
     }
 
     const simulations = [];
-    const omittedCategories: string[] = [];
     const athleteCountByCategory = new Map<number, number>();
 
     for (const category of categories) {
@@ -3037,70 +3024,54 @@ export class UserService {
             : registrationScope === "confirmed"
             ? "categoria_sem_inscritos_confirmados"
             : "categoria_sem_atletas_no_escopo";
-        if (categoryId !== null) {
-          const categoryLabel =
-            category.eventId === scope.canonicalEventId
-              ? category.name
-              : `${category.name}${scope.childSuffixByEventId.get(category.eventId) ?? " -X"}`;
-          simulations.push({
-            categoryId: category.id,
-            categoryName: categoryLabel,
-            status: "skipped",
-            reason,
-            groups: [],
-            stats: null,
-            registration: {
-              scope: registrationScope,
-              ...breakdown,
-              linkedAthletesCount: linkedAthleteIds.length,
-              scopedAthletesCount: 0,
-              considered: 0,
-              consideredAthleteIds: debugMode ? [] : undefined,
-            },
-            warnings: sanitizeUserWarnings([baseWarning, ...scopedWarnings]),
-          });
-        } else {
-          const categoryLabel =
-            category.eventId === scope.canonicalEventId
-              ? category.name
-              : `${category.name}${scope.childSuffixByEventId.get(category.eventId) ?? " -X"}`;
-          omittedCategories.push(`${categoryLabel} (${reason})`);
-        }
+        const categoryLabel =
+          category.eventId === scope.canonicalEventId
+            ? category.name
+            : `${category.name}${scope.childSuffixByEventId.get(category.eventId) ?? " -X"}`;
+        simulations.push({
+          categoryId: category.id,
+          categoryName: categoryLabel,
+          status: "skipped",
+          reason,
+          groups: [],
+          stats: null,
+          registration: {
+            scope: registrationScope,
+            ...breakdown,
+            linkedAthletesCount: linkedAthleteIds.length,
+            scopedAthletesCount: 0,
+            considered: 0,
+            consideredAthleteIds: debugMode ? [] : undefined,
+          },
+          warnings: sanitizeUserWarnings([baseWarning, ...scopedWarnings]),
+        });
         continue;
       }
 
       if (!hasMinimumSimulationAthletes(athletes.length)) {
         const reason = "categoria_com_menos_de_tres_atletas";
         const warning = `Categoria com ${athletes.length} atleta(s) no escopo. Mínimo para simulação: 3.`;
-        if (categoryId !== null) {
-          const categoryLabel =
-            category.eventId === scope.canonicalEventId
-              ? category.name
-              : `${category.name}${scope.childSuffixByEventId.get(category.eventId) ?? " -X"}`;
-          simulations.push({
-            categoryId: category.id,
-            categoryName: categoryLabel,
-            status: "skipped",
-            reason,
-            groups: [],
-            stats: null,
-            registration: {
-              scope: registrationScope,
-              ...breakdown,
-              linkedAthletesCount: linkedAthleteIds.length,
-              scopedAthletesCount: athletes.length,
-              considered: athletes.length,
-              consideredAthleteIds: debugMode ? athletes.map((athlete) => athlete.id) : undefined,
-            },
-            warnings: sanitizeUserWarnings([warning, ...scopedWarnings]),
-          });
-        } else {
-          const categoryLabel =
-            category.eventId === scope.canonicalEventId
-              ? category.name
-              : `${category.name}${scope.childSuffixByEventId.get(category.eventId) ?? " -X"}`;
-          omittedCategories.push(`${categoryLabel} (${reason})`);
-        }
+        const categoryLabel =
+          category.eventId === scope.canonicalEventId
+            ? category.name
+            : `${category.name}${scope.childSuffixByEventId.get(category.eventId) ?? " -X"}`;
+        simulations.push({
+          categoryId: category.id,
+          categoryName: categoryLabel,
+          status: "skipped",
+          reason,
+          groups: [],
+          stats: null,
+          registration: {
+            scope: registrationScope,
+            ...breakdown,
+            linkedAthletesCount: linkedAthleteIds.length,
+            scopedAthletesCount: athletes.length,
+            considered: athletes.length,
+            consideredAthleteIds: debugMode ? athletes.map((athlete) => athlete.id) : undefined,
+          },
+          warnings: sanitizeUserWarnings([warning, ...scopedWarnings]),
+        });
         continue;
       }
 
@@ -3189,16 +3160,12 @@ export class UserService {
       });
     }
 
-    const warnings = omittedCategories.length
-      ? [`Categorias omitidas por falta de atletas no escopo: ${omittedCategories.join(", ")}.`]
-      : [];
-
     return {
       eventId: scope.canonicalEventId,
       eventSituation,
       groupsDefined,
       registrationScope,
-      warnings: sanitizeUserWarnings(warnings),
+      warnings: [],
       categories: simulations,
     };
   }
