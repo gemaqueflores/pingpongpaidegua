@@ -6,6 +6,7 @@
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
+    "pretest": "npm --prefix ../.. run build --workspace @cbtm/shared",
     "test": "tsx --test test/**/*.test.ts"
   },
   "dependencies": {

@@ -99,6 +99,11 @@ export class AdminEventsController {
     return this.service.reprocessPostScrape(id);
   }
 
+  @Post(":id/reprocess-lifecycle")
+  async reprocessLifecycle(@Param("id", ParseIntPipe) id: number) {
+    return this.service.reprocessLifecycle(id);
+  }
+
   @Get(":id/scrape-runs")
   async listScrapeRuns(@Param("id", ParseIntPipe) id: number) {
     return this.service.listScrapeRuns(id);

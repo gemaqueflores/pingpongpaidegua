@@ -6,17 +6,7 @@ import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { JwtStrategy } from "./jwt.strategy";
 import { PrismaService } from "../common/prisma.service";
-
-function resolveJwtSecret(): string {
-  const configured = process.env.JWT_SECRET?.trim();
-  if (configured) {
-    return configured;
-  }
-  if ((process.env.NODE_ENV ?? "development") === "production") {
-    throw new Error("JWT_SECRET obrigatorio em producao.");
-  }
-  return "changeme";
-}
+import { resolveJwtSecret } from "./auth-config";
 
 @Module({
   imports: [

@@ -15,8 +15,10 @@ import {
 import { AliasSource, Athlete, EventLevel, MatchPhase, Prisma, RegistrationStatus } from "@prisma/client";
 import { config } from "../config";
 import { prisma } from "../prisma";
+import { buildResolverCandidates, resolveByCategoryHistory } from "./athlete-resolution";
 import { inferAthleteFederationFromClub } from "./athlete-federation";
 import { mergeMatchesAcrossSources } from "./match-merge";
+import { applyParenseEligibilityScopeToDataset, DatasetScopeStats } from "./parense-scope";
 import {
   computeEventRegistrationPairRemovals,
   shouldAllowDestructiveRegistrationSync,
@@ -35,19 +37,6 @@ interface UpsertResult {
 
 interface UpsertOptions {
   processRegistrations?: boolean;
-}
-
-interface DatasetScopeStats {
-  enabled: boolean;
-  reason: string;
-  eligibleClubsCount: number;
-  eligibleCategoriesCount: number;
-  registrationsBefore: number;
-  registrationsAfter: number;
-  matchesBefore: number;
-  matchesAfter: number;
-  categoriesBefore: number;
-  categoriesAfter: number;
 }
 
 interface CachedClub {
@@ -845,38 +834,12 @@ export class UpsertService {
   private static readonly REGISTRATION_SYNC_MIN_CATEGORY_COVERAGE = 0.85;
   private static readonly REGISTRATION_SYNC_PREVIOUS_RUN_LOOKBACK = 30;
 
-  private shouldApplyParenseScope(eventLevel: EventLevel | null, eventName: string | null): boolean {
-    if (eventLevel === "COPA" || eventLevel === "NACIONAL") {
-      return true;
-    }
-    const normalizedName = normalizeText(String(eventName ?? ""));
-    return normalizedName.includes("brasileirao") || normalizedName.includes("copa");
-  }
-
   private async applyParenseEligibilityScope(input: {
     eventLevel: EventLevel | null;
     eventName: string | null;
     dataset: ParsedDataset;
     warnings: string[];
   }): Promise<{ dataset: ParsedDataset; stats: DatasetScopeStats }> {
-    const enabled = this.shouldApplyParenseScope(input.eventLevel, input.eventName);
-    const baseStats: DatasetScopeStats = {
-      enabled,
-      reason: enabled ? "evento_copa_ou_nacional" : "nao_aplicavel",
-      eligibleClubsCount: 0,
-      eligibleCategoriesCount: 0,
-      registrationsBefore: input.dataset.registrations.length,
-      registrationsAfter: input.dataset.registrations.length,
-      matchesBefore: input.dataset.matches.length,
-      matchesAfter: input.dataset.matches.length,
-      categoriesBefore: input.dataset.categories.length,
-      categoriesAfter: input.dataset.categories.length,
-    };
-
-    if (!enabled) {
-      return { dataset: input.dataset, stats: baseStats };
-    }
-
     const eligibleClubRows = await prisma.athlete.findMany({
       where: {
         event: {
@@ -897,169 +860,13 @@ export class UpsertService {
         .map((row) => normalizeText(row.club.normalizedName))
         .filter(Boolean),
     );
-
-    if (eligibleClubNames.size === 0) {
-      input.warnings.push(
-        "ESCOPO_PARAOPEBA: sem clubes elegiveis (ESTADUAL/OPEN) encontrados; filtro ignorado.",
-      );
-      return {
-        dataset: input.dataset,
-        stats: {
-          ...baseStats,
-          reason: "sem_clubes_elegiveis",
-        },
-      };
-    }
-
-    const eligibleAthleteNames = new Set(
-      input.dataset.registrations
-        .filter((registration) =>
-          eligibleClubNames.has(normalizeText(registration.clubNormalizedName || registration.clubName)),
-        )
-        .map((registration) => normalizeText(registration.athleteNormalizedName || registration.athleteName))
-        .filter(Boolean),
-    );
-
-    const eligibleCategoryKeys = new Set<string>();
-    for (const registration of input.dataset.registrations) {
-      const athleteName = normalizeText(registration.athleteNormalizedName || registration.athleteName);
-      const clubName = normalizeText(registration.clubNormalizedName || registration.clubName);
-      const isEligible =
-        (athleteName && eligibleAthleteNames.has(athleteName)) ||
-        (clubName && eligibleClubNames.has(clubName));
-      if (!isEligible) {
-        continue;
-      }
-      const key = buildParsedCategoryKey({
-        categoryId: registration.categoryId ?? null,
-        categoryNormalizedName: registration.categoryNormalizedName ?? null,
-        categoryName: registration.categoryName ?? null,
-      });
-      if (key) {
-        eligibleCategoryKeys.add(key);
-      }
-    }
-
-    // Fallback: se o payload de inscricoes vier incompleto, usa confrontos para marcar categorias elegiveis.
-    for (const match of input.dataset.matches) {
-      const athleteAName = normalizeText(match.athleteANormalizedName || match.athleteAName);
-      const athleteBName = normalizeText(match.athleteBNormalizedName || match.athleteBName);
-      const athleteClubA = normalizeText(match.athleteAClubNormalizedName ?? "");
-      const athleteClubB = normalizeText(match.athleteBClubNormalizedName ?? "");
-      const byAthlete = eligibleAthleteNames.has(athleteAName) || eligibleAthleteNames.has(athleteBName);
-      const byClub =
-        (athleteClubA && eligibleClubNames.has(athleteClubA)) ||
-        (athleteClubB && eligibleClubNames.has(athleteClubB));
-      if (!Boolean(byAthlete || byClub)) {
-        continue;
-      }
-      const key = buildParsedCategoryKey({
-        categoryId: match.categoryId ?? null,
-        categoryNormalizedName: match.categoryNormalizedName ?? null,
-        categoryName: match.categoryName ?? null,
-      });
-      if (key) {
-        eligibleCategoryKeys.add(key);
-      }
-    }
-
-    if (eligibleCategoryKeys.size === 0) {
-      input.warnings.push(
-        "ESCOPO_PARAOPEBA: nenhuma categoria elegivel identificada no payload; filtro ignorado para evitar perda de integridade.",
-      );
-      return {
-        dataset: input.dataset,
-        stats: {
-          ...baseStats,
-          reason: "sem_categorias_elegiveis",
-          eligibleClubsCount: eligibleClubNames.size,
-        },
-      };
-    }
-
-    const scopedRegistrations = input.dataset.registrations.filter((registration) => {
-      const key = buildParsedCategoryKey({
-        categoryId: registration.categoryId ?? null,
-        categoryNormalizedName: registration.categoryNormalizedName ?? null,
-        categoryName: registration.categoryName ?? null,
-      });
-      return Boolean(key && eligibleCategoryKeys.has(key));
+    return applyParenseEligibilityScopeToDataset({
+      eventLevel: input.eventLevel,
+      eventName: input.eventName,
+      dataset: input.dataset,
+      eligibleClubNames,
+      warnings: input.warnings,
     });
-
-    const scopedMatches = input.dataset.matches.filter((match) => {
-      const key = buildParsedCategoryKey({
-        categoryId: match.categoryId ?? null,
-        categoryNormalizedName: match.categoryNormalizedName ?? null,
-        categoryName: match.categoryName ?? null,
-      });
-      return Boolean(key && eligibleCategoryKeys.has(key));
-    });
-
-    const scopedCategories = input.dataset.categories.filter((category) => {
-      const key = buildParsedCategoryKey({
-        categoryId: category.categoryId ?? null,
-        categoryNormalizedName: category.categoryNormalizedName ?? null,
-        categoryName: category.categoryName ?? null,
-      });
-      return Boolean(key && eligibleCategoryKeys.has(key));
-    });
-
-    // Guardrail de integridade: se o recorte zerar confrontos publicados, preserva o dataset
-    // original para evitar perda total de resultados em payloads parciais/incompletos.
-    if (input.dataset.matches.length > 0 && scopedMatches.length === 0) {
-      input.warnings.push(
-        "ESCOPO_PARAOPEBA: filtro por categoria elegivel resultou em 0 confrontos; filtro ignorado para preservar integridade.",
-      );
-      return {
-        dataset: input.dataset,
-        stats: {
-          ...baseStats,
-          reason: "fallback_integridade_zero_confrontos",
-          eligibleClubsCount: eligibleClubNames.size,
-          eligibleCategoriesCount: eligibleCategoryKeys.size,
-        },
-      };
-    }
-
-    // Guardrail adicional para queda extrema em confrontos (payload de inscricoes incompleto).
-    const matchRetentionRatio =
-      input.dataset.matches.length > 0 ? scopedMatches.length / input.dataset.matches.length : 1;
-    if (input.dataset.matches.length >= 100 && matchRetentionRatio < 0.05) {
-      input.warnings.push(
-        `ESCOPO_PARAOPEBA: recorte extremo de confrontos (${scopedMatches.length}/${input.dataset.matches.length}); filtro ignorado para preservar integridade.`,
-      );
-      return {
-        dataset: input.dataset,
-        stats: {
-          ...baseStats,
-          reason: "fallback_integridade_queda_extrema",
-          eligibleClubsCount: eligibleClubNames.size,
-          eligibleCategoriesCount: eligibleCategoryKeys.size,
-        },
-      };
-    }
-
-    input.warnings.push(
-      `ESCOPO_PARAOPEBA: filtro por categoria elegivel aplicado para ${input.eventLevel ?? "NIVEL_DESCONHECIDO"}; clubes elegiveis=${eligibleClubNames.size}; categorias elegiveis=${eligibleCategoryKeys.size}; registros ${input.dataset.registrations.length}->${scopedRegistrations.length}; jogos ${input.dataset.matches.length}->${scopedMatches.length}; categorias ${input.dataset.categories.length}->${scopedCategories.length}.`,
-    );
-
-    return {
-      dataset: {
-        ...input.dataset,
-        categories: scopedCategories,
-        registrations: scopedRegistrations,
-        matches: scopedMatches,
-      },
-      stats: {
-        ...baseStats,
-        reason: "filtro_aplicado",
-        eligibleClubsCount: eligibleClubNames.size,
-        eligibleCategoriesCount: eligibleCategoryKeys.size,
-        registrationsAfter: scopedRegistrations.length,
-        matchesAfter: scopedMatches.length,
-        categoriesAfter: scopedCategories.length,
-      },
-    };
   }
 
   private deduplicateCrossCategoryHashMatches(input: {
@@ -1870,8 +1677,7 @@ export class UpsertService {
         winnerIndex = existingMatch.winnerIndex;
       }
 
-      const persistedPhase: MatchPhase =
-        parsedMatch.phase === "ELIMINATORIA" ? MatchPhase.RESULTADOS : (parsedMatch.phase as MatchPhase);
+      const persistedPhase: MatchPhase = parsedMatch.phase as MatchPhase;
 
       const scorePlayers: Prisma.InputJsonValue = [
         {
@@ -3357,40 +3163,6 @@ export class UpsertService {
     this.indexAlias(input.aliasToAthleteIds, input.aliasNormalized, input.athleteId);
   }
 
-  private buildResolverCandidates(
-    eventId: number,
-    athletesById: Map<number, CachedAthlete>,
-    categoryAthleteIds?: Set<number> | null,
-  ): AthleteResolverCandidate[] {
-    if (!categoryAthleteIds || categoryAthleteIds.size === 0) {
-      return [];
-    }
-
-    const candidates: AthleteResolverCandidate[] = [];
-
-    for (const athlete of athletesById.values()) {
-      if (athlete.eventId !== eventId || athlete.createdFromWarning) {
-        continue;
-      }
-      if (!categoryAthleteIds.has(athlete.id)) {
-        continue;
-      }
-
-      candidates.push({
-        athleteId: athlete.id,
-        eventId: athlete.eventId,
-        nameDisplay: athlete.nameDisplay,
-        nameNormalized: athlete.nameNormalized,
-        rankingPoints: athlete.rankingPoints,
-        ratingPoints: athlete.ratingPoints,
-        clubNormalizedName: athlete.clubNormalizedName,
-        aliasesNormalized: [...athlete.aliases],
-      });
-    }
-
-    return candidates;
-  }
-
   private async buildCategoryAliasHistoryCounts(
     eventId: number,
     athletesById: Map<number, CachedAthlete>,
@@ -3434,32 +3206,6 @@ export class UpsertService {
     }
 
     return history;
-  }
-
-  private resolveByCategoryHistory(
-    candidates: CachedAthlete[],
-    categoryAliasHistoryCounts: Map<number, number> | null,
-  ): CachedAthlete | null {
-    if (!categoryAliasHistoryCounts || candidates.length <= 1) {
-      return null;
-    }
-
-    const ranked = candidates
-      .map((candidate) => ({
-        candidate,
-        count: categoryAliasHistoryCounts.get(candidate.id) ?? 0,
-      }))
-      .sort((a, b) => b.count - a.count);
-
-    const top = ranked[0];
-    const second = ranked[1];
-    if (!top || top.count <= 0) {
-      return null;
-    }
-    if (second && second.count === top.count) {
-      return null;
-    }
-    return top.candidate;
   }
 
   private async resolveMatchAthlete(input: ResolveMatchAthleteInput): Promise<CachedAthlete | null> {
@@ -3597,7 +3343,7 @@ export class UpsertService {
         }
       }
 
-      const byHistory = this.resolveByCategoryHistory(narrowed, input.categoryAliasHistoryCounts);
+      const byHistory = resolveByCategoryHistory(narrowed, input.categoryAliasHistoryCounts);
       if (byHistory) {
         return byHistory;
       }
@@ -3689,7 +3435,7 @@ export class UpsertService {
         }
       }
 
-      const byHistory = this.resolveByCategoryHistory(narrowed, input.categoryAliasHistoryCounts);
+      const byHistory = resolveByCategoryHistory(narrowed, input.categoryAliasHistoryCounts);
       if (byHistory) {
         categoryAliasAmbiguous = false;
         return byHistory;
@@ -3721,11 +3467,11 @@ export class UpsertService {
       return collidedResolvedAthlete;
     }
 
-    let resolverCandidates = this.buildResolverCandidates(
-      input.eventId,
-      input.athletesById,
-      input.categoryAthleteIds,
-    );
+    let resolverCandidates = buildResolverCandidates({
+      eventId: input.eventId,
+      athletesById: input.athletesById,
+      categoryAthleteIds: input.categoryAthleteIds,
+    });
 
     const decision = resolveAthleteCandidate({
       eventId: input.eventId,

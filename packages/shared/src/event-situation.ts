@@ -43,6 +43,21 @@ export interface EventAutoScheduleDecision {
 
 export type EventScrapeIntervalOverrides = Partial<Record<EventSituation, number>>;
 
+export interface EventCacheTimingOptions {
+  marginMs?: number;
+  minAgeMs?: number;
+  fallbackAgeMs?: number;
+}
+
+export interface EventRecoveryTimingOptions {
+  staleMultiplier?: number;
+  minStaleMs?: number;
+}
+
+export interface ScrapeLockTimingOptions {
+  minStaleMs?: number;
+}
+
 export const DEFAULT_EVENT_SCRAPE_INTERVAL_MS: Readonly<Record<
   "PRE_INSCRICOES" | "INSCRICOES_ABERTAS" | "POS_INSCRICOES_PRE_EVENTO" | "GRADES_PUBLICADAS_PRE_JOGO" | "EM_ANDAMENTO",
   number
@@ -53,6 +68,19 @@ export const DEFAULT_EVENT_SCRAPE_INTERVAL_MS: Readonly<Record<
   GRADES_PUBLICADAS_PRE_JOGO: 45 * 60 * 1000,
   EM_ANDAMENTO: 30 * 60 * 1000,
 };
+
+export const DEFAULT_EVENT_CACHE_TIMING: Readonly<Required<EventCacheTimingOptions>> = {
+  marginMs: 10 * 60 * 1000,
+  minAgeMs: 60 * 1000,
+  fallbackAgeMs: 30 * 60 * 1000,
+};
+
+export const DEFAULT_EVENT_RECOVERY_TIMING: Readonly<Required<EventRecoveryTimingOptions>> = {
+  staleMultiplier: 2,
+  minStaleMs: 30 * 60 * 1000,
+};
+
+export const DEFAULT_SCRAPE_LOCK_STALE_MS = 15 * 60 * 1000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -144,6 +172,17 @@ export function resolveEventScrapeIntervalOverridesFromEnv(
     POS_INSCRICOES_PRE_EVENTO: parsePositiveMs(env.SCRAPE_INTERVAL_POS_INSCRICOES_PRE_EVENTO_MS),
     GRADES_PUBLICADAS_PRE_JOGO: parsePositiveMs(env.SCRAPE_INTERVAL_GRADES_PUBLICADAS_PRE_JOGO_MS),
     EM_ANDAMENTO: parsePositiveMs(env.SCRAPE_INTERVAL_EM_ANDAMENTO_MS),
+  };
+}
+
+export function resolveEventCacheTimingFromEnv(
+  env: Record<string, string | undefined>,
+): Required<EventCacheTimingOptions> {
+  return {
+    marginMs: parsePositiveMs(env.SCRAPE_CACHE_MARGIN_MS) ?? DEFAULT_EVENT_CACHE_TIMING.marginMs,
+    minAgeMs: parsePositiveMs(env.SCRAPE_CACHE_MIN_AGE_MS) ?? DEFAULT_EVENT_CACHE_TIMING.minAgeMs,
+    fallbackAgeMs:
+      parsePositiveMs(env.SCRAPE_CACHE_FALLBACK_AGE_MS) ?? DEFAULT_EVENT_CACHE_TIMING.fallbackAgeMs,
   };
 }
 
@@ -463,4 +502,49 @@ export function shouldRunEventAutoScrape(
     elapsedMs,
     waitMs,
   };
+}
+
+export function computeEventCacheMaxAgeMs(
+  policy: EventScrapePolicy,
+  options: EventCacheTimingOptions = {},
+): number {
+  const marginMs = options.marginMs ?? DEFAULT_EVENT_CACHE_TIMING.marginMs;
+  const minAgeMs = options.minAgeMs ?? DEFAULT_EVENT_CACHE_TIMING.minAgeMs;
+  const fallbackAgeMs = options.fallbackAgeMs ?? DEFAULT_EVENT_CACHE_TIMING.fallbackAgeMs;
+
+  if (typeof policy.recommendedIntervalMs !== "number" || policy.recommendedIntervalMs <= 0) {
+    return fallbackAgeMs;
+  }
+
+  return Math.max(minAgeMs, policy.recommendedIntervalMs - marginMs);
+}
+
+export function computeEventRecoveryStaleThresholdMs(
+  policy: EventScrapePolicy,
+  options: EventRecoveryTimingOptions = {},
+): number {
+  const staleMultiplier = options.staleMultiplier ?? DEFAULT_EVENT_RECOVERY_TIMING.staleMultiplier;
+  const minStaleMs = options.minStaleMs ?? DEFAULT_EVENT_RECOVERY_TIMING.minStaleMs;
+
+  if (typeof policy.recommendedIntervalMs !== "number" || policy.recommendedIntervalMs <= 0) {
+    return minStaleMs;
+  }
+
+  return Math.max(minStaleMs, Math.trunc(policy.recommendedIntervalMs * staleMultiplier));
+}
+
+export function resolveScrapeLockStaleMsFromEnv(
+  env: Record<string, string | undefined>,
+  options: ScrapeLockTimingOptions = {},
+): number {
+  const minStaleMs = options.minStaleMs ?? 60 * 1000;
+  const rawValue =
+    env.HEALTH_MONITOR_STALE_LOCK_MS ??
+    env.SCRAPE_LOCK_STALE_MS ??
+    String(DEFAULT_SCRAPE_LOCK_STALE_MS);
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return Math.max(minStaleMs, DEFAULT_SCRAPE_LOCK_STALE_MS);
+  }
+  return Math.max(minStaleMs, Math.trunc(parsed));
 }

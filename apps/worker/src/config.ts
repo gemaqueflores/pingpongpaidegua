@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import path from "node:path";
-import { resolveEventScrapeIntervalOverridesFromEnv } from "@cbtm/shared";
+import { resolveEventScrapeIntervalOverridesFromEnv, resolveScrapeLockStaleMsFromEnv } from "@cbtm/shared";
 
 dotenv.config();
 
@@ -37,7 +37,7 @@ export const config = {
     .map((value) => value.trim())
     .filter(Boolean),
   scrapeCaptureTimeoutMs: Number(process.env.SCRAPE_CAPTURE_TIMEOUT_MS ?? "900000"),
-  scrapeLockStaleMs: Number(process.env.SCRAPE_LOCK_STALE_MS ?? "900000"),
+  scrapeLockStaleMs: resolveScrapeLockStaleMsFromEnv(process.env),
   refreshMs: Number(process.env.SCRAPER_REFRESH_CRON_MS ?? "600000"),
   postEventGraceHours: Number(process.env.SCRAPER_POST_EVENT_GRACE_HOURS ?? "48"),
   rawCaptureRetentionDaysSuccess: Number(process.env.RAW_CAPTURE_RETENTION_DAYS_SUCCESS ?? "14"),

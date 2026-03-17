@@ -5,6 +5,8 @@ import {
   compactWhitespace,
   computeEventSituation,
   detectWalkover,
+  extractWarningCode,
+  isOperationalRecoveryWarning,
   normalizeText,
 } from "@cbtm/shared";
 import { Prisma, ScrapeStatus } from "@prisma/client";
@@ -1671,6 +1673,7 @@ export class ScrapeProcessor {
 
     for (const warning of normalized) {
       const text = warning.toLowerCase();
+      const warningCode = extractWarningCode(warning);
 
       if (text.startsWith("post_scrape_summary")) {
         const backlogMatch = warning.match(/\bbacklog=(\d+)\b/i);
@@ -1724,8 +1727,7 @@ export class ScrapeProcessor {
       const isActionable =
         severity === "high" ||
         severity === "medium" ||
-        text.includes("guardrail_registration_drop") ||
-        text.includes("post_scrape_summary");
+        isOperationalRecoveryWarning(warning);
 
       if (!isActionable) {
         droppedNoise += 1;
@@ -1733,7 +1735,12 @@ export class ScrapeProcessor {
         continue;
       }
 
-      if (text.includes("post_scrape_summary") || text.includes("guardrail_registration_drop")) {
+      if (
+        warningCode === "POST_SCRAPE_SUMMARY" ||
+        warningCode === "GUARDRAIL_REGISTRATION_DROP" ||
+        warningCode === "GUARDRAIL_REGRESSION" ||
+        (warningCode !== null && isOperationalRecoveryWarning(warning))
+      ) {
         persistedCritical.add(warning);
         continue;
       }

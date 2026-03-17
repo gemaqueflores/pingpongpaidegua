@@ -1005,8 +1005,7 @@ function parseCardBasedMatches(
     const categoryName = cleanCategoryDisplayName(compactWhitespace(title.split(" - ")[0] ?? ""));
     const roundRaw = title.includes(" - ") ? compactWhitespace(title.split(" - ").slice(1).join(" - ")) : null;
     const round = normalizeRoundLabel(roundRaw);
-    const resolvedPhase =
-      phase === "RESULTADOS" && inferEliminationFromRound(round) ? "ELIMINATORIA" : phase;
+    const resolvedPhase = phase;
 
     const filteredNames = lines.filter((line, idx) => {
       if (idx === 0) {
@@ -1477,7 +1476,7 @@ function phasePreference(phase: ParsedMatch["phase"]): number {
     return 40;
   }
   if (phase === "ELIMINATORIA") {
-    return 30;
+    return 35;
   }
   if (phase === "GRUPOS") {
     return 20;

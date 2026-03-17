@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ParsedMatch } from "@cbtm/shared";
+import { ScrapeProcessor } from "../src/pipeline/scrape.processor";
 import { mergeMatchesAcrossSources } from "../src/pipeline/match-merge";
 
 let matchCounter = 0;
@@ -190,4 +191,51 @@ test("merge prioriza registro mais completo de RESULTADOS em conflito com ELIMIN
   assert.equal(match.matchDatetime, "2026-03-21T14:30:00.000Z");
   assert.equal(match.round, "Quartas de Final");
   assert.equal(match.sets?.length ?? 0, 4);
+});
+
+test("merge normaliza fase legada ELIMINATORIA para RESULTADOS antes do upsert", () => {
+  const onlyLegacyElimination = buildMatch({
+    matchKey: "legacy-only",
+    phase: "ELIMINATORIA",
+    sourceUrl: "https://app.cbtm.org.br/api/GameResult/5246/67",
+    metadata: { jogo: 91, source: "api-game-result" },
+    scoreRaw: "3-0",
+    sets: [],
+    setsResult: { p1Sets: 3, p2Sets: 0 },
+  });
+
+  const merged = mergeMatchesAcrossSources(5246, [onlyLegacyElimination]);
+  assert.equal(merged.matches.length, 1);
+  assert.equal(merged.matches[0].phase, "RESULTADOS");
+  assert.equal(merged.matches[0].sourceFlags?.eliminatoria, true);
+});
+
+test("persistencia de warnings preserva auditoria acionavel e remove diagnostico ruidoso", () => {
+  const processor = new ScrapeProcessor() as unknown as {
+    buildPersistedWarnings(rawWarnings: string[]): string[];
+  };
+
+  const persisted = processor.buildPersistedWarnings([
+    "AUDITORIA_PARTIDAS_DIVERGENCIA: 2 categoria(s) com divergencia de partidas.",
+    "HTTP_DEGRADED_RESULTS: fallback para browser.",
+    "RESULTADOS diagnostico 'RHM' (1050): com_sets=6, sem_sets=0.",
+    "POST_SCRAPE_SUMMARY: warnings(high=1, medium=0, low=2); conflicts(pool=0, sem_candidatos_pool=0, analisados=0, resolvidos=0, alias_exato=0, ambiguos=0, invalidos=0, backlog=0, disabled=nao).",
+  ]);
+
+  assert.ok(
+    persisted.some((warning) => warning.startsWith("AUDITORIA_PARTIDAS_DIVERGENCIA:")),
+  );
+  assert.ok(
+    persisted.some((warning) => warning.startsWith("HTTP_DEGRADED_RESULTS:")),
+  );
+  assert.ok(
+    persisted.some((warning) => warning.startsWith("POST_SCRAPE_SUMMARY:")),
+  );
+  assert.equal(
+    persisted.some((warning) => warning.startsWith("RESULTADOS diagnostico")),
+    false,
+  );
+  assert.ok(
+    persisted.some((warning) => warning.startsWith("WARNINGS_FILTRADOS_RUIDO:")),
+  );
 });

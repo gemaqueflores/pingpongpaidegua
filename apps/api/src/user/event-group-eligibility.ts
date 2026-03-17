@@ -1,4 +1,4 @@
-import { EventSituation } from "@cbtm/shared";
+import { EventSituation, normalizeLegacyMatchPhase } from "@cbtm/shared";
 
 export type UserEventStatus = "INSCRICOES_ABERTAS" | "INSCRICOES_ENCERRADAS" | "CONCLUIDO";
 
@@ -9,7 +9,7 @@ const GROUP_SIMULATION_ELIGIBLE_SITUATIONS = new Set<EventSituation>([
 ]);
 
 export function hasGroupStructureFromMatch(input: { phase: string | null; round: string | null }): boolean {
-  const phase = (input.phase ?? "").toString().trim().toUpperCase();
+  const phase = normalizeLegacyMatchPhase(input.phase);
   const round = (input.round ?? "").toString().trim().toLowerCase();
   if (phase === "GRUPOS") {
     return true;
@@ -43,4 +43,3 @@ export function canUseGroupSimulation(input: {
   }
   return GROUP_SIMULATION_ELIGIBLE_SITUATIONS.has(input.eventSituation);
 }
-

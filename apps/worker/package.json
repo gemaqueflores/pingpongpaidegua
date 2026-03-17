@@ -7,6 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "scrape:once": "tsx src/run-once.ts",
+    "pretest": "npm --prefix ../.. run build --workspace @cbtm/shared && npm --prefix ../.. run build --workspace @cbtm/parser",
     "test": "tsx --test test/**/*.test.ts"
   },
   "dependencies": {

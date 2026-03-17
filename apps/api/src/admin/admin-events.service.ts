@@ -1,5 +1,6 @@
 ﻿import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import { isOperationalRecoveryWarning, resolveScrapeLockStaleMsFromEnv } from "@cbtm/shared";
 import { PrismaService } from "../common/prisma.service";
 import { QueueService } from "../common/queue.service";
 import { computeEventSituation, getEventSituationTransition, normalizeText } from "@cbtm/shared";
@@ -46,6 +47,8 @@ type AuditRunPayload = {
 
 @Injectable()
 export class AdminEventsService {
+  private readonly staleLockMs = resolveScrapeLockStaleMsFromEnv(process.env);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly queue: QueueService,
@@ -515,8 +518,7 @@ export class AdminEventsService {
 
     if (event.scrapeLockedAt) {
       const lockAgeMs = Date.now() - event.scrapeLockedAt.getTime();
-      const staleLockMs = 45 * 60 * 1000;
-      if (lockAgeMs < staleLockMs) {
+      if (lockAgeMs < this.staleLockMs) {
         return {
           status: "busy",
           eventId: id,
@@ -541,6 +543,29 @@ export class AdminEventsService {
   async reprocessPostScrape(id: number) {
     await this.ensureEvent(id);
     return this.queue.enqueuePostScrapeReprocess(id);
+  }
+
+  async reprocessLifecycle(id: number) {
+    const event = await this.ensureEvent(id);
+
+    if (event.scrapeLockedAt) {
+      const lockAgeMs = Date.now() - event.scrapeLockedAt.getTime();
+      if (lockAgeMs < this.staleLockMs) {
+        return {
+          status: "busy",
+          eventId: id,
+          lockedAt: event.scrapeLockedAt.toISOString(),
+          message: "Já existe um scrape em execução para este evento.",
+        } as const;
+      }
+
+      await this.prisma.event.update({
+        where: { id },
+        data: { scrapeLockedAt: null },
+      });
+    }
+
+    return this.queue.enqueueReprocessLifecycle(id);
   }
 
   async listScrapeRuns(eventId: number) {
@@ -743,7 +768,9 @@ export class AdminEventsService {
     warnings: Prisma.JsonValue;
     extractionStats: Prisma.JsonValue;
   }): AuditRunPayload {
-    const warningsCount = Array.isArray(input.warnings) ? input.warnings.length : 0;
+    const warningsCount = Array.isArray(input.warnings)
+      ? input.warnings.filter((warning) => isOperationalRecoveryWarning(String(warning ?? ""))).length
+      : 0;
     return {
       runId: input.id,
       startedAt: input.startedAt.toISOString(),

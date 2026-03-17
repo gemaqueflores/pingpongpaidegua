@@ -1,22 +1,12 @@
-﻿import { Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
+import { resolveJwtSecret } from "./auth-config";
 
 export interface JwtPayload {
   sub: string;
   username: string;
   role: "ADMIN";
-}
-
-function resolveJwtSecret(): string {
-  const configured = process.env.JWT_SECRET?.trim();
-  if (configured) {
-    return configured;
-  }
-  if ((process.env.NODE_ENV ?? "development") === "production") {
-    throw new Error("JWT_SECRET obrigatorio em producao.");
-  }
-  return "changeme";
 }
 
 @Injectable()
@@ -37,4 +27,3 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     };
   }
 }
-

@@ -250,8 +250,8 @@ describe("resolveAthleteCandidate", () => {
   });
 
   it("ordena fases e rodadas semanticamente", () => {
-    expect(getMatchPhaseOrder("GRUPOS")).toBeLessThan(getMatchPhaseOrder("ELIMINATORIA"));
-    expect(getMatchPhaseOrder("ELIMINATORIA")).toBeLessThan(getMatchPhaseOrder("RESULTADOS"));
+    expect(getMatchPhaseOrder("GRUPOS")).toBeLessThan(getMatchPhaseOrder("RESULTADOS"));
+    expect(getMatchPhaseOrder("ELIMINATORIA")).toBe(getMatchPhaseOrder("RESULTADOS"));
 
     expect(getRoundSemanticOrder("Oitavas de Final")).toBeLessThan(getRoundSemanticOrder("Quartas de Final"));
     expect(getRoundSemanticOrder("Quartas de Final")).toBeLessThan(getRoundSemanticOrder("Semifinal"));

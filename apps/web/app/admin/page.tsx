@@ -12,6 +12,7 @@ import {
   apiGetEfficiencyConfig,
   apiGetScrapeRuns,
   apiMarkCompleted,
+  apiReprocessLifecycle,
   apiCreateEventMerge,
   apiResolveAthleteConflict,
   apiScrapeNow,
@@ -891,6 +892,50 @@ export default function AdminPage() {
     }
   }
 
+  async function reprocessLifecycle(event: EventRow) {
+    setNotice(null);
+    setBusyScrapeEventId(event.id);
+    setBusyScrapeStage(null);
+    try {
+      const queued = await apiReprocessLifecycle(event.id);
+      const status =
+        queued && typeof queued === "object" && typeof queued.status === "string"
+          ? queued.status.toLowerCase()
+          : "queued";
+
+      if (status === "busy") {
+        setNotice({
+          type: "error",
+          text:
+            queued && typeof queued === "object" && typeof queued.message === "string"
+              ? queued.message
+              : `Já existe um scrape em execução para '${event.nome}'.`,
+        });
+        return;
+      }
+
+      setNotice({
+        type: "success",
+        text: `Reprocessamento solicitado para '${event.nome}' (stage 2 + stage 3 + pós-scrape).`,
+      });
+      const queuedAt = new Date().toISOString();
+      void trackScrapeProgress(event.id, queuedAt);
+
+      await refreshEvents({ refreshSelectedDetails: selectedEventId === event.id });
+      if (selectedEventId === event.id) {
+        await loadEventDetails(event.id);
+      }
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text: error instanceof Error ? error.message : "Falha ao enfileirar reprocessamento.",
+      });
+    } finally {
+      setBusyScrapeEventId(null);
+      setBusyScrapeStage(null);
+    }
+  }
+
   async function createEventMerge() {
     const primaryEventId = Number(mergePrimaryEventId);
     const secondaryEventId = Number(mergeSecondaryEventId);
@@ -1460,6 +1505,14 @@ export default function AdminPage() {
                       {busyScrapeEventId === event.id && busyScrapeStage === null
                         ? "Enfileirando..."
                         : "Raspagem completa"}
+                    </button>
+                    <button
+                      className="admin-btn-secondary"
+                      onClick={() => reprocessLifecycle(event)}
+                      disabled={busyScrapeEventId === event.id}
+                      title="Dispara etapa 2 + etapa 3 + pós-scrape para reprocessar evento concluído"
+                    >
+                      Reprocessar ciclo
                     </button>
                     <button
                       className="admin-btn-secondary"

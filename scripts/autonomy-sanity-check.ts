@@ -5,6 +5,8 @@ import { Queue } from "bullmq";
 import { PrismaClient, ScrapeStatus } from "@prisma/client";
 import {
   buildEventScrapePolicy,
+  computeEventRecoveryStaleThresholdMs,
+  resolveScrapeLockStaleMsFromEnv,
   shouldRunEventAutoScrape,
   resolveEventScrapeIntervalOverridesFromEnv,
 } from "@cbtm/shared";
@@ -259,8 +261,9 @@ async function checkEventFreshness(
       if (pendingByEvent.has(event.id)) {
         continue;
       }
-      const intervalMs = Math.max(1, policy.recommendedIntervalMs ?? refreshMs);
-      const overdueMs = decision.elapsedMs === null ? intervalMs : Math.max(0, decision.elapsedMs - intervalMs);
+      const staleThresholdMs = computeEventRecoveryStaleThresholdMs(policy);
+      const overdueMs =
+        decision.elapsedMs === null ? staleThresholdMs : Math.max(0, decision.elapsedMs - staleThresholdMs);
       if (overdueMs <= refreshMs) {
         continue;
       }
@@ -268,7 +271,7 @@ async function checkEventFreshness(
         eventId: event.id,
         eventName: event.nome,
         policyReason: policy.reason,
-        intervalMs,
+        staleThresholdMs,
         lastScrapeAt: event.lastScrapeAt ? event.lastScrapeAt.toISOString() : null,
         overdueMs,
       });
@@ -393,10 +396,7 @@ async function main(): Promise<void> {
     "postgresql://postgres:postgres@localhost:5432/cbtm";
   const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";
 
-  const staleLockMs = asInt(
-    process.env.HEALTH_MONITOR_STALE_LOCK_MS ?? process.env.SCRAPE_LOCK_STALE_MS,
-    900000,
-  );
+  const staleLockMs = resolveScrapeLockStaleMsFromEnv(process.env);
   const maxPendingJobs = asInt(process.env.SCRAPER_AUTO_SCRAPE_MAX_PENDING_JOBS, 20);
   const refreshMs = asInt(process.env.SCRAPER_REFRESH_CRON_MS, 600000);
 

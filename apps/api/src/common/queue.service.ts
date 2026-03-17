@@ -130,6 +130,30 @@ export class QueueService implements OnModuleDestroy {
     return this.enqueueUnique("scrape-event", { eventId, reason }, jobId);
   }
 
+  async enqueueReprocessLifecycle(eventId: number): Promise<{
+    status: "queued";
+    items: Array<{
+      step: "stage2" | "stage3" | "post-scrape";
+      jobId: string;
+      deduplicated?: boolean;
+    }>;
+  }> {
+    const [stage2, stage3, postScrape] = await Promise.all([
+      this.enqueueScrapeNow(eventId, 2),
+      this.enqueueScrapeNow(eventId, 3),
+      this.enqueuePostScrapeReprocess(eventId),
+    ]);
+
+    return {
+      status: "queued",
+      items: [
+        { step: "stage2", jobId: stage2.jobId, deduplicated: stage2.deduplicated },
+        { step: "stage3", jobId: stage3.jobId, deduplicated: stage3.deduplicated },
+        { step: "post-scrape", jobId: postScrape.jobId, deduplicated: postScrape.deduplicated },
+      ],
+    };
+  }
+
   async enqueuePublishReadonly(
     eventId: number,
     mode: "incremental" | "full_event_rebuild" = "incremental",

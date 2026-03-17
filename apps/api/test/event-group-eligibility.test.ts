@@ -8,7 +8,7 @@ import {
 
 test("detecta estrutura oficial de grupos por fase ou rodada", () => {
   assert.equal(hasGroupStructureFromMatch({ phase: "GRUPOS", round: null }), true);
-  assert.equal(hasGroupStructureFromMatch({ phase: "ELIMINATORIA", round: "Grupo 01" }), true);
+  assert.equal(hasGroupStructureFromMatch({ phase: "RESULTADOS", round: "Grupo 01" }), true);
   assert.equal(hasGroupStructureFromMatch({ phase: "RESULTADOS", round: "Semifinal" }), false);
 });
 
@@ -50,4 +50,3 @@ test("simulador so pode ser usado sem grupos definidos e em situacao elegivel", 
     false,
   );
 });
-

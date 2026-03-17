@@ -3,6 +3,44 @@ export * from "./event-situation";
 export * from "./brazil-states";
 export * from "./registration-status";
 
+export const OPERATIONAL_WARNING_CODES = new Set<string>([
+  "POST_SCRAPE_SUMMARY",
+  "GUARDRAIL_REGISTRATION_DROP",
+  "GUARDRAIL_REGRESSION",
+  "HTTP_DEGRADED_RESULTS",
+  "SCRAPE_STRICT_QUALITY_GATE_ALERTA",
+  "AUDITORIA_CATEGORIAS_DIVERGENCIA",
+  "AUDITORIA_INSCRICOES_DIVERGENCIA",
+  "AUDITORIA_PARTIDAS_DIVERGENCIA",
+  "AUDITORIA_PARTIDAS_JOGADAS_DIVERGENCIA",
+  "AUDITORIA_CONFLITOS_PENDENTES",
+  "AUDITORIA_ELIMINATORIA_BLOQUEADA",
+  "AUDITORIA_REGRA_VINCULO",
+  "CONFLITO_DE_ATLETA_PENDENTE",
+  "CONFLITO_DE_ATLETA_AUTORRESOLVIDO",
+  "MERGE_WARNING_PARTICIPANTES",
+  "WARNINGS_FILTRADOS_RUIDO",
+  "WARNINGS_SEVERIDADE_TRUNCADOS",
+  "WARNINGS_TRUNCATED",
+]);
+
+export function extractWarningCode(warning: string | null | undefined): string | null {
+  const text = String(warning ?? "").trim();
+  if (!text) {
+    return null;
+  }
+  const match = text.match(/^([A-Z0-9_]+):/);
+  return match?.[1] ?? null;
+}
+
+export function isOperationalRecoveryWarning(warning: string | null | undefined): boolean {
+  const code = extractWarningCode(warning);
+  if (!code) {
+    return false;
+  }
+  return OPERATIONAL_WARNING_CODES.has(code);
+}
+
 export type MatchPhase = "INSCRICOES" | "GRUPOS" | "RESULTADOS" | "ELIMINATORIA";
 export type AliasSource = "INSCRICOES" | "JOGOS";
 export type SummaryOrderBy = "phase_hierarchy_datetime" | "category_phase_datetime";
@@ -949,16 +987,30 @@ export function computeMatchKey(input: MatchKeyInput): string {
   return createHash("sha1").update(payload).digest("hex");
 }
 
+export function normalizeLegacyMatchPhase(
+  phase: MatchPhase | string | null | undefined,
+): "INSCRICOES" | "GRUPOS" | "RESULTADOS" {
+  switch ((phase ?? "").toString().trim().toUpperCase()) {
+    case "INSCRICOES":
+      return "INSCRICOES";
+    case "GRUPOS":
+      return "GRUPOS";
+    case "ELIMINATORIA":
+    case "RESULTADOS":
+      return "RESULTADOS";
+    default:
+      return "RESULTADOS";
+  }
+}
+
 export function getMatchPhaseOrder(phase: MatchPhase | string | null | undefined): number {
-  switch ((phase ?? "").toString().toUpperCase()) {
+  switch (normalizeLegacyMatchPhase(phase)) {
     case "GRUPOS":
       return 1;
-    case "ELIMINATORIA":
-      return 2;
     case "RESULTADOS":
-      return 3;
+      return 2;
     case "INSCRICOES":
-      return 4;
+      return 3;
     default:
       return 99;
   }

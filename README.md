@@ -1,4 +1,4 @@
-﻿# appcbtmeventos (monorepo)
+# appcbtmeventos (monorepo)
 
 Sistema full-stack para extração, normalização, persistência e consulta de eventos CBTM (URAL Base), com scraping de callbacks DevExpress (DX).
 
@@ -151,14 +151,24 @@ docker compose up --build -d
 docker compose ps
 ```
 
+Isso sobe backend e infraestrutura local. O frontend do monorepo via Docker continua sob o profile `local-ui`.
+
+Para subir o frontend local do monorepo via Docker, use também o profile `local-ui`:
+
+```bash
+docker compose --profile local-ui up --build -d
+```
+
 Serviços:
 - API: `http://localhost:4000`
 - Web: `http://localhost:3000`
 - Postgres: `localhost:5432`
 - Redis: `localhost:6379`
 
-Credenciais padrão:
-- admin: `mush1n-d0sh4 / Mur1l0@8#`
+Credenciais locais:
+- Usuário admin padrão do ambiente local: `admin-local`
+- Senha padrão apenas para desenvolvimento local via `docker-compose.yml`: `admin-local-change-me`
+- Em produção, configure obrigatoriamente `JWT_SECRET`, `ADMIN_USERNAME` e `ADMIN_PASSWORD_HASH`
 
 ## Fluxo de uso
 1. Abrir `http://localhost:3000`.
@@ -317,6 +327,62 @@ npm run smoke:fixture
 
 Documentacao adicional:
 - `docs/placares-aproveitamento-status.md`
+
+## Notas de UI responsiva
+
+### Breakpoints padrao
+- `mobile`: `< 640px`
+- `tablet`: `640px - 1023px`
+- `desktop`: `>= 1024px`
+
+### Container global
+- Classe: `.container`
+- `max-width: 1200px`
+- Padding:
+  - mobile: `16px`
+  - tablet: `24px`
+  - desktop: `32px`
+
+### Componentes novos
+- `apps/web/components/ui/SegmentedControl.tsx`
+  - Controle segmentado para filtros/tabs consistentes.
+- `apps/web/components/ui/SearchInput.tsx`
+  - Busca com debounce opcional e icone padronizado.
+- `apps/web/components/ui/FilterDrawer.tsx`
+  - Filtros colapsaveis no mobile.
+- `apps/web/components/ui/EmptyState.tsx`
+  - Estado vazio consistente com titulo + descricao.
+- `apps/web/components/ui/DataTableResponsive.tsx`
+  - Estrutura table-to-cards (desktop tabela, mobile cards).
+
+### Padroes aplicados
+- Filtros mobile com drawer em `Home` e `Eventos`.
+- Busca padronizada em `Atletas`, `Eficiencia` e `Evento > Atletas/Clubes`.
+- Segmented control padronizado em:
+  - `Home` (filtros)
+  - `Eventos` (filtros)
+  - `Evento/[id]` (tabs e eficiencia)
+  - `Group Simulator` (escopo)
+  - `Resumo do atleta do evento` (agrupamento de jogos)
+- Empty states padronizados nas listagens filtraveis.
+
+### Como usar `DataTableResponsive`
+- Passe `columns`, `rows`, `mobileCard` e `empty`.
+- Exemplo:
+  - desktop: colunas em `<table className="data-table">`
+  - mobile: renderizacao em cards via `mobileCard`.
+
+### Como usar `FilterDrawer` e `FilterBar`
+- `FilterDrawer` e focado em mobile; aciona painel colapsavel.
+- Para desktop, mantenha controles em linha (ex.: `SegmentedControl`) dentro do card.
+- Regra geral:
+  - mobile: drawer/colapsavel
+  - desktop: inline
+
+### Decisoes principais
+- Mantida arquitetura atual (rotas canonicas consumindo paginas de `app/user/*` quando necessario).
+- Nao alterados contratos de API.
+- Prioridade em componentes reutilizaveis e consistencia de interacao mobile-first.
 
 ## Migrations Prisma
 - `prisma/migrations/20260209120000_init`

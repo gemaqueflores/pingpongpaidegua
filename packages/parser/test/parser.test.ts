@@ -39,6 +39,7 @@ describe("parser DX", () => {
     expect(dataset.extractionStats.categoriesScanned).toBeGreaterThan(0);
     expect(dataset.extractionStats.tabPayloadCounts.INSCRICOES).toBeGreaterThan(0);
     expect(dataset.matches.some((m) => m.phase === "RESULTADOS")).toBe(true);
+    expect(dataset.matches.some((m) => m.phase === "ELIMINATORIA")).toBe(false);
   });
 
   it("deve manter match_key deterministico", () => {

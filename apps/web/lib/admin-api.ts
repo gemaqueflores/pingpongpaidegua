@@ -245,6 +245,17 @@ export async function apiUpdateEfficiencyConfig(payload: {
   return handleResponse(response);
 }
 
+export async function apiReprocessLifecycle(id: number) {
+  const response = await fetchWithRecovery(`${API_BASE}/admin/events/${id}/reprocess-lifecycle`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({}),
+    keepalive: true,
+  });
+
+  return handleResponse(response);
+}
+
 export async function apiGetEventMerges(): Promise<AdminEventMergeRow[]> {
   const response = await fetchWithRecovery(`${API_BASE}/admin/events/merges`, {
     headers: getHeaders(),

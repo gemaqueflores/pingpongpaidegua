@@ -2,6 +2,7 @@ import {
   ParsedMatch,
   ParsedMatchSet,
   compactWhitespace,
+  normalizeLegacyMatchPhase,
   normalizeText,
 } from "@cbtm/shared";
 import { parseScoreRaw } from "./score-parser";
@@ -647,6 +648,7 @@ function mergeGroup(eventId: number, group: ParsedMatch[], warnings: string[]): 
   }
 
   merged.setsResult = mergedFinal;
+  merged.phase = normalizeLegacyMatchPhase(merged.phase);
   merged.scoreRaw = mergedScoreRaw;
   merged.cbtmMatchId = mergedCbtmMatchId;
   merged.sourceFlags = mergedFlags;

@@ -3,6 +3,7 @@ import { JwtService } from "@nestjs/jwt";
 import { compareSync, hashSync } from "bcryptjs";
 import { createHash, randomBytes } from "crypto";
 import { PrismaService } from "../common/prisma.service";
+import { resolveAdminUsername, resolveBootstrapAdminPasswordHash } from "./auth-config";
 
 interface AuthAccount {
   id: number;
@@ -31,8 +32,8 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
   ) {
-    this.adminUsername = this.resolveAdminUsername();
-    this.bootstrapAdminPasswordHash = this.resolveBootstrapAdminPasswordHash();
+    this.adminUsername = resolveAdminUsername();
+    this.bootstrapAdminPasswordHash = resolveBootstrapAdminPasswordHash();
 
     if (!this.bootstrapAdminPasswordHash.startsWith("$2")) {
       throw new Error("ADMIN_PASSWORD_HASH invalido: use hash bcrypt");
@@ -50,32 +51,6 @@ export class AuthService {
     const resetTtlMinutes = Number.isFinite(resetTtlRaw) && resetTtlRaw > 0 ? resetTtlRaw : 30;
     this.resetTokenTtlMs = Math.floor(resetTtlMinutes * 60 * 1000);
     this.adminResetEmail = (process.env.ADMIN_RESET_EMAIL ?? "gemaqueflores@gmail.com").trim().toLowerCase();
-  }
-
-  private isProduction(): boolean {
-    return (process.env.NODE_ENV ?? "development") === "production";
-  }
-
-  private resolveAdminUsername(): string {
-    const configured = process.env.ADMIN_USERNAME?.trim();
-    if (configured) {
-      return configured;
-    }
-    if (this.isProduction()) {
-      throw new Error("ADMIN_USERNAME obrigatorio em producao.");
-    }
-    return "mush1n-d0sh4";
-  }
-
-  private resolveBootstrapAdminPasswordHash(): string {
-    const configured = process.env.ADMIN_PASSWORD_HASH?.trim();
-    if (configured) {
-      return configured;
-    }
-    if (this.isProduction()) {
-      throw new Error("ADMIN_PASSWORD_HASH obrigatorio em producao.");
-    }
-    return "$2a$12$Iq1queD4Z4aK9GFqIvVGz..KPrev.5WHB7PJdaAXqLBbLf5XYcthC";
   }
 
   setNowProvider(nowProvider: () => number): void {

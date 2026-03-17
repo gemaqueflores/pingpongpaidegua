@@ -1,6 +1,12 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { Prisma, ScrapeStatus } from "@prisma/client";
-import { buildEventScrapePolicy, resolveEventScrapeIntervalOverridesFromEnv } from "@cbtm/shared";
+import {
+  buildEventScrapePolicy,
+  computeEventRecoveryStaleThresholdMs,
+  isOperationalRecoveryWarning,
+  resolveEventScrapeIntervalOverridesFromEnv,
+  resolveScrapeLockStaleMsFromEnv,
+} from "@cbtm/shared";
 import { PrismaReadService, PrismaService } from "./prisma.service";
 import { QueueService } from "./queue.service";
 
@@ -11,7 +17,7 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
   private readonly enabled = process.env.HEALTH_MONITOR_ENABLED !== "false";
   private readonly intervalMs = Math.max(5000, Number(process.env.HEALTH_MONITOR_INTERVAL_MS ?? "30000"));
   private readonly recoveryEnabled = process.env.HEALTH_MONITOR_RECOVERY_ENABLED !== "false";
-  private readonly staleLockMs = Math.max(60000, Number(process.env.HEALTH_MONITOR_STALE_LOCK_MS ?? "900000"));
+  private readonly staleLockMs = resolveScrapeLockStaleMsFromEnv(process.env);
   private readonly scrapeLookbackMs = Math.max(
     300000,
     Number(process.env.HEALTH_MONITOR_SCRAPE_LOOKBACK_MS ?? "5400000"),
@@ -165,15 +171,7 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
       return true;
     }
 
-    const warningText = input.warnings.join("\n").toLowerCase();
-    if (
-      warningText.includes("http_degraded_results") ||
-      warningText.includes("auditoria_partidas_divergencia") ||
-      warningText.includes("auditoria_inscricoes_divergencia") ||
-      warningText.includes("auditoria_conflitos_pendentes") ||
-      warningText.includes("scrape_strict_quality_gate_alerta") ||
-      warningText.includes("conflito_de_atleta_pendente")
-    ) {
+    if (input.warnings.some((warning) => isOperationalRecoveryWarning(warning))) {
       return true;
     }
 
@@ -376,8 +374,7 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
       if (!policy.autoSchedule) {
         continue;
       }
-      const intervalMs = Math.max(30 * 60 * 1000, policy.recommendedIntervalMs ?? 30 * 60 * 1000);
-      const maxStalenessMs = intervalMs * 2;
+      const maxStalenessMs = computeEventRecoveryStaleThresholdMs(policy);
       const stale =
         !event.lastScrapeAt || now.getTime() - event.lastScrapeAt.getTime() > maxStalenessMs;
       if (!stale) {
