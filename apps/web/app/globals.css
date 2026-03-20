@@ -1861,6 +1861,12 @@ a {
     padding: 14px;
   }
 
+  .user-theme .product-header.user {
+    background: rgba(2, 13, 35, 0.96);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  }
+
   .sim-category-carousel-header {
     gap: 6px;
   }
