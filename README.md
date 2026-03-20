@@ -263,6 +263,22 @@ Credenciais locais:
   - Secrets obrigatorios:
     - `ORACLE_SSH_HOST`
     - `ORACLE_SSH_USER`
+    - `ORACLE_SSH_KEY`
+
+## Operacao leve na VM (Oracle Always Free)
+- Self-heal dos containers:
+  - Instalar: `bash scripts/vm/install-self-heal.sh`
+  - Recovery: `scripts/vm/ppg-recover.sh`
+- Saude da VM e housekeeping leve:
+  - Instalar: `bash scripts/vm/install-vm-ops.sh`
+  - Health log: `.runtime/ppg-vm-health.log`
+  - Housekeeping log: `.runtime/ppg-housekeeping.log`
+- O housekeeping:
+  - remove containers parados
+  - remove imagens Docker nao utilizadas com idade configuravel
+  - nao remove volumes
+  - nao reinicia servicos
+    - `ORACLE_SSH_USER`
     - `ORACLE_SSH_PRIVATE_KEY`
   - Secrets opcionais:
     - `ORACLE_SSH_PORT` (default `22`)
