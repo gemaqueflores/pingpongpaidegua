@@ -133,6 +133,14 @@ function inferEventType(event: EventRow): Exclude<EventTypeFilter, "ALL"> {
   return "ESTADUAL";
 }
 
+function normalizeQuickLookupText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>([]);
@@ -209,6 +217,41 @@ export default function HomePage() {
     return athlete.nameDisplay ?? athlete.name ?? `Atleta #${athlete.id}`;
   }
 
+  function pickQuickAthleteOption(
+    query: string,
+    options: AthleteQuickOption[],
+  ): AthleteQuickOption | null {
+    if (options.length === 0) {
+      return null;
+    }
+
+    const normalizedQuery = normalizeQuickLookupText(query);
+    if (!normalizedQuery) {
+      return options[0];
+    }
+
+    const exact = options.find((option) => normalizeQuickLookupText(athleteOptionLabel(option)) === normalizedQuery);
+    if (exact) {
+      return exact;
+    }
+
+    const startsWith = options.find((option) =>
+      normalizeQuickLookupText(athleteOptionLabel(option)).startsWith(normalizedQuery),
+    );
+    if (startsWith) {
+      return startsWith;
+    }
+
+    const includes = options.find((option) =>
+      normalizeQuickLookupText(athleteOptionLabel(option)).includes(normalizedQuery),
+    );
+    if (includes) {
+      return includes;
+    }
+
+    return options[0];
+  }
+
   function setQuickSearchState(eventId: number, nextQuery: string): void {
     setQuickAthleteQueryByEventId((current) => ({ ...current, [eventId]: nextQuery }));
     setQuickAthleteTouchedByEventId((current) => ({ ...current, [eventId]: true }));
@@ -248,10 +291,50 @@ export default function HomePage() {
     }, 220);
   }
 
-  function openAthleteGames(eventId: number): void {
+  async function resolveQuickAthleteSelection(eventId: number): Promise<AthleteQuickOption | null> {
     const selected = quickAthleteSelectedByEventId[eventId];
-    if (!selected) return;
-    router.push(`/events/${eventId}/athletes/${selected.id}`);
+    if (selected) {
+      return selected;
+    }
+
+    const query = (quickAthleteQueryByEventId[eventId] ?? "").trim();
+    if (query.length < 2) {
+      return null;
+    }
+
+    const cachedOptions = quickAthleteOptionsByEventId[eventId] ?? [];
+    const cachedMatch = pickQuickAthleteOption(query, cachedOptions);
+    if (cachedMatch) {
+      setQuickAthleteSelectedByEventId((current) => ({ ...current, [eventId]: cachedMatch }));
+      setQuickAthleteQueryByEventId((current) => ({ ...current, [eventId]: athleteOptionLabel(cachedMatch) }));
+      setQuickAthleteOptionsByEventId((current) => ({ ...current, [eventId]: [] }));
+      return cachedMatch;
+    }
+
+    setQuickAthleteLoadingByEventId((current) => ({ ...current, [eventId]: true }));
+    try {
+      const rows = (await apiGetAthletes(eventId, query)) as AthleteQuickOption[];
+      const match = pickQuickAthleteOption(query, rows.slice(0, 8));
+      setQuickAthleteOptionsByEventId((current) => ({ ...current, [eventId]: rows.slice(0, 8) }));
+      if (!match) {
+        return null;
+      }
+      setQuickAthleteSelectedByEventId((current) => ({ ...current, [eventId]: match }));
+      setQuickAthleteQueryByEventId((current) => ({ ...current, [eventId]: athleteOptionLabel(match) }));
+      setQuickAthleteOptionsByEventId((current) => ({ ...current, [eventId]: [] }));
+      return match;
+    } catch {
+      setQuickAthleteOptionsByEventId((current) => ({ ...current, [eventId]: [] }));
+      return null;
+    } finally {
+      setQuickAthleteLoadingByEventId((current) => ({ ...current, [eventId]: false }));
+    }
+  }
+
+  async function openAthleteGames(eventId: number): Promise<void> {
+    const athlete = await resolveQuickAthleteSelection(eventId);
+    if (!athlete) return;
+    router.push(`/events/${eventId}/athletes/${athlete.id}`);
   }
 
   function joinWaitlist(): void {
@@ -378,6 +461,12 @@ export default function HomePage() {
                           onChange={(inputEvent) => {
                             setQuickSearchState(event.id, inputEvent.target.value);
                           }}
+                          onKeyDown={(inputEvent) => {
+                            if (inputEvent.key === "Enter") {
+                              inputEvent.preventDefault();
+                              void openAthleteGames(event.id);
+                            }
+                          }}
                           onFocus={() =>
                             setQuickAthleteTouchedByEventId((current) => ({ ...current, [event.id]: true }))
                           }
@@ -426,8 +515,13 @@ export default function HomePage() {
                       <button
                         type="button"
                         className="secondary"
-                        onClick={() => openAthleteGames(event.id)}
-                        disabled={!quickAthleteSelectedByEventId[event.id]}
+                        onClick={() => {
+                          void openAthleteGames(event.id);
+                        }}
+                        disabled={
+                          quickAthleteLoadingByEventId[event.id] ||
+                          (quickAthleteQueryByEventId[event.id] ?? "").trim().length < 2
+                        }
                       >
                         Ver meus jogos
                       </button>
