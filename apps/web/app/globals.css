@@ -2640,6 +2640,7 @@ a {
   .next-event-actions {
     width: 100%;
   }
+}
 
 .next-event-actions button,
 .club-efficiency-button {
@@ -2780,7 +2781,6 @@ a {
   .next-event-athlete-form > button {
     width: 100%;
   }
-}
 }
 
 @media (max-width: 430px) {
