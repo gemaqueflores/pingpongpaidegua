@@ -16,6 +16,8 @@ VM_SWAP_WARN_MB="${VM_SWAP_WARN_MB:-1024}"
 VM_SWAP_FAIL_MB="${VM_SWAP_FAIL_MB:-2048}"
 VM_DOCKER_RECLAIMABLE_WARN_MB="${VM_DOCKER_RECLAIMABLE_WARN_MB:-4096}"
 VM_CONTAINER_RESTART_WARN="${VM_CONTAINER_RESTART_WARN:-1}"
+VM_PG_CONNECTIONS_WARN="${VM_PG_CONNECTIONS_WARN:-30}"
+VM_PG_CONNECTIONS_FAIL="${VM_PG_CONNECTIONS_FAIL:-38}"
 
 if [[ ! -d "$APP_DIR" ]]; then
   exit 0
@@ -70,6 +72,27 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   )"
 fi
 
+pg_connections_total="0"
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && [[ -d "$APP_DIR" ]]; then
+  cd "$APP_DIR"
+  compose_cmd=(docker compose -p "$PROJECT_NAME")
+  if ! "${compose_cmd[@]}" version >/dev/null 2>&1; then
+    if command -v docker-compose >/dev/null 2>&1; then
+      compose_cmd=(docker-compose -p "$PROJECT_NAME")
+    else
+      compose_cmd=()
+    fi
+  fi
+
+  if [[ "${#compose_cmd[@]}" -gt 0 ]]; then
+    pg_connections_total="$(
+      "${compose_cmd[@]}" exec -T postgres psql -U postgres -d cbtm -At -c "SELECT count(*) FROM pg_stat_activity;" 2>/dev/null \
+        | tr -d '[:space:]' \
+        || echo "0"
+    )"
+  fi
+fi
+
 status="pass"
 reasons=()
 
@@ -107,11 +130,21 @@ if (( restart_count >= VM_CONTAINER_RESTART_WARN )) && [[ "$status" != "fail" ]]
   reasons+=("container_restarts=${restart_count}")
 fi
 
+if [[ "$pg_connections_total" =~ ^[0-9]+$ ]]; then
+  if (( pg_connections_total >= VM_PG_CONNECTIONS_FAIL )); then
+    status="fail"
+    reasons+=("pg_connections=${pg_connections_total}")
+  elif (( pg_connections_total >= VM_PG_CONNECTIONS_WARN )) && [[ "$status" != "fail" ]]; then
+    status="warn"
+    reasons+=("pg_connections=${pg_connections_total}")
+  fi
+fi
+
 if [[ "${#reasons[@]}" -eq 0 ]]; then
   reasons+=("ok")
 fi
 
-echo "${timestamp} vm_health status=${status} reasons=${reasons[*]} metrics=disk:${disk_percent}% mem_available:${mem_available_mb}MB swap_used:${swap_used_mb}MB reclaimable_images:${reclaimable_images_mb}MB restarts:${restart_count}"
+echo "${timestamp} vm_health status=${status} reasons=${reasons[*]} metrics=disk:${disk_percent}% mem_available:${mem_available_mb}MB swap_used:${swap_used_mb}MB reclaimable_images:${reclaimable_images_mb}MB restarts:${restart_count} pg_connections:${pg_connections_total}"
 
 case "$status" in
   pass) exit 0 ;;

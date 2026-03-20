@@ -6,7 +6,7 @@ services:
     command:
       - postgres
       - -c
-      - max_connections=80
+      - max_connections=50
       - -c
       - shared_buffers=128MB
       - -c
@@ -111,9 +111,9 @@ services:
       SCRAPE_INTERVAL_GRADES_PUBLICADAS_PRE_JOGO_MS: 2700000
       SCRAPE_INTERVAL_EM_ANDAMENTO_MS: 1800000
       NODE_OPTIONS: --max-old-space-size=384
-      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=12&pool_timeout=30&connect_timeout=10}
-      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=24&pool_timeout=30&connect_timeout=10}
-      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=12&pool_timeout=30&connect_timeout=10}
+      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=6&pool_timeout=30&connect_timeout=10}
+      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=10&pool_timeout=30&connect_timeout=10}
+      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=6&pool_timeout=30&connect_timeout=10}
       REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
@@ -144,9 +144,9 @@ services:
       dockerfile: docker/worker.Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=8&pool_timeout=30&connect_timeout=10}
-      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=4&pool_timeout=30&connect_timeout=10}
-      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=8&pool_timeout=30&connect_timeout=10}
+      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=4&pool_timeout=30&connect_timeout=10}
+      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=2&pool_timeout=30&connect_timeout=10}
+      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=4&pool_timeout=30&connect_timeout=10}
       REDIS_URL: redis://redis:6379
       SCRAPER_MODE: live
       SCRAPER_EVENT_URL: https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID={EVENT_ID}
