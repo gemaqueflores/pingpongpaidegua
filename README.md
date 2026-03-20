@@ -278,11 +278,9 @@ Credenciais locais:
   - remove imagens Docker nao utilizadas com idade configuravel
   - nao remove volumes
   - nao reinicia servicos
-    - `ORACLE_SSH_USER`
-    - `ORACLE_SSH_PRIVATE_KEY`
-  - Secrets opcionais:
-    - `ORACLE_SSH_PORT` (default `22`)
-    - `ORACLE_APP_DIR` (default `~/pingpongpaidegua`)
+- Tuning leve para Always Free:
+  - pools Prisma e `max_connections` do Postgres foram reduzidos para perfil conservador
+  - prewarm de read models no worker e limitado para evitar picos apos scrape
 
 ## Publicacao online (producao)
 1. Configure DNS do dominio para o servidor.
