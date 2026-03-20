@@ -4,6 +4,7 @@ import type { Viewport } from "next";
 import { Inter, Montserrat } from "next/font/google";
 import { designTokens } from "../lib/designTokens";
 import { SITE_URL, buildMetadata } from "../lib/seo";
+import { siteContent } from "../lib/siteContent";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "700"], display: "swap" });
 const montserrat = Montserrat({ subsets: ["latin"], weight: ["700", "800"], display: "swap" });
@@ -17,8 +18,8 @@ export const viewport: Viewport = {
 export const metadata = {
   metadataBase: new URL(SITE_URL),
   ...buildMetadata({
-    title: "Plataforma de Tênis de Mesa: PingPong Paid'egua",
-    description: "Plataforma de Tênis de Mesa: PingPong Paid'egua",
+    title: `${siteContent.projectName} | T?nis de Mesa`,
+    description: siteContent.shortDescription,
     path: "/",
   }),
 };

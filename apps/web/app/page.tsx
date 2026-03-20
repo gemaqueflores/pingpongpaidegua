@@ -19,6 +19,8 @@ import { UserShell } from "../components/user/UserShell";
 import { SegmentedControl } from "../components/ui/SegmentedControl";
 import { FilterDrawer } from "../components/ui/FilterDrawer";
 import { EmptyState } from "../components/ui/EmptyState";
+import { PublicFooter } from "../components/user/PublicFooter";
+import { buildWaitlistMailto, siteContent } from "../lib/siteContent";
 
 type EventRow = UserEventRow;
 type EventTypeFilter = "ALL" | "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN";
@@ -151,6 +153,7 @@ export default function HomePage() {
     Record<number, AthleteQuickOption | null>
   >({});
   const [quickAthleteTouchedByEventId, setQuickAthleteTouchedByEventId] = useState<Record<number, boolean>>({});
+  const [waitlistEmail, setWaitlistEmail] = useState("");
   const quickSearchTimersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
@@ -251,13 +254,17 @@ export default function HomePage() {
     router.push(`/events/${eventId}/athletes/${selected.id}`);
   }
 
+  function joinWaitlist(): void {
+    window.location.href = buildWaitlistMailto(waitlistEmail.trim());
+  }
+
   return (
     <UserShell>
       <div className="user-theme home-theme">
       <main className="container grid user-page">
         <Hero
           title="Plataforma de Tênis de Mesa Brasil"
-          subtitle="PingPong Paid'egua"
+          subtitle={siteContent.heroStatement}
           className="home-page-hero"
           actions={
             <>
@@ -276,9 +283,60 @@ export default function HomePage() {
               >
                 Apoie o projeto
               </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => router.push("/sobre")}
+                aria-label="Saiba mais sobre o projeto"
+              >
+                Sobre o app
+              </button>
             </>
           }
         />
+        <Card className="grid" variant="event">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <h2>Sobre o projeto</h2>
+            <Badge tone="default">Projeto independente</Badge>
+          </div>
+          <p className="arena-muted">{siteContent.shortDescription}</p>
+          <div className="institutional-grid">
+            <article className="athlete-list-card compact-summary-card">
+              <h3>Como funciona</h3>
+              <ol className="institutional-list">
+                <li>Capturamos inscrições, grupos e resultados de eventos de tênis de mesa.</li>
+                <li>Processamos atletas, clubes, jogos e categorias com regras auditáveis.</li>
+                <li>Publicamos consultas rápidas para atletas, clubes e acompanhamento do evento.</li>
+              </ol>
+            </article>
+            <article className="athlete-list-card compact-summary-card">
+              <h3>Principais recursos</h3>
+              <ul className="institutional-list">
+                <li>Consulta pública de eventos, atletas e eficiência.</li>
+                <li>Resumo individual por atleta e leitura de desempenho.</li>
+                <li>Simulador de grupos e acompanhamento por categoria.</li>
+              </ul>
+            </article>
+            <article className="athlete-list-card compact-summary-card">
+              <h3>Lista de espera</h3>
+              <p className="compact-summary-meta">
+                Receba novidades sobre novos recursos, cobertura de eventos e evoluções do app.
+              </p>
+              <div className="institutional-waitlist">
+                <input
+                  type="email"
+                  value={waitlistEmail}
+                  onChange={(event) => setWaitlistEmail(event.target.value)}
+                  placeholder="Seu e-mail"
+                  aria-label="Seu e-mail"
+                />
+                <button type="button" onClick={joinWaitlist}>
+                  Entrar na lista
+                </button>
+              </div>
+            </article>
+          </div>
+        </Card>
         {highlightedEvent ? (
           <Card className="grid" variant="event">
             <div className="row" style={{ justifyContent: "space-between" }}>
@@ -480,9 +538,7 @@ export default function HomePage() {
           ) : null}
         </Card>
 
-        <footer className="arena-footer">
-          <p>PingPong Paid'egua © {new Date().getFullYear()} - Plataforma de Tênis de Mesa Brasil</p>
-        </footer>
+        <PublicFooter />
       </main>
       </div>
     </UserShell>

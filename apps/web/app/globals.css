@@ -2724,6 +2724,54 @@ a {
   font-size: 0.86rem;
 }
 
+.institutional-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.institutional-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.institutional-list li {
+  color: var(--text-main);
+}
+
+.institutional-waitlist {
+  display: grid;
+  gap: 10px;
+}
+
+.institutional-waitlist input {
+  width: 100%;
+}
+
+.public-site-footer {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+
+.public-site-footer p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.public-site-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.public-site-footer-links a {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
 @media (max-width: 640px) {
   .next-event-athlete-form {
     grid-template-columns: 1fr;
