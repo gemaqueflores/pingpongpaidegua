@@ -10,6 +10,9 @@ export function PublicFooter() {
         <a href={siteContent.socialLinks.github} target="_blank" rel="noreferrer">
           GitHub
         </a>
+        <a href={siteContent.socialLinks.youtube} target="_blank" rel="noreferrer">
+          YouTube
+        </a>
         <a href={siteContent.socialLinks.instagram} target="_blank" rel="noreferrer">
           Instagram
         </a>

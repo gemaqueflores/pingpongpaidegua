@@ -25,23 +25,23 @@ export default function SobrePage() {
           <h2>Proposta</h2>
           <p className="arena-muted">{siteContent.shortDescription}</p>
           <p className="arena-muted">
-            O projeto foi criado para oferecer leitura p\u00fablica, acompanhamento de eventos,
-            consulta de atletas, efici\u00eancia de clubes e an\u00e1lise de resultados de
-            t\u00eanis de mesa com foco em consist\u00eancia e transpar\u00eancia.
+            O projeto foi criado para oferecer leitura pública, acompanhamento de eventos,
+            consulta de atletas, eficiência de clubes e análise de resultados de tênis de mesa
+            com foco em consistência e transparência.
           </p>
         </Card>
 
         <Card className="grid" variant="event">
           <h2>Como usamos os dados</h2>
           <ul className="institutional-list">
-            <li>Captura de informa\u00e7\u00f5es p\u00fablicas de eventos, categorias, atletas e resultados.</li>
-            <li>Normaliza\u00e7\u00e3o e auditoria para leitura r\u00e1pida no site.</li>
-            <li>Publica\u00e7\u00e3o de consultas para atletas, clubes e interessados no evento.</li>
+            <li>Captura de informações públicas de eventos, categorias, atletas e resultados.</li>
+            <li>Normalização e auditoria para leitura rápida no site.</li>
+            <li>Publicação de consultas para atletas, clubes e interessados no evento.</li>
           </ul>
         </Card>
 
         <Card className="grid" variant="event">
-          <h2>Respons\u00e1vel</h2>
+          <h2>Responsável</h2>
           <p className="arena-muted">
             {siteContent.responsibleName} {"\u00b7"} {siteContent.cityState}
           </p>

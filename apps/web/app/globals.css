@@ -2774,6 +2774,14 @@ a {
 }
 
 @media (max-width: 640px) {
+  .public-site-footer {
+    text-align: center;
+  }
+
+  .public-site-footer-links {
+    justify-content: center;
+  }
+
   .next-event-athlete-form {
     grid-template-columns: 1fr;
   }
