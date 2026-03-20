@@ -3167,6 +3167,16 @@ a {
   min-height: 0;
 }
 
+.page-header-compact .hero-title {
+  font-size: clamp(1.7rem, 4.4vw, 2.6rem);
+  line-height: 0.96;
+}
+
+.page-header-compact .hero-subtitle {
+  font-size: 0.95rem;
+  margin-top: 4px;
+}
+
 .events-page-header .hero-title {
   font-size: clamp(1.7rem, 4vw, 2.5rem);
 }
