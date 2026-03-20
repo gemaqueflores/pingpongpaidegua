@@ -7,7 +7,7 @@ import { siteContent } from "../../lib/siteContent";
 
 export const metadata = buildMetadata({
   title: `Contato | ${siteContent.projectName}`,
-  description: `Contato e canais públicos do ${siteContent.projectName}.`,
+  description: `Contato e canais p\u00fablicos do ${siteContent.projectName}.`,
   path: "/contato",
 });
 
@@ -15,7 +15,7 @@ export default function ContatoPage() {
   return (
     <UserShell>
       <main className="container grid user-page">
-        <PageHeader title="Contato" subtitle="Canais públicos do projeto" compact />
+        <PageHeader title="Contato" subtitle="Canais p\u00fablicos do projeto" compact />
 
         <Card className="grid" variant="event">
           <h2>Fale conosco</h2>
@@ -23,12 +23,12 @@ export default function ContatoPage() {
             E-mail: <a href={`mailto:${siteContent.contactEmail}`}>{siteContent.contactEmail}</a>
           </p>
           <p className="arena-muted">
-            Responsável: {siteContent.responsibleName} · {siteContent.cityState}
+            Respons\u00e1vel: {siteContent.responsibleName} {"\u00b7"} {siteContent.cityState}
           </p>
         </Card>
 
         <Card className="grid" variant="event">
-          <h2>Links públicos</h2>
+          <h2>Links p\u00fablicos</h2>
           <ul className="institutional-list">
             <li>
               <a href={siteContent.socialLinks.instagram} target="_blank" rel="noreferrer">

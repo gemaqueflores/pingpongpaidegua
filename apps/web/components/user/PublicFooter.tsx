@@ -15,7 +15,8 @@ export function PublicFooter() {
         </a>
       </div>
       <p>
-        {siteContent.projectName} © {new Date().getFullYear()} · {siteContent.shortDescription}
+        {siteContent.projectName} {"\u00a9"} {new Date().getFullYear()} {"\u00b7"}{" "}
+        {siteContent.shortDescription}
       </p>
       <p>{siteContent.amazonAffiliateDisclosure}</p>
       <p>

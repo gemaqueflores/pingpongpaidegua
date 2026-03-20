@@ -7,7 +7,7 @@ import { siteContent } from "../../lib/siteContent";
 
 export const metadata = buildMetadata({
   title: `Privacidade | ${siteContent.projectName}`,
-  description: `Política de privacidade do ${siteContent.projectName}.`,
+  description: `Pol\u00edtica de privacidade do ${siteContent.projectName}.`,
   path: "/privacidade",
 });
 
@@ -15,20 +15,20 @@ export default function PrivacidadePage() {
   return (
     <UserShell>
       <main className="container grid user-page">
-        <PageHeader title="Privacidade" subtitle="Uso de dados e transparência" compact />
+        <PageHeader title="Privacidade" subtitle="Uso de dados e transpar\u00eancia" compact />
 
         <Card className="grid" variant="event">
-          <h2>Dados públicos de eventos</h2>
+          <h2>Dados p\u00fablicos de eventos</h2>
           <p className="arena-muted">
-            O {siteContent.projectName} utiliza informações públicas de eventos esportivos para fins de consulta,
-            organização e análise esportiva.
+            O {siteContent.projectName} utiliza informa\u00e7\u00f5es p\u00fablicas de eventos
+            esportivos para fins de consulta, organiza\u00e7\u00e3o e an\u00e1lise esportiva.
           </p>
         </Card>
 
         <Card className="grid" variant="event">
-          <h2>Contato e solicitações</h2>
+          <h2>Contato e solicita\u00e7\u00f5es</h2>
           <p className="arena-muted">
-            Solicitações relacionadas ao site podem ser enviadas para{" "}
+            Solicita\u00e7\u00f5es relacionadas ao site podem ser enviadas para{" "}
             <a href={`mailto:${siteContent.contactEmail}`}>{siteContent.contactEmail}</a>.
           </p>
         </Card>
