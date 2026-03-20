@@ -2666,7 +2666,7 @@ a {
 
 .next-event-athlete-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 1fr;
   gap: 10px;
   align-items: start;
 }
@@ -2685,13 +2685,15 @@ a {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  right: 0;
-  z-index: 16;
+  right: auto;
+  width: min(100%, 420px);
+  min-width: min(100%, 280px);
+  z-index: 24;
   border: 1px solid var(--line-glow);
   border-radius: 10px;
   background: rgba(4, 19, 51, 0.98);
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
-  max-height: 220px;
+  max-height: 260px;
   overflow-y: auto;
 }
 
@@ -2714,6 +2716,9 @@ a {
   display: grid;
   gap: 2px;
   box-shadow: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .next-event-athlete-suggestions li button:hover {
@@ -2722,6 +2727,9 @@ a {
 
 .next-event-athlete-suggestions li button small {
   color: var(--text-muted);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .next-event-athlete-feedback {
@@ -2729,6 +2737,10 @@ a {
   padding: 10px;
   color: var(--text-muted);
   font-size: 0.86rem;
+}
+
+.next-event-athlete-form > button {
+  width: 100%;
 }
 
 .institutional-grid {
