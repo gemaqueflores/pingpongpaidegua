@@ -220,6 +220,54 @@ test("sanitizeRegistrationOrphanAthletes remove apenas atletas sem categorias e 
   }
 });
 
+test("sanitizeRegistrationOrphanCategories remove categorias ausentes sem vinculos e sem partidas", async () => {
+  const service = new UpsertService() as unknown as {
+    sanitizeRegistrationOrphanCategories(input: {
+      eventId: number;
+      observedCategoryIds: Set<number>;
+      updated: Record<string, number>;
+      warnings: string[];
+    }): Promise<void>;
+  };
+
+  const originalCategoryFindMany = prisma.category.findMany;
+  const originalMatchFindMany = prisma.match.findMany;
+  const originalCategoryDeleteMany = prisma.category.deleteMany;
+
+  const deletedCategoryIds: number[] = [];
+
+  prisma.category.findMany = (async () => [
+    { id: 501, name: "ABSOLUTO C (FEM)" },
+    { id: 502, name: "ABSOLUTO E (FEM)" },
+  ]) as typeof prisma.category.findMany;
+  prisma.match.findMany = (async () => [{ categoryId: 502 }]) as typeof prisma.match.findMany;
+  prisma.category.deleteMany = (async (args) => {
+    deletedCategoryIds.push(...args.where.id.in);
+    return { count: args.where.id.in.length };
+  }) as typeof prisma.category.deleteMany;
+
+  try {
+    const updated: Record<string, number> = {};
+    const warnings: string[] = [];
+
+    await service.sanitizeRegistrationOrphanCategories({
+      eventId: 49,
+      observedCategoryIds: new Set([310, 66]),
+      updated,
+      warnings,
+    });
+
+    assert.deepEqual(deletedCategoryIds, [501]);
+    assert.equal(updated.categories_removed_without_links, 1);
+    assert.match(warnings[0] ?? "", /preservou 1 categoria\(s\) orfa\(s\)/i);
+    assert.match(warnings[1] ?? "", /removeu 1 categoria\(s\) sem vinculos e sem partidas/i);
+  } finally {
+    prisma.category.findMany = originalCategoryFindMany;
+    prisma.match.findMany = originalMatchFindMany;
+    prisma.category.deleteMany = originalCategoryDeleteMany;
+  }
+});
+
 test("syncMutableRegistrationCategories bloqueia remocoes ate confirmar 2 runs consecutivos", async () => {
   const service = new UpsertService() as unknown as {
     syncMutableRegistrationCategories(input: {
@@ -559,6 +607,100 @@ test("syncMutableRegistrationCategories remove vinculos obsoletos apos confirmac
     assert.deepEqual(stats.categoriesBlockedByConfirmation, []);
     assert.match(warnings[0] ?? "", /removeu categorias antigas de 'ATLETA B'/i);
     assert.match(warnings[1] ?? "", /removeu 1 vinculo\(s\) obsoleto\(s\) de atleta-categoria/i);
+  } finally {
+    prisma.athleteCategory.findMany = originalAthleteCategoryFindMany;
+    prisma.athleteCategory.deleteMany = originalAthleteCategoryDeleteMany;
+    prisma.scrapeRun.findMany = originalScrapeRunFindMany;
+  }
+});
+
+test("syncMutableRegistrationCategories remove categoria ausente apos 2 runs consecutivos", async () => {
+  const service = new UpsertService() as unknown as {
+    syncMutableRegistrationCategories(input: {
+      eventId: number;
+      observedRegistrationPairs: Map<
+        string,
+        {
+          athleteId: number;
+          categoryId: number;
+          categoryName: string;
+          registrationStatus: "INSCRITO" | "PRE_INSCRITO" | "OUTRO" | null;
+        }
+      >;
+      updated: Record<string, number>;
+      warnings: string[];
+    }): Promise<{
+      categoryHashes: Record<string, string>;
+      categoryCoverage: Record<string, number>;
+      categoryGapTotals: Record<string, number>;
+      categoriesConfirmedForRemoval: string[];
+      categoriesBlockedByConfirmation: string[];
+      categoriesBlockedByCoverage: string[];
+    }>;
+  };
+
+  const originalAthleteCategoryFindMany = prisma.athleteCategory.findMany;
+  const originalAthleteCategoryDeleteMany = prisma.athleteCategory.deleteMany;
+  const originalScrapeRunFindMany = prisma.scrapeRun.findMany;
+
+  const deletedPairs: Array<{ athleteId: number; categoryIds: number[] }> = [];
+  prisma.athleteCategory.findMany = (async () => [
+    {
+      athleteId: 21,
+      categoryId: 701,
+      registrationStatus: "INSCRITO",
+      athlete: { id: 21, nameDisplay: "ATLETA X" },
+      category: { id: 701, name: "ABSOLUTO C (FEM)", cbtmCategoryId: "72" },
+    },
+    {
+      athleteId: 22,
+      categoryId: 701,
+      registrationStatus: "INSCRITO",
+      athlete: { id: 22, nameDisplay: "ATLETA Y" },
+      category: { id: 701, name: "ABSOLUTO C (FEM)", cbtmCategoryId: "72" },
+    },
+  ]) as typeof prisma.athleteCategory.findMany;
+  prisma.athleteCategory.deleteMany = (async (args) => {
+    deletedPairs.push({
+      athleteId: args.where.athleteId,
+      categoryIds: args.where.categoryId.in,
+    });
+    return { count: args.where.categoryId.in.length };
+  }) as typeof prisma.athleteCategory.deleteMany;
+  prisma.scrapeRun.findMany = (async () => [
+    {
+      extractionStats: {
+        registrationSync: {
+          categoryHashes: {
+            "701": createHash("sha1").update("").digest("hex"),
+          },
+          categoryCoverage: {
+            "701": 0,
+          },
+        },
+      },
+    },
+  ]) as typeof prisma.scrapeRun.findMany;
+
+  try {
+    const updated: Record<string, number> = {};
+    const warnings: string[] = [];
+
+    const stats = await service.syncMutableRegistrationCategories({
+      eventId: 49,
+      observedRegistrationPairs: new Map(),
+      updated,
+      warnings,
+    });
+
+    assert.deepEqual(deletedPairs, [
+      { athleteId: 21, categoryIds: [701] },
+      { athleteId: 22, categoryIds: [701] },
+    ]);
+    assert.equal(updated.athlete_categories_removed_from_snapshot, 2);
+    assert.deepEqual(stats.categoriesConfirmedForRemoval, ["ABSOLUTO C (FEM)#701"]);
+    assert.match(warnings[0] ?? "", /removeu categorias antigas de 'ATLETA X'/i);
+    assert.match(warnings[1] ?? "", /removeu categorias antigas de 'ATLETA Y'/i);
   } finally {
     prisma.athleteCategory.findMany = originalAthleteCategoryFindMany;
     prisma.athleteCategory.deleteMany = originalAthleteCategoryDeleteMany;

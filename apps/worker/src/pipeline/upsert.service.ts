@@ -1248,6 +1248,13 @@ export class UpsertService {
         updated,
         warnings,
       });
+
+      await this.sanitizeRegistrationOrphanCategories({
+        eventId,
+        observedCategoryIds: new Set(observedRegistrationStatsByCategory.keys()),
+        updated,
+        warnings,
+      });
     }
 
     const persistedAthleteCategories = await prisma.athleteCategory.findMany({
@@ -2144,10 +2151,6 @@ export class UpsertService {
       categoriesBlockedByCoverage: [],
     };
 
-    if (input.observedRegistrationPairs.size === 0) {
-      return extractionStats;
-    }
-
     const observedByCategory = new Map<
       number,
       {
@@ -2248,10 +2251,34 @@ export class UpsertService {
 
     const previousCategoryHashes = await this.loadPreviousRegistrationSyncCategoryHashes(input.eventId);
     const categoryRemovalsAllowed = new Map<number, { categoryName: string; removableKeys: Set<string> }>();
+    const emptyCategoryHash = this.computeRegistrationCategoryHash([]);
 
     for (const [categoryId, currentPairs] of currentPairsByCategory.entries()) {
       const observed = observedByCategory.get(categoryId);
       if (!observed) {
+        const categoryKey = String(categoryId);
+        const categoryName = currentPairs[0]?.categoryName ?? `categoria-${categoryId}`;
+        const label = `${categoryName}#${categoryId}`;
+        extractionStats.categoryHashes[categoryKey] = emptyCategoryHash;
+        extractionStats.categoryGapTotals[categoryKey] = currentPairs.length;
+        extractionStats.categoryCoverage[categoryKey] = 0;
+
+        const previous = previousCategoryHashes.get(categoryKey);
+        if (!previous || previous.hash !== emptyCategoryHash || previous.coverage !== 0) {
+          extractionStats.categoriesBlockedByConfirmation.push(label);
+          input.updated.registration_sync_skipped_confirmation =
+            (input.updated.registration_sync_skipped_confirmation ?? 0) + currentPairs.length;
+          input.warnings.push(
+            `Sincronizacao de inscricoes aguardando 2 runs consecutivos para categoria ausente '${categoryName}' no evento ${input.eventId} (remocoes pendentes=${currentPairs.length}).`,
+          );
+          continue;
+        }
+
+        extractionStats.categoriesConfirmedForRemoval.push(label);
+        categoryRemovalsAllowed.set(categoryId, {
+          categoryName,
+          removableKeys: new Set(currentPairs.map((pair) => `${pair.athleteId}|${pair.categoryId}`)),
+        });
         continue;
       }
 
@@ -2584,6 +2611,77 @@ export class UpsertService {
       (input.updated.athletes_removed_without_category_link ?? 0) + removableAthleteIds.length;
     input.warnings.push(
       `Sanitizacao de inscricoes removeu ${removableAthleteIds.length} atleta(s) sem vinculo atleta-categoria no evento ${input.eventId}.`,
+    );
+  }
+
+  private async sanitizeRegistrationOrphanCategories(input: {
+    eventId: number;
+    observedCategoryIds: Set<number>;
+    updated: Record<string, number>;
+    warnings: string[];
+  }): Promise<void> {
+    const orphanCategories = await prisma.category.findMany({
+      where: {
+        eventId: input.eventId,
+        cbtmCategoryId: {
+          notIn: [...IGNORED_CATEGORY_IDS],
+          not: null,
+        },
+        athletes: {
+          none: {},
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    const removableCategories = orphanCategories.filter(
+      (category) => !input.observedCategoryIds.has(category.id),
+    );
+    if (removableCategories.length === 0) {
+      return;
+    }
+
+    const removableCategoryIds = removableCategories.map((category) => category.id);
+    const categoriesWithMatches = await prisma.match.findMany({
+      where: {
+        categoryId: { in: removableCategoryIds },
+        eventId: input.eventId,
+      },
+      select: {
+        categoryId: true,
+      },
+      distinct: ["categoryId"],
+    });
+    const protectedCategoryIds = new Set(categoriesWithMatches.map((row) => row.categoryId));
+
+    if (protectedCategoryIds.size > 0) {
+      input.warnings.push(
+        `Sanitizacao de inscricoes preservou ${protectedCategoryIds.size} categoria(s) orfa(s) por ja possuirem partidas publicadas no evento ${input.eventId}.`,
+      );
+    }
+
+    const finalRemovable = removableCategories.filter(
+      (category) => !protectedCategoryIds.has(category.id),
+    );
+    if (finalRemovable.length === 0) {
+      return;
+    }
+
+    await prisma.category.deleteMany({
+      where: {
+        id: {
+          in: finalRemovable.map((category) => category.id),
+        },
+      },
+    });
+
+    input.updated.categories_removed_without_links =
+      (input.updated.categories_removed_without_links ?? 0) + finalRemovable.length;
+    input.warnings.push(
+      `Sanitizacao de inscricoes removeu ${finalRemovable.length} categoria(s) sem vinculos e sem partidas no evento ${input.eventId}.`,
     );
   }
 
