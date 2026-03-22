@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ParsedMatch } from "@cbtm/shared";
-import {
-  ScrapeProcessor,
-  shouldClearCompetitiveDataOnManualStage2,
-} from "../src/pipeline/scrape.processor";
+import { shouldClearCompetitiveDataOnManualStage2 } from "@cbtm/shared";
+import { ScrapeProcessor } from "../src/pipeline/scrape.processor";
 import { mergeMatchesAcrossSources } from "../src/pipeline/match-merge";
 
 let matchCounter = 0;

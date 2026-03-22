@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { shouldClearCompetitiveDataOnManualStage2 } from "@cbtm/shared";
 import { HealthMonitorService } from "../src/common/health-monitor.service";
 
 function createService() {
@@ -52,4 +53,16 @@ test("health monitor continua acionando recovery por extractionStats quando warn
   });
 
   assert.equal(shouldRecover, true);
+});
+
+test("stage 2 de recuperacao nao deve ser usado em evento com grades ou em andamento", () => {
+  assert.equal(shouldClearCompetitiveDataOnManualStage2("GRADES_PUBLICADAS_PRE_JOGO"), false);
+  assert.equal(shouldClearCompetitiveDataOnManualStage2("EM_ANDAMENTO"), false);
+  assert.equal(shouldClearCompetitiveDataOnManualStage2("POS_EVENTO"), false);
+});
+
+test("stage 2 de recuperacao so pode ser usado antes da fase de jogo", () => {
+  assert.equal(shouldClearCompetitiveDataOnManualStage2("PRE_INSCRICOES"), true);
+  assert.equal(shouldClearCompetitiveDataOnManualStage2("INSCRICOES_ABERTAS"), true);
+  assert.equal(shouldClearCompetitiveDataOnManualStage2("POS_INSCRICOES_PRE_EVENTO"), true);
 });

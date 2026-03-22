@@ -84,6 +84,21 @@ export const DEFAULT_SCRAPE_LOCK_STALE_MS = 15 * 60 * 1000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export function shouldClearCompetitiveDataOnManualStage2(eventSituation: EventSituation): boolean {
+  switch (eventSituation) {
+    case "PRE_INSCRICOES":
+    case "INSCRICOES_ABERTAS":
+    case "POS_INSCRICOES_PRE_EVENTO":
+      return true;
+    case "DRAFT":
+    case "GRADES_PUBLICADAS_PRE_JOGO":
+    case "EM_ANDAMENTO":
+    case "POS_EVENTO":
+    default:
+      return false;
+  }
+}
+
 function isBusinessDay(date: Date): boolean {
   const day = date.getDay();
   return day !== 0 && day !== 6;

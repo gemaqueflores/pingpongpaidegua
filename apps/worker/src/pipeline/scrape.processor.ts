@@ -5,10 +5,10 @@ import {
   compactWhitespace,
   computeEventSituation,
   detectWalkover,
-  EventSituation,
   extractWarningCode,
   isOperationalRecoveryWarning,
   normalizeText,
+  shouldClearCompetitiveDataOnManualStage2,
 } from "@cbtm/shared";
 import { Prisma, ScrapeStatus } from "@prisma/client";
 import { config } from "../config";
@@ -94,21 +94,6 @@ interface ScrapeConformanceAudit {
 }
 
 type CategoryKindForAudit = "RATING" | "RANKING";
-
-export function shouldClearCompetitiveDataOnManualStage2(eventSituation: EventSituation): boolean {
-  switch (eventSituation) {
-    case "PRE_INSCRICOES":
-    case "INSCRICOES_ABERTAS":
-    case "POS_INSCRICOES_PRE_EVENTO":
-      return true;
-    case "DRAFT":
-    case "GRADES_PUBLICADAS_PRE_JOGO":
-    case "EM_ANDAMENTO":
-    case "POS_EVENTO":
-    default:
-      return false;
-  }
-}
 
 function resolveManualForceStage(reason?: string): ManualForceStage {
   const normalized = String(reason ?? "").trim().toLowerCase();

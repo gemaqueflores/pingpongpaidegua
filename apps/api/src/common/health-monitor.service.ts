@@ -3,9 +3,11 @@ import { Prisma, ScrapeStatus } from "@prisma/client";
 import {
   buildEventScrapePolicy,
   computeEventRecoveryStaleThresholdMs,
+  computeEventSituation,
   isOperationalRecoveryWarning,
   resolveEventScrapeIntervalOverridesFromEnv,
   resolveScrapeLockStaleMsFromEnv,
+  shouldClearCompetitiveDataOnManualStage2,
 } from "@cbtm/shared";
 import { PrismaReadService, PrismaService } from "./prisma.service";
 import { QueueService } from "./queue.service";
@@ -235,6 +237,14 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
       if (event.concluido) {
         continue;
       }
+      const eventSituation = computeEventSituation({
+        inicioInscricoes: event.inicioInscricoes,
+        fimInscricoes: event.fimInscricoes,
+        inicioRealizacao: event.inicioRealizacao,
+        fimRealizacao: event.fimRealizacao,
+        dataInicio: event.dataInicio,
+        dataFim: event.dataFim,
+      });
       const policy = buildEventScrapePolicy(event, {
         intervalBySituationMs: this.scrapeIntervalBySituationMs,
       });
@@ -285,7 +295,8 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
         break;
       }
       const shouldEscalateToStage2 =
-        consecutiveDegraded >= this.recoveryEscalateAfterConsecutiveDegraded;
+        consecutiveDegraded >= this.recoveryEscalateAfterConsecutiveDegraded &&
+        shouldClearCompetitiveDataOnManualStage2(eventSituation);
 
       const warningText = warnings.join("\n").toLowerCase();
       const shouldPrioritizePostReprocess =
