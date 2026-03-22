@@ -5,6 +5,7 @@ import {
   compactWhitespace,
   computeEventSituation,
   detectWalkover,
+  EventSituation,
   extractWarningCode,
   isOperationalRecoveryWarning,
   normalizeText,
@@ -93,6 +94,21 @@ interface ScrapeConformanceAudit {
 }
 
 type CategoryKindForAudit = "RATING" | "RANKING";
+
+export function shouldClearCompetitiveDataOnManualStage2(eventSituation: EventSituation): boolean {
+  switch (eventSituation) {
+    case "PRE_INSCRICOES":
+    case "INSCRICOES_ABERTAS":
+    case "POS_INSCRICOES_PRE_EVENTO":
+      return true;
+    case "DRAFT":
+    case "GRADES_PUBLICADAS_PRE_JOGO":
+    case "EM_ANDAMENTO":
+    case "POS_EVENTO":
+    default:
+      return false;
+  }
+}
 
 function resolveManualForceStage(reason?: string): ManualForceStage {
   const normalized = String(reason ?? "").trim().toLowerCase();
@@ -453,7 +469,10 @@ export class ScrapeProcessor {
 
     try {
       let stage2CleanupSummary: EventMatchesCleanupSummary | null = null;
-      if (manualForceStage === "stage-2-inscricoes") {
+      const shouldClearCompetitiveData =
+        manualForceStage === "stage-2-inscricoes" &&
+        shouldClearCompetitiveDataOnManualStage2(eventSituation);
+      if (shouldClearCompetitiveData) {
         stage2CleanupSummary = await this.withDbRetry(
           () => this.clearEventMatchesData(eventId),
           "event.clearMatchesData:stage2",
@@ -625,6 +644,11 @@ export class ScrapeProcessor {
       ).size;
       let processRegistrations = manualForceStage !== "stage-3-resultados";
       let preUpsertGuardrailReason: string | null = null;
+      if (manualForceStage === "stage-2-inscricoes" && !shouldClearCompetitiveData) {
+        capture.warnings.push(
+          `STAGE2_PRESERVOU_CONFRONTOS: limpeza competitiva ignorada na situacao '${eventSituation}' para preservar grupos/resultados publicados.`,
+        );
+      }
       const registrationDropRatio =
         currentTotalsBeforeUpsert.athletes > 0
           ? observedRegistrationAthletes / currentTotalsBeforeUpsert.athletes

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ParsedMatch } from "@cbtm/shared";
-import { ScrapeProcessor } from "../src/pipeline/scrape.processor";
+import {
+  ScrapeProcessor,
+  shouldClearCompetitiveDataOnManualStage2,
+} from "../src/pipeline/scrape.processor";
 import { mergeMatchesAcrossSources } from "../src/pipeline/match-merge";
 
 let matchCounter = 0;
@@ -238,4 +241,16 @@ test("persistencia de warnings preserva auditoria acionavel e remove diagnostico
   assert.ok(
     persisted.some((warning) => warning.startsWith("WARNINGS_FILTRADOS_RUIDO:")),
   );
+});
+
+test("stage 2 manual preserva confrontos quando o evento ja tem grades ou jogos publicados", () => {
+  assert.equal(shouldClearCompetitiveDataOnManualStage2("GRADES_PUBLICADAS_PRE_JOGO"), false);
+  assert.equal(shouldClearCompetitiveDataOnManualStage2("EM_ANDAMENTO"), false);
+  assert.equal(shouldClearCompetitiveDataOnManualStage2("POS_EVENTO"), false);
+});
+
+test("stage 2 manual pode limpar confrontos apenas antes da fase de jogo", () => {
+  assert.equal(shouldClearCompetitiveDataOnManualStage2("PRE_INSCRICOES"), true);
+  assert.equal(shouldClearCompetitiveDataOnManualStage2("INSCRICOES_ABERTAS"), true);
+  assert.equal(shouldClearCompetitiveDataOnManualStage2("POS_INSCRICOES_PRE_EVENTO"), true);
 });
