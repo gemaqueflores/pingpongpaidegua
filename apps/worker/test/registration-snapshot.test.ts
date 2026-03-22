@@ -22,7 +22,15 @@ test("snapshot sync so ocorre em janela mutavel de inscricoes", () => {
       eventSituation: "EM_ANDAMENTO",
       registrationCount: 10,
     }),
-    false,
+    true,
+  );
+  assert.equal(
+    shouldSyncRegistrationSnapshot({
+      eventConcluded: false,
+      eventSituation: "GRADES_PUBLICADAS_PRE_JOGO",
+      registrationCount: 10,
+    }),
+    true,
   );
   assert.equal(
     shouldSyncRegistrationSnapshot({

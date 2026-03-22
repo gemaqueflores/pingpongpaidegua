@@ -4,6 +4,8 @@ const MUTABLE_REGISTRATION_SITUATIONS: EventSituation[] = [
   "PRE_INSCRICOES",
   "INSCRICOES_ABERTAS",
   "POS_INSCRICOES_PRE_EVENTO",
+  "GRADES_PUBLICADAS_PRE_JOGO",
+  "EM_ANDAMENTO",
 ];
 
 export function shouldSyncRegistrationSnapshot(input: {
