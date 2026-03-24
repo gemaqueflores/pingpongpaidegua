@@ -219,12 +219,36 @@ export interface GroupSimulationCategory {
       ratingPoints: number | null;
     }>;
   }>;
+  matchups: Array<{
+    matchName: string;
+    blockName: string;
+    athleteA: {
+      athleteId: number;
+      nameDisplay: string;
+      nameReduced: string;
+      clubName: string | null;
+      rankingPoints: number | null;
+      ratingPoints: number | null;
+    } | null;
+    athleteB: {
+      athleteId: number;
+      nameDisplay: string;
+      nameReduced: string;
+      clubName: string | null;
+      rankingPoints: number | null;
+      ratingPoints: number | null;
+    } | null;
+    athleteASeed: number | null;
+    athleteBSeed: number | null;
+    isBye: boolean;
+  }>;
   stats: {
+    structureType?: "groups" | "knockout";
     sortBasis?: "rating" | "ranking";
     primaryFieldUsed?: "ratingPoints" | "rankingPoints";
     fallbackUsedCount?: number;
     seed: string;
-    distributionMode: "ZIGUE_ZAGUE_INVERTIDO";
+    distributionMode: "ZIGUE_ZAGUE_INVERTIDO" | "K1_BLOCOS";
     athleteCount: number;
     groupCount: number;
     minGroupSize: number;
@@ -241,6 +265,9 @@ export interface GroupSimulationCategory {
     }>;
     historicalPreferredGroupCount: number | null;
     historicalSampleSize?: number;
+    seededAthleteCount?: number;
+    bracketSize?: number;
+    byeCount?: number;
   } | null;
   registration: {
     scope: GroupSimulationScope;

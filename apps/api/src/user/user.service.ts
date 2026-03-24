@@ -1652,6 +1652,17 @@ export class UserService {
         };
       },
     });
+    const eventRulesByEventId = new Map(
+      (
+        await this.prisma.event.findMany({
+          where: { id: { in: scope.allEventIds } },
+          select: {
+            id: true,
+            ratingMatchFormat: true,
+          },
+        })
+      ).map((item) => [item.id, item] as const),
+    );
   }
 
   async listEventCategoryMedalists(eventId: number): Promise<{
@@ -2853,6 +2864,17 @@ export class UserService {
         normalizedName: true,
       },
     });
+    const eventRulesByEventId = new Map(
+      (
+        await this.prisma.event.findMany({
+          where: { id: { in: scope.allEventIds } },
+          select: {
+            id: true,
+            ratingMatchFormat: true,
+          },
+        })
+      ).map((item) => [item.id, item] as const),
+    );
 
     const categoryIds = categories.map((category) => category.id);
     const categoryLinksAll = categoryIds.length
@@ -2942,6 +2964,7 @@ export class UserService {
           status: "skipped",
           reason,
           groups: [],
+          matchups: [],
           stats: null,
           registration: {
             scope: registrationScope,
@@ -2969,6 +2992,7 @@ export class UserService {
           status: "skipped",
           reason,
           groups: [],
+          matchups: [],
           stats: null,
           registration: {
             scope: registrationScope,
@@ -2999,6 +3023,7 @@ export class UserService {
           ratingPoints: athlete.ratingPoints,
         })),
         preferredGroupCount: historical.preferredGroupCount,
+        ratingMatchFormat: eventRulesByEventId.get(category.eventId)?.ratingMatchFormat ?? "RR_K1",
       });
       const useRatingPoints = simulation.stats.sortBasis === "rating";
 
@@ -3051,6 +3076,33 @@ export class UserService {
             rankingPoints: athlete.rankingPoints,
             ratingPoints: athlete.ratingPoints,
           })),
+        })),
+        matchups: simulation.matchups.map((matchup) => ({
+          matchName: matchup.matchName,
+          blockName: matchup.blockName,
+          athleteA: matchup.athleteA
+            ? {
+                athleteId: matchup.athleteA.athleteId,
+                nameDisplay: matchup.athleteA.nameDisplay,
+                nameReduced: toReducedName(matchup.athleteA.nameDisplay),
+                clubName: matchup.athleteA.clubName,
+                rankingPoints: matchup.athleteA.rankingPoints,
+                ratingPoints: matchup.athleteA.ratingPoints,
+              }
+            : null,
+          athleteB: matchup.athleteB
+            ? {
+                athleteId: matchup.athleteB.athleteId,
+                nameDisplay: matchup.athleteB.nameDisplay,
+                nameReduced: toReducedName(matchup.athleteB.nameDisplay),
+                clubName: matchup.athleteB.clubName,
+                rankingPoints: matchup.athleteB.rankingPoints,
+                ratingPoints: matchup.athleteB.ratingPoints,
+              }
+            : null,
+          athleteASeed: matchup.athleteASeed,
+          athleteBSeed: matchup.athleteBSeed,
+          isBye: matchup.isBye,
         })),
         stats: {
           ...simulation.stats,

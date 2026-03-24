@@ -265,29 +265,32 @@ export default function GroupSimulatorPage() {
                             category.stats?.sortBasis,
                           );
                           const pointsLabel = useRatingPoints ? "Rating" : "Ranking";
+                          const isKnockout = category.stats?.structureType === "knockout";
                           return (
                             <>
                         <div className="sim-category-card-header">
                           <h3>{category.categoryName}</h3>
-                          <ShareActions
-                            inline
-                            shareText={`Simulação de grupos da categoria ${category.categoryName}`}
-                            fileName={`simulador-${eventId}-${category.categoryId}.png`}
-                            buildImage={() =>
-                              createGroupSimulationShareImageBlob({
-                                eventName: event?.nome ?? `Evento ${eventId}`,
-                                categoryName: category.categoryName,
-                                groups: category.groups.map((group) => ({
-                                  groupName: group.groupName,
-                                  athletes: group.athletes.map((athlete) => ({
-                                    athleteName: athlete.nameReduced || athlete.nameDisplay,
-                                    clubName: athlete.clubName ?? "-",
+                          {!isKnockout ? (
+                            <ShareActions
+                              inline
+                              shareText={`Simulação de grupos da categoria ${category.categoryName}`}
+                              fileName={`simulador-${eventId}-${category.categoryId}.png`}
+                              buildImage={() =>
+                                createGroupSimulationShareImageBlob({
+                                  eventName: event?.nome ?? `Evento ${eventId}`,
+                                  categoryName: category.categoryName,
+                                  groups: category.groups.map((group) => ({
+                                    groupName: group.groupName,
+                                    athletes: group.athletes.map((athlete) => ({
+                                      athleteName: athlete.nameReduced || athlete.nameDisplay,
+                                      clubName: athlete.clubName ?? "-",
+                                    })),
                                   })),
-                                })),
-                                branding: "PingPong Paid'egua",
-                              })
-                            }
-                          />
+                                  branding: "PingPong Paid'egua",
+                                })
+                              }
+                            />
+                          ) : null}
                         </div>
                         <p>
                           Atletas Simulados: <strong>{category.registration.considered}</strong> | Inscritos: <strong>{category.registration.confirmed}</strong> | Pré-inscritos: <strong>{category.registration.preInscrito}</strong>
@@ -296,70 +299,126 @@ export default function GroupSimulatorPage() {
                           <Badge tone="default">
                             Base de seed: {category.stats?.sortBasis === "rating" ? "Rating" : "Ranking"}
                           </Badge>
+                          {isKnockout ? <Badge tone="open">Formato: k1</Badge> : null}
                           <Badge tone="default">Fallback aplicado: {String(category.stats?.fallbackUsedCount ?? 0)}</Badge>
-                          <Badge tone="open">Líder de grupo destacado</Badge>
+                          {!isKnockout ? <Badge tone="open">Líder de grupo destacado</Badge> : null}
+                          {isKnockout ? (
+                            <Badge tone="default">
+                              Cabeças de chave: {String(category.stats?.seededAthleteCount ?? 0)}
+                            </Badge>
+                          ) : null}
+                          {isKnockout ? (
+                            <Badge tone="default">
+                              Byes: {String(category.stats?.byeCount ?? 0)}
+                            </Badge>
+                          ) : null}
                         </div>
 
-                        <div className="sim-group-grid">
-                          {category.groups.map((group) => (
-                            <section key={`${category.categoryId}-${group.groupName}`} className="sim-group-card">
-                              <h4>{group.groupName}</h4>
-                              <div className="group-athlete-list">
-                                <div className="group-athlete-row group-athlete-head">
-                                  <span>Atleta</span>
-                                  <span>{pointsLabel}</span>
-                                </div>
-                                {[...group.athletes]
-                                  .sort((left, right) => {
-                                    const leftPoints = useRatingPoints
-                                      ? (left.ratingPoints ?? left.rankingPoints ?? Number.MIN_SAFE_INTEGER)
-                                      : (left.rankingPoints ?? left.ratingPoints ?? Number.MIN_SAFE_INTEGER);
-                                    const rightPoints = useRatingPoints
-                                      ? (right.ratingPoints ?? right.rankingPoints ?? Number.MIN_SAFE_INTEGER)
-                                      : (right.rankingPoints ?? right.ratingPoints ?? Number.MIN_SAFE_INTEGER);
-                                    if (leftPoints !== rightPoints) {
-                                      return rightPoints - leftPoints;
-                                    }
-
-                                    const leftTieBreak = useRatingPoints
-                                      ? (left.rankingPoints ?? Number.MIN_SAFE_INTEGER)
-                                      : (left.ratingPoints ?? Number.MIN_SAFE_INTEGER);
-                                    const rightTieBreak = useRatingPoints
-                                      ? (right.rankingPoints ?? Number.MIN_SAFE_INTEGER)
-                                      : (right.ratingPoints ?? Number.MIN_SAFE_INTEGER);
-                                    if (leftTieBreak !== rightTieBreak) {
-                                      return rightTieBreak - leftTieBreak;
-                                    }
-
-                                    return (left.nameReduced || left.nameDisplay).localeCompare(
-                                      right.nameReduced || right.nameDisplay,
-                                      "pt-BR",
-                                      { sensitivity: "base" },
-                                    );
-                                  })
-                                  .map((athlete, athleteIndex) => (
-                                  <div
-                                    key={`${group.groupName}-${athlete.athleteId}`}
-                                    className={`group-athlete-row ${athleteIndex === 0 ? "group-athlete-seed" : ""}`}
-                                  >
-                                    <div className="group-athlete-main">
-                                      <span className="group-athlete-name">
-                                        {athleteIndex === 0 ? "★ " : ""}
-                                        {athlete.nameReduced || athlete.nameDisplay}
+                        {isKnockout ? (
+                          <div className="sim-group-grid">
+                            {category.matchups.map((matchup) => (
+                              <section key={`${category.categoryId}-${matchup.matchName}`} className="sim-group-card">
+                                <h4>{matchup.matchName}</h4>
+                                <p className="arena-muted" style={{ marginTop: "-0.4rem" }}>{matchup.blockName}</p>
+                                <div className="group-athlete-list">
+                                  {[
+                                    {
+                                      athlete: matchup.athleteA,
+                                      seed: matchup.athleteASeed,
+                                    },
+                                    {
+                                      athlete: matchup.athleteB,
+                                      seed: matchup.athleteBSeed,
+                                    },
+                                  ].map((entry, entryIndex) => (
+                                    <div
+                                      key={`${matchup.matchName}-${entryIndex}`}
+                                      className={`group-athlete-row ${entry.seed ? "group-athlete-seed" : ""}`}
+                                    >
+                                      <div className="group-athlete-main">
+                                        <span className="group-athlete-name">
+                                          {entry.seed ? `★${entry.seed} ` : ""}
+                                          {entry.athlete ? (entry.athlete.nameReduced || entry.athlete.nameDisplay) : "BYE"}
+                                        </span>
+                                        <span className="group-athlete-club">
+                                          {entry.athlete ? (entry.athlete.clubName ?? "-") : "Avanço automático"}
+                                        </span>
+                                      </div>
+                                      <span className="group-athlete-points">
+                                        {entry.athlete
+                                          ? useRatingPoints
+                                            ? (entry.athlete.ratingPoints ?? "-")
+                                            : (entry.athlete.rankingPoints ?? "-")
+                                          : "-"}
                                       </span>
-                                      <span className="group-athlete-club">{athlete.clubName ?? "-"}</span>
                                     </div>
-                                    <span className="group-athlete-points">
-                                      {useRatingPoints
-                                        ? (athlete.ratingPoints ?? "-")
-                                        : (athlete.rankingPoints ?? "-")}
-                                    </span>
-                                  </div>
                                   ))}
-                              </div>
-                            </section>
-                          ))}
-                        </div>
+                                </div>
+                              </section>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="sim-group-grid">
+                            {category.groups.map((group) => (
+                              <section key={`${category.categoryId}-${group.groupName}`} className="sim-group-card">
+                                <h4>{group.groupName}</h4>
+                                <div className="group-athlete-list">
+                                  <div className="group-athlete-row group-athlete-head">
+                                    <span>Atleta</span>
+                                    <span>{pointsLabel}</span>
+                                  </div>
+                                  {[...group.athletes]
+                                    .sort((left, right) => {
+                                      const leftPoints = useRatingPoints
+                                        ? (left.ratingPoints ?? left.rankingPoints ?? Number.MIN_SAFE_INTEGER)
+                                        : (left.rankingPoints ?? left.ratingPoints ?? Number.MIN_SAFE_INTEGER);
+                                      const rightPoints = useRatingPoints
+                                        ? (right.ratingPoints ?? right.rankingPoints ?? Number.MIN_SAFE_INTEGER)
+                                        : (right.rankingPoints ?? right.ratingPoints ?? Number.MIN_SAFE_INTEGER);
+                                      if (leftPoints !== rightPoints) {
+                                        return rightPoints - leftPoints;
+                                      }
+
+                                      const leftTieBreak = useRatingPoints
+                                        ? (left.rankingPoints ?? Number.MIN_SAFE_INTEGER)
+                                        : (left.ratingPoints ?? Number.MIN_SAFE_INTEGER);
+                                      const rightTieBreak = useRatingPoints
+                                        ? (right.rankingPoints ?? Number.MIN_SAFE_INTEGER)
+                                        : (right.ratingPoints ?? Number.MIN_SAFE_INTEGER);
+                                      if (leftTieBreak !== rightTieBreak) {
+                                        return rightTieBreak - leftTieBreak;
+                                      }
+
+                                      return (left.nameReduced || left.nameDisplay).localeCompare(
+                                        right.nameReduced || right.nameDisplay,
+                                        "pt-BR",
+                                        { sensitivity: "base" },
+                                      );
+                                    })
+                                    .map((athlete, athleteIndex) => (
+                                    <div
+                                      key={`${group.groupName}-${athlete.athleteId}`}
+                                      className={`group-athlete-row ${athleteIndex === 0 ? "group-athlete-seed" : ""}`}
+                                    >
+                                      <div className="group-athlete-main">
+                                        <span className="group-athlete-name">
+                                          {athleteIndex === 0 ? "★ " : ""}
+                                          {athlete.nameReduced || athlete.nameDisplay}
+                                        </span>
+                                        <span className="group-athlete-club">{athlete.clubName ?? "-"}</span>
+                                      </div>
+                                      <span className="group-athlete-points">
+                                        {useRatingPoints
+                                          ? (athlete.ratingPoints ?? "-")
+                                          : (athlete.rankingPoints ?? "-")}
+                                      </span>
+                                    </div>
+                                    ))}
+                                </div>
+                              </section>
+                            ))}
+                          </div>
+                        )}
                             </>
                           );
                         })()

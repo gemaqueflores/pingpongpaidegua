@@ -53,6 +53,37 @@ test("simulador distribui tamanhos de grupos de forma balanceada", () => {
   assert.ok(max - min <= 1);
 });
 
+test("categorias rating com formato K1 simulam confrontos iniciais sem grupos", () => {
+  const athletes = Array.from({ length: 16 }, (_, index) =>
+    athlete(index + 1, `CLUBE ${index + 1}`, 2000 - index * 10),
+  );
+
+  const result = simulateGroupsForCategory({
+    seed: "event:k1:cat:rating",
+    categoryName: "RJM",
+    ratingMatchFormat: "K1",
+    athletes,
+  });
+
+  assert.equal(result.stats.structureType, "knockout");
+  assert.equal(result.groups.length, 0);
+  assert.equal(result.matchups.length, 8);
+  assert.equal(result.stats.seededAthleteCount, 4);
+
+  const seedBlocks = new Map<number, string>();
+  for (const matchup of result.matchups) {
+    if (matchup.athleteASeed) {
+      seedBlocks.set(matchup.athleteASeed, matchup.blockName);
+    }
+    if (matchup.athleteBSeed) {
+      seedBlocks.set(matchup.athleteBSeed, matchup.blockName);
+    }
+  }
+
+  assert.equal(seedBlocks.size, 4);
+  assert.equal(new Set(seedBlocks.values()).size, 4);
+});
+
 test("simulador usa distribuicao em zigue-zague invertido (A-B-C-C-B-A)", () => {
   const result = simulateGroupsForCategory({
     seed: "event:2:cat:3",

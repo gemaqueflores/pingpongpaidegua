@@ -15,9 +15,20 @@ export interface GroupSimulationGroup {
   athletes: GroupSimulationAthleteInput[];
 }
 
+export interface KnockoutSimulationMatch {
+  matchName: string;
+  blockName: string;
+  athleteA: GroupSimulationAthleteInput | null;
+  athleteB: GroupSimulationAthleteInput | null;
+  athleteASeed: number | null;
+  athleteBSeed: number | null;
+  isBye: boolean;
+}
+
 export interface GroupSimulationStats {
   seed: string;
-  distributionMode: "ZIGUE_ZAGUE_INVERTIDO";
+  structureType: "groups" | "knockout";
+  distributionMode: "ZIGUE_ZAGUE_INVERTIDO" | "K1_BLOCOS";
   sortBasis: "rating" | "ranking";
   primaryFieldUsed: "ratingPoints" | "rankingPoints";
   fallbackUsedCount: number;
@@ -33,10 +44,14 @@ export interface GroupSimulationStats {
   iterations: number;
   initialDistribution: Array<{ groupName: string; athleteIds: number[] }>;
   historicalPreferredGroupCount: number | null;
+  seededAthleteCount?: number;
+  bracketSize?: number;
+  byeCount?: number;
 }
 
 export interface GroupSimulationResult {
   groups: GroupSimulationGroup[];
+  matchups: KnockoutSimulationMatch[];
   stats: GroupSimulationStats;
   warnings: string[];
 }
@@ -119,6 +134,99 @@ function resolveSortBasis(categoryName: string | null | undefined): SortBasis {
 
 function normalizedNameForSort(name: string): string {
   return normalizeAthleteName(name);
+}
+
+function nextPowerOfTwo(value: number): number {
+  let size = 1;
+  while (size < value) {
+    size *= 2;
+  }
+  return size;
+}
+
+function buildStandardSeedOrder(size: number): number[] {
+  if (size <= 1) {
+    return [1];
+  }
+  const previous = buildStandardSeedOrder(size / 2);
+  const result: number[] = [];
+  for (const seed of previous) {
+    result.push(seed, size + 1 - seed);
+  }
+  return result;
+}
+
+function resolveKnockoutSeedCount(athleteCount: number): number {
+  return Math.max(1, Math.floor(athleteCount / 4));
+}
+
+function buildKnockoutInitialMatchups(input: {
+  athletes: GroupSimulationAthleteInput[];
+}): {
+  matchups: KnockoutSimulationMatch[];
+  seededAthleteCount: number;
+  bracketSize: number;
+  byeCount: number;
+} {
+  const athleteCount = input.athletes.length;
+  const bracketSize = nextPowerOfTwo(Math.max(2, athleteCount));
+  const seededAthleteCount = resolveKnockoutSeedCount(athleteCount);
+  const seedOrder = buildStandardSeedOrder(bracketSize);
+  const slots = Array<GroupSimulationAthleteInput | null>(bracketSize).fill(null);
+  const seedNumbersByAthleteId = new Map<number, number>();
+
+  for (let index = 0; index < seededAthleteCount; index += 1) {
+    const athlete = input.athletes[index];
+    if (!athlete) {
+      continue;
+    }
+    const seedNumber = index + 1;
+    const slotIndex = seedOrder.findIndex((item) => item === seedNumber);
+    if (slotIndex >= 0) {
+      slots[slotIndex] = athlete;
+      seedNumbersByAthleteId.set(athlete.athleteId, seedNumber);
+    }
+  }
+
+  const remainingAthletes = input.athletes.slice(seededAthleteCount);
+  const remainingSlotIndexes = seedOrder
+    .map((seedNumber, slotIndex) => ({ seedNumber, slotIndex }))
+    .filter((item) => item.seedNumber > seededAthleteCount)
+    .sort((left, right) => left.seedNumber - right.seedNumber)
+    .map((item) => item.slotIndex);
+
+  remainingAthletes.forEach((athlete, index) => {
+    const slotIndex = remainingSlotIndexes[index];
+    if (slotIndex !== undefined) {
+      slots[slotIndex] = athlete;
+    }
+  });
+
+  const blockCount = Math.min(4, Math.max(1, bracketSize / 2));
+  const slotsPerBlock = Math.max(2, Math.ceil(bracketSize / blockCount));
+  const matchups: KnockoutSimulationMatch[] = [];
+
+  for (let slotIndex = 0; slotIndex < bracketSize; slotIndex += 2) {
+    const athleteA = slots[slotIndex];
+    const athleteB = slots[slotIndex + 1];
+    const blockIndex = Math.min(blockCount, Math.floor(slotIndex / slotsPerBlock) + 1);
+    matchups.push({
+      matchName: `Confronto ${String(matchups.length + 1).padStart(2, "0")}`,
+      blockName: `Bloco ${String(blockIndex).padStart(2, "0")}`,
+      athleteA,
+      athleteB,
+      athleteASeed: athleteA ? (seedNumbersByAthleteId.get(athleteA.athleteId) ?? null) : null,
+      athleteBSeed: athleteB ? (seedNumbersByAthleteId.get(athleteB.athleteId) ?? null) : null,
+      isBye: !athleteA || !athleteB,
+    });
+  }
+
+  return {
+    matchups,
+    seededAthleteCount,
+    bracketSize,
+    byeCount: Math.max(0, bracketSize - athleteCount),
+  };
 }
 
 export function sortAthletesByScore(
@@ -490,6 +598,7 @@ export function simulateGroupsForCategory(input: {
   athletes: GroupSimulationAthleteInput[];
   categoryName?: string | null;
   preferredGroupCount?: number | null;
+  ratingMatchFormat?: "RR_K1" | "K1" | null;
 }): GroupSimulationResult {
   const warnings: string[] = [];
   const uniqueAthletes = new Map<number, GroupSimulationAthleteInput>();
@@ -502,6 +611,8 @@ export function simulateGroupsForCategory(input: {
     uniqueAthletes.set(athlete.athleteId, athlete);
   }
   const athletes = [...uniqueAthletes.values()];
+  const sortBasis = resolveSortBasis(input.categoryName);
+  const useKnockout = sortBasis === "rating" && input.ratingMatchFormat === "K1";
   if (duplicatedAthleteCount > 0) {
     warnings.push(
       `Simulador descartou ${duplicatedAthleteCount} atleta(s) duplicado(s) pelo mesmo athleteId na entrada da categoria.`,
@@ -514,9 +625,10 @@ export function simulateGroupsForCategory(input: {
       groups: [],
       stats: {
         seed: input.seed,
-        distributionMode: "ZIGUE_ZAGUE_INVERTIDO",
-        sortBasis: "ranking",
-        primaryFieldUsed: "rankingPoints",
+        structureType: useKnockout ? "knockout" : "groups",
+        distributionMode: useKnockout ? "K1_BLOCOS" : "ZIGUE_ZAGUE_INVERTIDO",
+        sortBasis,
+        primaryFieldUsed: sortBasis === "rating" ? "ratingPoints" : "rankingPoints",
         fallbackUsedCount: 0,
         athleteCount: 0,
         groupCount: 0,
@@ -531,7 +643,56 @@ export function simulateGroupsForCategory(input: {
         initialDistribution: [],
         historicalPreferredGroupCount: input.preferredGroupCount ?? null,
       },
+      matchups: [],
       warnings: ["Categoria sem atletas para simulação de grupos."],
+    };
+  }
+
+  const sortedResult = sortAthletesByScore(athletes, { categoryName: input.categoryName });
+  const sortedAthletes = sortedResult.sortedAthletes;
+
+  if (useKnockout) {
+    const knockout = buildKnockoutInitialMatchups({
+      athletes: sortedAthletes,
+    });
+    if (knockout.byeCount > 0) {
+      warnings.push(
+        `Chave inicial com ${knockout.byeCount} bye(s) para completar a eliminatória simples.`,
+      );
+    }
+
+    return {
+      groups: [],
+      matchups: knockout.matchups,
+      stats: {
+        seed: input.seed,
+        structureType: "knockout",
+        distributionMode: "K1_BLOCOS",
+        sortBasis: sortedResult.sortBasis,
+        primaryFieldUsed: sortedResult.primaryFieldUsed,
+        fallbackUsedCount: sortedResult.fallbackUsedCount,
+        athleteCount,
+        groupCount: knockout.matchups.length,
+        minGroupSize: 0,
+        maxGroupSize: 0,
+        clubCollisionPairs: 0,
+        clubCollisionsInevitable: 0,
+        collisionsBefore: 0,
+        collisionsAfter: 0,
+        swapsApplied: 0,
+        iterations: 0,
+        initialDistribution: knockout.matchups.map((matchup) => ({
+          groupName: matchup.matchName,
+          athleteIds: [matchup.athleteA?.athleteId, matchup.athleteB?.athleteId].filter(
+            (athleteId): athleteId is number => Number.isInteger(athleteId),
+          ),
+        })),
+        historicalPreferredGroupCount: null,
+        seededAthleteCount: knockout.seededAthleteCount,
+        bracketSize: knockout.bracketSize,
+        byeCount: knockout.byeCount,
+      },
+      warnings,
     };
   }
 
@@ -554,8 +715,6 @@ export function simulateGroupsForCategory(input: {
   const maxGroupSize = Math.ceil(athleteCount / groupCount);
   const minGroupSize = Math.floor(athleteCount / groupCount);
 
-  const sortedResult = sortAthletesByScore(athletes, { categoryName: input.categoryName });
-  const sortedAthletes = sortedResult.sortedAthletes;
   const cobra = allocateGroupsCobra({
     athletesSorted: sortedAthletes.map((athlete, index) => ({
       athleteId: athlete.athleteId,
@@ -610,8 +769,10 @@ export function simulateGroupsForCategory(input: {
 
   return {
     groups: finalGroups,
+    matchups: [],
     stats: {
       seed: input.seed,
+      structureType: "groups",
       distributionMode: "ZIGUE_ZAGUE_INVERTIDO",
       sortBasis: sortedResult.sortBasis,
       primaryFieldUsed: sortedResult.primaryFieldUsed,
