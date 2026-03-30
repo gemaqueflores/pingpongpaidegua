@@ -1909,9 +1909,6 @@ export class UserService {
 
       const athletesBucket = athletesByCategory.get(match.categoryId) ?? new Map<number, CategoryAthleteRef>();
       for (const participant of match.participants) {
-        if (participant.athlete.createdFromWarning) {
-          continue;
-        }
         pushUniqueCategoryAthlete(athletesBucket, {
           athleteId: participant.athlete.id,
           athleteName: participant.athlete.nameDisplay,
@@ -2245,9 +2242,6 @@ export class UserService {
 
       const athletesBucket = categoryAthletesMap.get(match.categoryId) ?? new Map<number, CategoryAthleteRef>();
       for (const participant of match.participants) {
-        if (participant.athlete.createdFromWarning) {
-          continue;
-        }
         if (!eligibleClubIds.has(participant.athlete.clubId)) {
           continue;
         }
@@ -2538,7 +2532,7 @@ export class UserService {
 
       const athletes = clubAthletesInCategory.get(match.categoryId) ?? new Map<number, CategoryAthleteRef>();
       for (const participant of match.participants) {
-        if (participant.athlete.createdFromWarning || participant.athlete.clubId !== clubId) {
+        if (participant.athlete.clubId !== clubId) {
           continue;
         }
         pushUniqueCategoryAthlete(athletes, {
