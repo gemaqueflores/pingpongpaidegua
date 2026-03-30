@@ -16,6 +16,50 @@ const MAX_BY_MEDAL: Record<MedalType, number> = {
 
 const MEDAL_ORDER: MedalType[] = ["ouro", "prata", "bronze"];
 
+function normalizeToken(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitCompositeParts(name: string): string[] {
+  return name
+    .split(/\s+#\s+|#|\s+-\s+/g)
+    .map((part) => normalizeToken(part))
+    .filter(Boolean)
+    .sort();
+}
+
+function areNamesEquivalent(left: string, right: string): boolean {
+  const leftParts = splitCompositeParts(left);
+  const rightParts = splitCompositeParts(right);
+  if (leftParts.length > 1 || rightParts.length > 1) {
+    if (leftParts.length !== rightParts.length || leftParts.length === 0) {
+      return false;
+    }
+    return leftParts.every((leftPart) =>
+      rightParts.some(
+        (rightPart) =>
+          rightPart === leftPart ||
+          rightPart.includes(leftPart) ||
+          leftPart.includes(rightPart),
+      ),
+    );
+  }
+
+  const leftToken = normalizeToken(left);
+  const rightToken = normalizeToken(right);
+  return (
+    leftToken === rightToken ||
+    leftToken.includes(rightToken) ||
+    rightToken.includes(leftToken)
+  );
+}
+
 function compareMedalists(left: MedalistLike, right: MedalistLike): number {
   if (left.position !== right.position) {
     return left.position - right.position;
@@ -45,6 +89,11 @@ export function normalizeCategoryMedalists<T extends MedalistLike>(medalists: T[
   }
 
   const selectedUnitKeys = new Set<string>();
+  const selectedNamesByMedal: Record<MedalType, string[]> = {
+    ouro: [],
+    prata: [],
+    bronze: [],
+  };
   const normalized: T[] = [];
   for (const medal of MEDAL_ORDER) {
     let selectedForMedal = 0;
@@ -56,8 +105,12 @@ export function normalizeCategoryMedalists<T extends MedalistLike>(medalists: T[
       if (selectedUnitKeys.has(unitKey)) {
         continue;
       }
+      if (selectedNamesByMedal[medal].some((name) => areNamesEquivalent(name, candidate.athleteName))) {
+        continue;
+      }
       normalized.push(candidate);
       selectedUnitKeys.add(unitKey);
+      selectedNamesByMedal[medal].push(candidate.athleteName);
       selectedForMedal += 1;
     }
   }

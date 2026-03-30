@@ -58,3 +58,12 @@ test("deduplica medalhistas pela unidade competitiva quando informado", () => {
     ["pair:a#b", "pair:c#d", "pair:e#f", "pair:g#h"],
   );
 });
+
+test("deduplica alias de dupla com nomes equivalentes no mesmo podio", () => {
+  const normalized = normalizeCategoryMedalists([
+    { athleteId: 1, athleteName: "LILIAN # SOFIA MENDONÇA", medalha: "bronze" as const, position: 3 },
+    { athleteId: 2, athleteName: "LILIAN DUARTE - SOFIA MENDONÇA", medalha: "bronze" as const, position: 3 },
+  ]);
+
+  assert.equal(normalized.length, 1);
+});
