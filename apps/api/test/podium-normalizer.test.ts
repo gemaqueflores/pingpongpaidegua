@@ -67,3 +67,25 @@ test("deduplica alias de dupla com nomes equivalentes no mesmo podio", () => {
 
   assert.equal(normalized.length, 1);
 });
+
+test("deduplica dupla por unitKey equivalente quando o alias acrescenta sobrenome", () => {
+  const normalized = normalizeCategoryMedalists([
+    {
+      athleteId: 1,
+      athleteName: "LILIAN # SOFIA MENDONÇA",
+      medalha: "bronze" as const,
+      position: 3,
+      unitKey: "pair:lilian sofia mendonca",
+    },
+    {
+      athleteId: 2,
+      athleteName: "LILIAN DUARTE - SOFIA MENDONÇA",
+      medalha: "bronze" as const,
+      position: 3,
+      unitKey: "pair:lilian duarte sofia mendonca",
+    },
+  ]);
+
+  assert.equal(normalized.length, 1);
+  assert.equal(normalized[0].unitKey, "pair:lilian sofia mendonca");
+});

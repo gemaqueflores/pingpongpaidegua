@@ -60,6 +60,40 @@ function areNamesEquivalent(left: string, right: string): boolean {
   );
 }
 
+function splitUnitKeyTokens(unitKey: string): string[] {
+  return normalizeToken(unitKey.replace(/^pair:/i, ""))
+    .split(" ")
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function areUnitKeysEquivalent(left: string, right: string): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left.startsWith("pair:") || !right.startsWith("pair:")) {
+    return false;
+  }
+
+  const leftTokens = splitUnitKeyTokens(left);
+  const rightTokens = splitUnitKeyTokens(right);
+  if (leftTokens.length === 0 || rightTokens.length === 0) {
+    return false;
+  }
+
+  const smaller = leftTokens.length <= rightTokens.length ? leftTokens : rightTokens;
+  const larger = smaller === leftTokens ? rightTokens : leftTokens;
+
+  return smaller.every((token) =>
+    larger.some(
+      (candidate) =>
+        candidate === token ||
+        candidate.includes(token) ||
+        token.includes(candidate),
+    ),
+  );
+}
+
 function compareMedalists(left: MedalistLike, right: MedalistLike): number {
   if (left.position !== right.position) {
     return left.position - right.position;
@@ -103,6 +137,9 @@ export function normalizeCategoryMedalists<T extends MedalistLike>(medalists: T[
         break;
       }
       if (selectedUnitKeys.has(unitKey)) {
+        continue;
+      }
+      if ([...selectedUnitKeys].some((selectedKey) => areUnitKeysEquivalent(selectedKey, unitKey))) {
         continue;
       }
       if (selectedNamesByMedal[medal].some((name) => areNamesEquivalent(name, candidate.athleteName))) {
