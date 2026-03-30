@@ -36,6 +36,26 @@ function createMedalistsServiceHarness() {
         return [];
       },
     },
+    athleteCategory: {
+      async findMany() {
+        return [];
+      },
+    },
+    match: {
+      async findMany() {
+        return [];
+      },
+    },
+    event: {
+      async findMany() {
+        return [];
+      },
+    },
+    scrapeRun: {
+      async findMany() {
+        return [];
+      },
+    },
   };
 
   const prismaWrite = {
@@ -153,4 +173,158 @@ test("event medalists usa cache stale quando recomputacao falha", async () => {
     staleReason: "compute_failed",
   });
   assert.equal(harness.getCategoryFindManyCalls(), 1);
+});
+
+test("event medalists resolve clube de dupla quando atleta placeholder pode ser reconciliado por atletas canonicos", async () => {
+  let categoryFindManyCalls = 0;
+  const prismaRead = {
+    readModelCache: {
+      async findUnique() {
+        return null;
+      },
+    },
+    category: {
+      async findMany() {
+        categoryFindManyCalls += 1;
+        return [
+          {
+            id: 1949,
+            eventId: 44,
+            name: "ABSOLUTO B (FEM) - DUPLAS",
+            cbtmCategoryId: "1949",
+          },
+        ];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [
+          {
+            categoryId: 1949,
+            athlete: {
+              id: 1,
+              nameDisplay: "ANDREZA MOTA",
+              club: { id: 139, name: "BEL.TT/CAMINHO DO BEM-PA" },
+            },
+          },
+          {
+            categoryId: 1949,
+            athlete: {
+              id: 2,
+              nameDisplay: "LUDMILLA LIMA",
+              club: { id: 139, name: "BEL.TT/CAMINHO DO BEM-PA" },
+            },
+          },
+        ];
+      },
+    },
+    match: {
+      async findMany() {
+        return [
+          {
+            id: 9001,
+            eventId: 44,
+            categoryId: 1949,
+            phase: "RESULTADOS",
+            round: "Final",
+            tableNumber: "1",
+            matchDatetime: new Date("2026-03-29T12:00:00.000Z"),
+            scoreRaw: "3x1",
+            p1Sets: 3,
+            p2Sets: 1,
+            winnerIndex: 0,
+            gameId: "j1",
+            sourceUrl: null,
+            category: {
+              id: 1949,
+              name: "ABSOLUTO B (FEM) - DUPLAS",
+              cbtmCategoryId: "1949",
+            },
+            participants: [
+              {
+                athlete: {
+                  id: 5655,
+                  nameDisplay: "ANDREZA MOTA - LUDMILLA LIMA",
+                  club: { id: 1, name: "SEM CLUBE" },
+                },
+              },
+              {
+                athlete: {
+                  id: 9999,
+                  nameDisplay: "OUTRA DUPLA",
+                  club: { id: 138, name: "PAYSANDU SPORT CLUB - PA" },
+                },
+              },
+            ],
+          },
+        ];
+      },
+    },
+    event: {
+      async findMany() {
+        return [
+          {
+            id: 44,
+            dataInicio: new Date("2026-03-28T00:00:00.000Z"),
+            inicioRealizacao: new Date("2026-03-28T00:00:00.000Z"),
+            ratingMatchFormat: "RR_K1",
+          },
+        ];
+      },
+    },
+    scrapeRun: {
+      async findMany() {
+        return [];
+      },
+    },
+  };
+
+  const prismaWrite = {
+    readModelCache: {
+      async upsert(input: {
+        where: { key: string };
+        create: { key: string; sourceScrapeRunId: number | null; payload: unknown };
+        update: { sourceScrapeRunId: number | null; payload: unknown };
+      }) {
+        return {
+          key: input.where.key,
+          sourceScrapeRunId: input.update.sourceScrapeRunId,
+          payload: input.update.payload,
+          updatedAt: new Date(),
+        };
+      },
+    },
+  };
+
+  const service = new UserService(prismaRead as never, prismaWrite as never) as UserService & {
+    resolveEventScope(eventId: number): Promise<{ canonicalEventId: number; allEventIds: number[]; childSuffixByEventId: Map<number, string> }>;
+    ensureEvent(eventId: number): Promise<Record<string, unknown>>;
+    getLatestReliableScrapeRunIdForScope(eventIds: number[]): Promise<number>;
+  };
+
+  service.resolveEventScope = async (eventId: number) => ({
+    canonicalEventId: eventId,
+    allEventIds: [eventId],
+    childSuffixByEventId: new Map(),
+  });
+  service.ensureEvent = async (eventId: number) => ({
+    id: eventId,
+    cbtmEventId: 5468,
+    nome: "2TMB26",
+    nivel: "ESTADUAL",
+    inicioInscricoes: new Date("2026-02-25T00:00:00.000Z"),
+    fimInscricoes: new Date("2026-03-20T00:00:00.000Z"),
+    inicioRealizacao: new Date("2026-03-28T00:00:00.000Z"),
+    fimRealizacao: new Date("2026-03-29T00:00:00.000Z"),
+    dataInicio: new Date("2026-03-28T00:00:00.000Z"),
+    dataFim: new Date("2026-03-29T00:00:00.000Z"),
+    concluido: false,
+  });
+  service.getLatestReliableScrapeRunIdForScope = async () => 99;
+
+  const response = await service.listEventCategoryMedalists(44);
+  const category = response.categories[0];
+  assert.equal(categoryFindManyCalls, 1);
+  assert.equal(category?.categoryName, "ABSOLUTO B (FEM) - DUPLAS");
+  assert.equal(category?.medalists[0]?.clubName, "BEL.TT/CAMINHO DO BEM-PA");
 });

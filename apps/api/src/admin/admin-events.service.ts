@@ -12,9 +12,9 @@ import { RawCaptureRetentionService } from "./raw-capture-retention.service";
 type DateBoundary = "start" | "end";
 const EVENT_TZ_OFFSET_MINUTES = -3 * 60;
 const DEFAULT_EFFICIENCY_CONFIG = {
-  pesoOuro: 400,
-  pesoPrata: 240,
-  pesoBronze: 120,
+  pesoOuro: 130,
+  pesoPrata: 80,
+  pesoBronze: 50,
 } as const;
 
 type ConformanceAuditSummary = {

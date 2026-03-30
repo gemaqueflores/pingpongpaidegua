@@ -81,7 +81,7 @@ function createEfficiencyServiceHarness() {
       throw new Error("forced compute failure");
     }
     return {
-      weights: { pesoOuro: 400, pesoPrata: 240, pesoBronze: 120 },
+      weights: { pesoOuro: 130, pesoPrata: 80, pesoBronze: 50 },
       ranking: [
         {
           clubId: 1,
@@ -119,7 +119,7 @@ test("event efficiency persiste read model e reutiliza cache valido no mesmo scr
   const first = await harness.service.listEventEfficiency(1);
   assert.equal(first.eventId, 1);
   assert.equal(first.ranking.length, 1);
-  assert.equal(first.weights.pesoOuro, 400);
+  assert.equal(first.weights.pesoOuro, 130);
   assert.equal(harness.getComputeCalls(), 1);
 
   const second = await harness.service.listEventEfficiency(1);
@@ -134,7 +134,7 @@ test("event efficiency usa cache stale quando recomputacao falha", async () => {
     sourceScrapeRunId: 77,
     payload: {
       eventId: 1,
-      weights: { pesoOuro: 400, pesoPrata: 240, pesoBronze: 120 },
+      weights: { pesoOuro: 130, pesoPrata: 80, pesoBronze: 50 },
       ranking: [{ clubId: 9, clubName: "CACHE CLUBE", ouro: 1, prata: 0, bronze: 0 }],
     },
     updatedAt: new Date("2000-01-01T00:00:00.000Z"),

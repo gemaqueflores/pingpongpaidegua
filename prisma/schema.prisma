@@ -414,9 +414,9 @@ model EventSyncRun {
 
 model EfficiencyConfig {
   id         Int      @id
-  pesoOuro   Int      @default(400) @map("peso_ouro")
-  pesoPrata  Int      @default(240) @map("peso_prata")
-  pesoBronze Int      @default(120) @map("peso_bronze")
+  pesoOuro   Int      @default(130) @map("peso_ouro")
+  pesoPrata  Int      @default(80) @map("peso_prata")
+  pesoBronze Int      @default(50) @map("peso_bronze")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 

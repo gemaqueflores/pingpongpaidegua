@@ -50,9 +50,9 @@ const TECHNICIAN_CATEGORY_ID = "99999999";
 const IGNORED_CATEGORY_IDS = ["88888888", TECHNICIAN_CATEGORY_ID];
 const SUPPORT_EMAIL = "gemaqueflores@gmail.com";
 const DEFAULT_EFFICIENCY_WEIGHTS = {
-  pesoOuro: 400,
-  pesoPrata: 240,
-  pesoBronze: 120,
+  pesoOuro: 130,
+  pesoPrata: 80,
+  pesoBronze: 50,
 } as const;
 const DEFAULT_USER_LIST_PAGE_SIZE = Number(process.env.USER_LIST_DEFAULT_PAGE_SIZE ?? "500");
 const MAX_USER_LIST_PAGE_SIZE = Number(process.env.USER_LIST_MAX_PAGE_SIZE ?? "2000");
@@ -353,6 +353,52 @@ function pushUniqueCategoryAthlete(
     return;
   }
   bucket.set(athlete.athleteId, athlete);
+}
+
+function isPlaceholderClubName(clubName: string | null | undefined): boolean {
+  const normalized = normalizeText(clubName ?? "");
+  return !normalized || normalized === "sem clube";
+}
+
+function resolveCompositeAthleteClub(
+  athleteName: string | null | undefined,
+  athletePool: CategoryAthleteRef[],
+): Pick<CategoryAthleteRef, "clubId" | "clubName"> | null {
+  if (!isCompositePairName(athleteName)) {
+    return null;
+  }
+
+  const pairMembers = splitPairNameParts(athleteName);
+  if (pairMembers.length < 2) {
+    return null;
+  }
+
+  const matchedClubs = new Map<string, { clubId: number | null; clubName: string }>();
+  for (const member of pairMembers) {
+    const match = athletePool.find(
+      (candidate) =>
+        !isPlaceholderClubName(candidate.clubName) &&
+        !isCompositePairName(candidate.athleteName) &&
+        arePairMembersEquivalent(member, candidate.athleteName),
+    );
+    if (!match || !match.clubName) {
+      return null;
+    }
+    const key = normalizeText(match.clubName);
+    if (!key || key === "sem clube") {
+      return null;
+    }
+    matchedClubs.set(key, {
+      clubId: match.clubId ?? null,
+      clubName: match.clubName,
+    });
+  }
+
+  if (matchedClubs.size !== 1) {
+    return null;
+  }
+
+  return [...matchedClubs.values()][0];
 }
 
 function splitPairNameParts(name: string | null | undefined): string[] {
@@ -1811,6 +1857,7 @@ export class UserService {
               nameDisplay: true,
               club: {
                 select: {
+                  id: true,
                   name: true,
                 },
               },
@@ -1886,14 +1933,17 @@ export class UserService {
         }
 
         const athletesByCategory = new Map<number, Map<number, CategoryAthleteRef>>();
+        const scopedAthletesPool = new Map<number, CategoryAthleteRef>();
         for (const row of athleteCategories) {
       const bucket = athletesByCategory.get(row.categoryId) ?? new Map<number, CategoryAthleteRef>();
-      pushUniqueCategoryAthlete(bucket, {
+      const athleteRef = {
         athleteId: row.athlete.id,
         athleteName: row.athlete.nameDisplay,
-        clubId: null,
+        clubId: row.athlete.club?.id ?? null,
         clubName: row.athlete.club?.name ?? null,
-      });
+      };
+      pushUniqueCategoryAthlete(bucket, athleteRef);
+      pushUniqueCategoryAthlete(scopedAthletesPool, athleteRef);
       athletesByCategory.set(row.categoryId, bucket);
         }
 
@@ -1909,12 +1959,16 @@ export class UserService {
 
       const athletesBucket = athletesByCategory.get(match.categoryId) ?? new Map<number, CategoryAthleteRef>();
       for (const participant of match.participants) {
-        pushUniqueCategoryAthlete(athletesBucket, {
+        const athleteRef = {
           athleteId: participant.athlete.id,
           athleteName: participant.athlete.nameDisplay,
           clubId: participant.athlete.club?.id ?? null,
           clubName: participant.athlete.club?.name ?? null,
-        });
+        };
+        pushUniqueCategoryAthlete(athletesBucket, athleteRef);
+        if (!isPlaceholderClubName(athleteRef.clubName)) {
+          pushUniqueCategoryAthlete(scopedAthletesPool, athleteRef);
+        }
       }
       athletesByCategory.set(match.categoryId, athletesBucket);
         }
@@ -1931,6 +1985,7 @@ export class UserService {
           ? category.name
           : `${category.name}${scope.childSuffixByEventId.get(category.eventId) ?? " -X"}`;
       const athletes = [...(athletesByCategory.get(category.id)?.values() ?? [])];
+      const fallbackAthletePool = [...scopedAthletesPool.values()];
       const fullCategoryMatches = fullCategoryMatchesMap.get(category.id) ?? [];
       const medalExpectation = inferCategoryMedalExpectation(fullCategoryMatches);
       const allowDualBronze = medalExpectation?.mode !== "grupo_unico";
@@ -1954,10 +2009,15 @@ export class UserService {
           if (!medalha || position === null) {
             return [];
           }
+          const resolvedClub =
+            isPlaceholderClubName(athlete.clubName)
+              ? resolveCompositeAthleteClub(athlete.athleteName, athletes) ??
+                resolveCompositeAthleteClub(athlete.athleteName, fallbackAthletePool)
+              : null;
           return [{
             athleteId: athlete.athleteId,
             athleteName: athlete.athleteName,
-            clubName: athlete.clubName,
+            clubName: resolvedClub?.clubName ?? athlete.clubName,
             position,
             medalha,
             unitKey: buildMedalistUnitKey({
@@ -2218,15 +2278,18 @@ export class UserService {
     ]);
 
     const categoryAthletesMap = new Map<number, Map<number, CategoryAthleteRef>>();
+    const scopedAthletesPool = new Map<number, CategoryAthleteRef>();
 
     for (const item of athleteCategories) {
       const bucket = categoryAthletesMap.get(item.categoryId) ?? new Map<number, CategoryAthleteRef>();
-      pushUniqueCategoryAthlete(bucket, {
+      const athleteRef = {
         athleteId: item.athlete.id,
         athleteName: item.athlete.nameDisplay,
         clubId: item.athlete.clubId,
-        clubName: null,
-      });
+        clubName: rowsByClubId.get(item.athlete.clubId)?.clubName ?? null,
+      };
+      pushUniqueCategoryAthlete(bucket, athleteRef);
+      pushUniqueCategoryAthlete(scopedAthletesPool, athleteRef);
       categoryAthletesMap.set(item.categoryId, bucket);
     }
 
@@ -2245,18 +2308,23 @@ export class UserService {
         if (!eligibleClubIds.has(participant.athlete.clubId)) {
           continue;
         }
-        pushUniqueCategoryAthlete(athletesBucket, {
+        const athleteRef = {
           athleteId: participant.athlete.id,
           athleteName: participant.athlete.nameDisplay,
           clubId: participant.athlete.clubId,
           clubName: participant.athlete.club?.name ?? null,
-        });
+        };
+        pushUniqueCategoryAthlete(athletesBucket, athleteRef);
+        if (!isPlaceholderClubName(athleteRef.clubName)) {
+          pushUniqueCategoryAthlete(scopedAthletesPool, athleteRef);
+        }
       }
       categoryAthletesMap.set(match.categoryId, athletesBucket);
     }
 
     for (const categoryId of categoryIds) {
       const athletesInCategory = [...(categoryAthletesMap.get(categoryId)?.values() ?? [])];
+      const fallbackAthletePool = [...scopedAthletesPool.values()];
       if (athletesInCategory.length === 0) {
         continue;
       }
@@ -2283,9 +2351,15 @@ export class UserService {
           if (!medal || position === null) {
             return [];
           }
+          const resolvedClub =
+            isPlaceholderClubName(athlete.clubName)
+              ? resolveCompositeAthleteClub(athlete.athleteName, athletesInCategory) ??
+                resolveCompositeAthleteClub(athlete.athleteName, fallbackAthletePool)
+              : null;
           return [{
             athleteId: athlete.athleteId,
             athleteName: athlete.athleteName,
+            clubName: resolvedClub?.clubName ?? athlete.clubName ?? null,
             medalha: medal,
             position,
             unitKey: buildMedalistUnitKey({
@@ -2308,7 +2382,12 @@ export class UserService {
           continue;
         }
 
-        const fallbackClubId = typeof athlete.clubId === "number" ? athlete.clubId : null;
+        const resolvedClub =
+          isPlaceholderClubName(athlete.clubName)
+            ? resolveCompositeAthleteClub(athlete.athleteName, athletesInCategory) ??
+              resolveCompositeAthleteClub(athlete.athleteName, fallbackAthletePool)
+            : null;
+        const fallbackClubId = resolvedClub?.clubId ?? (typeof athlete.clubId === "number" ? athlete.clubId : null);
         const clubId = athleteClubByAthleteId.get(athlete.athleteId) ?? fallbackClubId;
         if (!clubId) {
           continue;
