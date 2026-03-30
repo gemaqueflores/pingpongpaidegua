@@ -16,6 +16,12 @@ describe("doubles pair name helpers", () => {
     expect(normalizeDoublesPairName("ANA # ANA # BIA")).toBe("ANA # BIA");
   });
 
+  it("normaliza dupla com separador hifenado", () => {
+    expect(normalizeDoublesPairName("RACHEL COSTA - DANILO MENEZES")).toBe(
+      "DANILO MENEZES # RACHEL COSTA",
+    );
+  });
+
   it("detecta labels de dupla", () => {
     expect(isDoublesLikeLabel("DUPLA MISTA")).toBe(true);
     expect(isDoublesLikeLabel("Evento de duplas")).toBe(true);
@@ -25,8 +31,8 @@ describe("doubles pair name helpers", () => {
   it("normaliza somente quando contexto ou categoria sao de dupla", () => {
     expect(shouldNormalizeDoublesPairName("2TMB26 - DUPLAS", "SUB-15 MAS", "A # B")).toBe(true);
     expect(shouldNormalizeDoublesPairName("2TMB26", "DUPLA MISTA", "A # B")).toBe(true);
+    expect(shouldNormalizeDoublesPairName("2TMB26", "DUPLA MISTA", "A - B")).toBe(true);
     expect(shouldNormalizeDoublesPairName("2TMB26", "SUB-15 MAS", "A # B")).toBe(false);
     expect(shouldNormalizeDoublesPairName("2TMB26", "SUB-15 MAS", "A")).toBe(false);
   });
 });
-

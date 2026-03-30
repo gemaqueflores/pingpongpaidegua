@@ -1,6 +1,7 @@
 import {
   AthletePerformanceInput,
   calculateAthletePointPerformance,
+  compactWhitespace,
   detectWalkover,
   normalizeAthleteName,
   resolveAthleteIndexInMatch,
@@ -43,6 +44,13 @@ export interface CategoryClassificationSummary {
   reason: string;
   mode: "grupo_unico" | "eliminatoria" | "indefinido";
   tieTechnical: boolean;
+}
+
+export interface CategoryMedalExpectation {
+  mode: "grupo_unico" | "eliminatoria" | "indefinido";
+  participantCount: number;
+  publishedMatchesCount: number;
+  expectedMedalists: number;
 }
 
 type RoundStage = "final" | "semifinal" | "quartas" | "oitavas" | "fase16" | "fase32" | "outro";
@@ -207,8 +215,32 @@ function toStandingKey(player: CategoryAnalyticsPlayer | null, fallbackIndex: nu
   if (player?.athleteId) {
     return `id:${player.athleteId}`;
   }
-  const normalizedName = normalizeAthleteName(player?.name ?? "");
+  const normalizedName = normalizeStandingNameKey(player?.name ?? "");
   return normalizedName ? `name:${normalizedName}` : `unk:${fallbackIndex}`;
+}
+
+function splitCompositeEntryParts(name: string | null | undefined): string[] {
+  return compactWhitespace(name)
+    .split(/\s+#\s+|#|\s+-\s+/g)
+    .map((part) => compactWhitespace(part))
+    .filter(Boolean);
+}
+
+function normalizeStandingNameKey(name: string | null | undefined): string {
+  const parts = splitCompositeEntryParts(name);
+  if (parts.length >= 2) {
+    const deduped = new Set<string>();
+    for (const part of parts) {
+      const normalizedPart = normalizeAthleteName(part);
+      if (normalizedPart) {
+        deduped.add(normalizedPart);
+      }
+    }
+    if (deduped.size >= 2) {
+      return [...deduped].sort((left, right) => left.localeCompare(right, "pt-BR")).join("#");
+    }
+  }
+  return normalizeAthleteName(name ?? "");
 }
 
 function athleteMatchesStandingKey(key: string, athlete: AthletePerformanceInput): boolean {
@@ -224,7 +256,7 @@ function athleteMatchesStandingKey(key: string, athlete: AthletePerformanceInput
   }
 
   if (key.startsWith("name:")) {
-    const normalizedName = normalizeAthleteName(athlete.athleteNameNormalized ?? athlete.athleteName ?? "");
+    const normalizedName = normalizeStandingNameKey(athlete.athleteName ?? athlete.athleteNameNormalized ?? "");
     return key === `name:${normalizedName}`;
   }
 
@@ -558,7 +590,7 @@ function computeGroupSingleClassification(input: {
       athleteIds.add(id);
     }
   }
-  const normalizedName = normalizeAthleteName(input.athlete.athleteNameNormalized ?? input.athlete.athleteName ?? "");
+  const normalizedName = normalizeStandingNameKey(input.athlete.athleteName ?? input.athlete.athleteNameNormalized ?? "");
 
   const athleteIndex = ordered.orderedKeys.findIndex((key) => {
     if (key.startsWith("id:")) {
@@ -856,4 +888,82 @@ export function computeCategoryClassificationSummaries(
       } satisfies CategoryClassificationSummary;
     })
     .sort((a, b) => a.categoryName.localeCompare(b.categoryName, "pt-BR", { sensitivity: "base" }));
+}
+
+export function inferCategoryMedalExpectation(matches: CategoryAnalyticsMatch[]): CategoryMedalExpectation | null {
+  if (matches.length === 0) {
+    return null;
+  }
+
+  const parsedCategoryMatches = matches.map(toParsedMatch);
+  const structuralParticipants = new Set<string>();
+  const structuralGroupRounds = new Set<string>();
+  let hasEliminationStructure = false;
+  for (const match of matches) {
+    structuralParticipants.add(toStandingKey(match.players[0], 0));
+    structuralParticipants.add(toStandingKey(match.players[1], 1));
+    if (isGroupRoundMatch(match)) {
+      structuralGroupRounds.add(extractGroupKeyFromRound(match.round));
+      continue;
+    }
+    const roundStage = toRoundStage(match.round);
+    const hasRealPlayers = Boolean(
+      match.players[0]?.name ||
+        match.players[0]?.athleteId ||
+        match.players[1]?.name ||
+        match.players[1]?.athleteId,
+    );
+    if (roundStage !== "outro" && hasRealPlayers) {
+      hasEliminationStructure = true;
+    }
+  }
+
+  const walkoverLosersInGroups = collectGroupWalkoverLoserKeys({
+    matches,
+    parsedMatches: parsedCategoryMatches,
+  });
+
+  const effectiveMatches = matches.filter((match, index) => {
+    if (!isGroupRoundMatch(match)) {
+      return true;
+    }
+    const parsed = parsedCategoryMatches[index];
+    if (!parsed) {
+      return true;
+    }
+    return !walkoverLosersInGroups.has(parsed.p1Key) && !walkoverLosersInGroups.has(parsed.p2Key);
+  });
+
+  if (effectiveMatches.length === 0) {
+    return {
+      mode: "indefinido",
+      participantCount: 0,
+      publishedMatchesCount: 0,
+      expectedMedalists: 0,
+    };
+  }
+
+  const effectiveParticipants = new Set<string>();
+  for (const match of effectiveMatches) {
+    effectiveParticipants.add(toStandingKey(match.players[0], 0));
+    effectiveParticipants.add(toStandingKey(match.players[1], 1));
+  }
+
+  const hasGroupData = structuralGroupRounds.size > 0;
+  const isSingleGroup =
+    hasGroupData &&
+    ((structuralGroupRounds.size === 1 && !hasEliminationStructure) ||
+      (structuralParticipants.size > 0 && structuralParticipants.size <= 5 && !hasEliminationStructure));
+
+  const participantCount = effectiveParticipants.size;
+  const expectedMedalists = isSingleGroup
+    ? Math.min(participantCount, 3)
+    : Math.min(participantCount, 4);
+
+  return {
+    mode: isSingleGroup ? "grupo_unico" : "eliminatoria",
+    participantCount,
+    publishedMatchesCount: effectiveMatches.length,
+    expectedMedalists,
+  };
 }

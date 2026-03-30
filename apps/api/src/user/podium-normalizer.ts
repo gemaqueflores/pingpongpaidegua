@@ -5,6 +5,7 @@ export type MedalistLike = {
   athleteName: string;
   medalha: MedalType;
   position: number;
+  unitKey?: string | null;
 };
 
 const MAX_BY_MEDAL: Record<MedalType, number> = {
@@ -43,23 +44,23 @@ export function normalizeCategoryMedalists<T extends MedalistLike>(medalists: T[
     byMedal[medal].sort(compareMedalists);
   }
 
-  const selectedAthleteIds = new Set<number>();
+  const selectedUnitKeys = new Set<string>();
   const normalized: T[] = [];
   for (const medal of MEDAL_ORDER) {
     let selectedForMedal = 0;
     for (const candidate of byMedal[medal]) {
+      const unitKey = candidate.unitKey?.trim() || `athlete:${candidate.athleteId}`;
       if (selectedForMedal >= MAX_BY_MEDAL[medal]) {
         break;
       }
-      if (selectedAthleteIds.has(candidate.athleteId)) {
+      if (selectedUnitKeys.has(unitKey)) {
         continue;
       }
       normalized.push(candidate);
-      selectedAthleteIds.add(candidate.athleteId);
+      selectedUnitKeys.add(unitKey);
       selectedForMedal += 1;
     }
   }
 
   return normalized;
 }
-

@@ -792,17 +792,16 @@ export function isDoublesLikeLabel(input: string | null | undefined): boolean {
   return /\bdupla(?:s)?\b/.test(normalized);
 }
 
-export function normalizeDoublesPairName(input: string | null | undefined): string {
-  const value = compactWhitespace(input);
-  if (!value.includes("#")) {
-    return value;
-  }
-
-  const parts = value
-    .split("#")
+function splitDoublesPairParts(input: string | null | undefined): string[] {
+  return compactWhitespace(input)
+    .split(/\s+#\s+|#|\s+-\s+/g)
     .map((part) => compactWhitespace(part))
     .filter(Boolean);
+}
 
+export function normalizeDoublesPairName(input: string | null | undefined): string {
+  const value = compactWhitespace(input);
+  const parts = splitDoublesPairParts(value);
   if (parts.length < 2) {
     return value;
   }
@@ -829,7 +828,7 @@ export function shouldNormalizeDoublesPairName(
   categoryName: string | null | undefined,
   athleteName: string | null | undefined,
 ): boolean {
-  if (!compactWhitespace(athleteName).includes("#")) {
+  if (splitDoublesPairParts(athleteName).length < 2) {
     return false;
   }
   return isDoublesLikeLabel(eventName) || isDoublesLikeLabel(categoryName);
@@ -854,9 +853,8 @@ export function resolveAthleteIndexInMatch(
     }
   }
 
-  const athleteNameNormalized = normalizeAthleteName(
-    athlete.athleteNameNormalized ?? athlete.athleteName ?? null,
-  );
+  const athletePairNameNormalized = normalizeAthleteName(normalizeDoublesPairName(athlete.athleteName ?? null));
+  const athleteNameNormalized = normalizeAthleteName(athlete.athleteNameNormalized ?? athlete.athleteName ?? null);
 
   for (let index = 0; index < 2; index += 1) {
     const player = players[index];
@@ -868,8 +866,12 @@ export function resolveAthleteIndexInMatch(
       return index === 0 ? 0 : 1;
     }
 
+    const playerPairNameNormalized = normalizeAthleteName(normalizeDoublesPairName(player.name ?? null));
     const playerNameNormalized = normalizeAthleteName(player.name ?? null);
-    if (athleteNameNormalized && playerNameNormalized === athleteNameNormalized) {
+    if (
+      (athletePairNameNormalized && playerPairNameNormalized === athletePairNameNormalized) ||
+      (athleteNameNormalized && playerNameNormalized === athleteNameNormalized)
+    ) {
       return index === 0 ? 0 : 1;
     }
   }

@@ -26,6 +26,7 @@ import { PrismaReadService, PrismaService } from "../common/prisma.service";
 import {
   collectWalkoverLoserAthleteIds,
   computeCategoryClassificationSummaries,
+  inferCategoryMedalExpectation,
   computeCategoryPerformanceSummaries,
   type CategoryAnalyticsMatch,
 } from "./athlete-analytics";
@@ -195,6 +196,7 @@ type EventCategoryMedalist = {
   clubName: string | null;
   position: number;
   medalha: "ouro" | "prata" | "bronze";
+  unitKey?: string | null;
 };
 
 type EventCategoryMedalistRow = {
@@ -322,10 +324,15 @@ function totalEfficiencyMedals(counter: EfficiencyMedalCounter): number {
   return counter.ouro + counter.prata + counter.bronze;
 }
 
-function resolveMedalFromPosition(position: number | null | undefined): "ouro" | "prata" | "bronze" | null {
+function resolveMedalFromPosition(
+  position: number | null | undefined,
+  options?: { allowDualBronze?: boolean },
+): "ouro" | "prata" | "bronze" | null {
+  const allowDualBronze = options?.allowDualBronze ?? true;
   if (position === 1) return "ouro";
   if (position === 2) return "prata";
-  if (position === 3 || position === 4) return "bronze";
+  if (position === 3) return "bronze";
+  if (allowDualBronze && position === 4) return "bronze";
   return null;
 }
 
@@ -350,13 +357,93 @@ function pushUniqueCategoryAthlete(
 
 function splitPairNameParts(name: string | null | undefined): string[] {
   return compactWhitespace(name)
-    .split("#")
+    .split(/\s+#\s+|#|\s+-\s+/g)
     .map((part: string) => compactWhitespace(part))
     .filter(Boolean);
 }
 
 function isCompositePairName(name: string | null | undefined): boolean {
-  return compactWhitespace(name).includes("#");
+  const compact = compactWhitespace(name);
+  return compact.includes("#") || /\s-\s/.test(compact);
+}
+
+function normalizeCompositePairName(name: string | null | undefined): string {
+  const compact = compactWhitespace(name);
+  const parts = splitPairNameParts(compact);
+  if (parts.length < 2) {
+    return compact;
+  }
+
+  const deduped = new Map<string, string>();
+  for (const part of parts) {
+    const normalized = normalizeAthleteName(part);
+    if (!normalized || deduped.has(normalized)) {
+      continue;
+    }
+    deduped.set(normalized, part);
+  }
+
+  if (deduped.size < 2) {
+    return compact;
+  }
+
+  return [...deduped.entries()]
+    .sort((left, right) => left[0].localeCompare(right[0], "pt-BR"))
+    .map(([, display]) => display)
+    .join(" # ");
+}
+
+function arePairMembersEquivalent(left: string, right: string): boolean {
+  const normalizedLeft = normalizeAthleteName(left);
+  const normalizedRight = normalizeAthleteName(right);
+  if (!normalizedLeft || !normalizedRight) {
+    return false;
+  }
+  return (
+    normalizedLeft === normalizedRight ||
+    normalizedLeft.includes(normalizedRight) ||
+    normalizedRight.includes(normalizedLeft)
+  );
+}
+
+function areCompetitiveEntryNamesEquivalent(left: string | null | undefined, right: string | null | undefined): boolean {
+  const normalizedLeft = normalizeAthleteName(left);
+  const normalizedRight = normalizeAthleteName(right);
+  if (normalizedLeft && normalizedRight && normalizedLeft === normalizedRight) {
+    return true;
+  }
+
+  const leftParts = splitPairNameParts(left);
+  const rightParts = splitPairNameParts(right);
+  if (leftParts.length >= 2 && rightParts.length >= 2 && leftParts.length === rightParts.length) {
+    const remaining = [...rightParts];
+    for (const leftPart of leftParts) {
+      const matchIndex = remaining.findIndex((rightPart) => arePairMembersEquivalent(leftPart, rightPart));
+      if (matchIndex < 0) {
+        return false;
+      }
+      remaining.splice(matchIndex, 1);
+    }
+    return remaining.length === 0;
+  }
+
+  return false;
+}
+
+function buildMedalistUnitKey(input: {
+  eventName?: string | null;
+  categoryName: string | null | undefined;
+  athleteId: number;
+  athleteName: string;
+}): string {
+  if (
+    isCompositePairName(input.athleteName) ||
+    isDoublesCategoryName(input.categoryName) ||
+    isDoublesEventName(input.eventName)
+  ) {
+    return `pair:${normalizeAthleteName(normalizeCompositePairName(input.athleteName))}`;
+  }
+  return `athlete:${input.athleteId}`;
 }
 
 function isDoublesCategoryName(categoryName: string | null | undefined): boolean {
@@ -1848,6 +1935,8 @@ export class UserService {
           : `${category.name}${scope.childSuffixByEventId.get(category.eventId) ?? " -X"}`;
       const athletes = [...(athletesByCategory.get(category.id)?.values() ?? [])];
       const fullCategoryMatches = fullCategoryMatchesMap.get(category.id) ?? [];
+      const medalExpectation = inferCategoryMedalExpectation(fullCategoryMatches);
+      const allowDualBronze = medalExpectation?.mode !== "grupo_unico";
       const walkoverMatchesCount = countWalkoverMatches(fullCategoryMatches);
       const woDisqualifiedAthleteIds = collectWalkoverLoserAthleteIds(fullCategoryMatches);
       const positionByAthleteId = this.computeCategoryPositionByAthleteId(
@@ -1858,25 +1947,29 @@ export class UserService {
         })),
       );
 
-      const medalistsRaw = athletes
-        .map((athlete) => {
+      const medalistsRaw: EventCategoryMedalist[] = athletes
+        .flatMap((athlete) => {
           if (woDisqualifiedAthleteIds.has(athlete.athleteId)) {
-            return null;
+            return [];
           }
           const position = positionByAthleteId.get(athlete.athleteId) ?? null;
-          const medalha = resolveMedalFromPosition(position);
+          const medalha = resolveMedalFromPosition(position, { allowDualBronze });
           if (!medalha || position === null) {
-            return null;
+            return [];
           }
-          return {
+          return [{
             athleteId: athlete.athleteId,
             athleteName: athlete.athleteName,
             clubName: athlete.clubName,
             position,
             medalha,
-          } satisfies EventCategoryMedalist;
+            unitKey: buildMedalistUnitKey({
+              categoryName,
+              athleteId: athlete.athleteId,
+              athleteName: athlete.athleteName,
+            }),
+          }];
         })
-        .filter((item): item is EventCategoryMedalist => Boolean(item))
         .sort((left, right) => {
           const medalDiff = medalOrder[left.medalha] - medalOrder[right.medalha];
           if (medalDiff !== 0) {
@@ -1921,7 +2014,11 @@ export class UserService {
         calculatedMatchesCount,
         walkoverMatchesCount,
       });
-      const expectedMedalists = registeredBaseCount <= 3 ? registeredBaseCount : 4;
+      const expectedMedalists =
+        fullCategoryMatches.length === 0
+          ? 0
+          : medalExpectation?.expectedMedalists ??
+            (registeredBaseCount <= 3 ? registeredBaseCount : 4);
       const athleteCount =
         typeof officialRegisteredCount === "number" && officialRegisteredCount >= 0
           ? officialRegisteredCount
@@ -1966,7 +2063,12 @@ export class UserService {
 
         return {
           eventId: scope.canonicalEventId,
-          categories: categoriesWithMedalists,
+          categories: categoriesWithMedalists.filter(
+            (category) =>
+              category.medalists.length > 0 ||
+              category.publishedMatchesCount > 0 ||
+              (category.expectedMedalists ?? 0) > 0,
+          ),
         };
       },
     });
@@ -2166,6 +2268,8 @@ export class UserService {
       }
 
       const fullCategoryMatches = fullCategoryMatchesMap.get(categoryId) ?? [];
+      const medalExpectation = inferCategoryMedalExpectation(fullCategoryMatches);
+      const allowDualBronze = medalExpectation?.mode !== "grupo_unico";
       const woDisqualifiedAthleteIds = collectWalkoverLoserAthleteIds(fullCategoryMatches);
       const positionByAthleteId = this.computeCategoryPositionByAthleteId(
         fullCategoryMatches,
@@ -2176,33 +2280,27 @@ export class UserService {
       );
 
       const medalistsInCategory = normalizeCategoryMedalists(
-        athletesInCategory
-          .map((athlete) => {
-            if (woDisqualifiedAthleteIds.has(athlete.athleteId)) {
-              return null;
-            }
-            const position = positionByAthleteId.get(athlete.athleteId) ?? null;
-            const medal = resolveMedalFromPosition(position);
-            if (!medal || position === null) {
-              return null;
-            }
-            return {
+        athletesInCategory.flatMap((athlete) => {
+          if (woDisqualifiedAthleteIds.has(athlete.athleteId)) {
+            return [];
+          }
+          const position = positionByAthleteId.get(athlete.athleteId) ?? null;
+          const medal = resolveMedalFromPosition(position, { allowDualBronze });
+          if (!medal || position === null) {
+            return [];
+          }
+          return [{
+            athleteId: athlete.athleteId,
+            athleteName: athlete.athleteName,
+            medalha: medal,
+            position,
+            unitKey: buildMedalistUnitKey({
+              categoryName: fullCategoryMatches[0]?.categoryName ?? null,
               athleteId: athlete.athleteId,
               athleteName: athlete.athleteName,
-              medalha: medal,
-              position,
-            };
-          })
-          .filter(
-            (
-              item,
-            ): item is {
-              athleteId: number;
-              athleteName: string;
-              medalha: "ouro" | "prata" | "bronze";
-              position: number;
-            } => Boolean(item),
-          ),
+            }),
+          }];
+        }),
       );
 
       for (const medalist of medalistsInCategory) {
@@ -2211,7 +2309,7 @@ export class UserService {
           continue;
         }
         const position = positionByAthleteId.get(athlete.athleteId) ?? null;
-        const medal = resolveMedalFromPosition(position);
+        const medal = resolveMedalFromPosition(position, { allowDualBronze });
         if (!medal || position === null) {
           continue;
         }
@@ -2504,6 +2602,8 @@ export class UserService {
       const categoryAthletes = [...(clubAthletesInCategory.get(category.id)?.values() ?? [])];
       if (categoryAthletes.length === 0) continue;
       const categoryMatches = fullCategoryMatchesMap.get(category.id) ?? [];
+      const medalExpectation = inferCategoryMedalExpectation(categoryMatches);
+      const allowDualBronze = medalExpectation?.mode !== "grupo_unico";
       const woDisqualifiedAthleteIds = collectWalkoverLoserAthleteIds(categoryMatches);
       const positionByAthleteId = this.computeCategoryPositionByAthleteId(
         categoryMatches,
@@ -2532,33 +2632,28 @@ export class UserService {
         };
 
       const medalistsInCategory = normalizeCategoryMedalists(
-        categoryAthletes
-          .map((athlete) => {
-            if (woDisqualifiedAthleteIds.has(athlete.athleteId)) {
-              return null;
-            }
-            const position = positionByAthleteId.get(athlete.athleteId) ?? null;
-            const medal = resolveMedalFromPosition(position);
-            if (!medal || position === null) {
-              return null;
-            }
-            return {
+        categoryAthletes.flatMap((athlete) => {
+          if (woDisqualifiedAthleteIds.has(athlete.athleteId)) {
+            return [];
+          }
+          const position = positionByAthleteId.get(athlete.athleteId) ?? null;
+          const medal = resolveMedalFromPosition(position, { allowDualBronze });
+          if (!medal || position === null) {
+            return [];
+          }
+          return [{
+            athleteId: athlete.athleteId,
+            athleteName: athlete.athleteName,
+            medalha: medal,
+            position,
+            unitKey: buildMedalistUnitKey({
+              eventName: event.nome,
+              categoryName: category.name,
               athleteId: athlete.athleteId,
               athleteName: athlete.athleteName,
-              medalha: medal,
-              position,
-            };
-          })
-          .filter(
-            (
-              item,
-            ): item is {
-              athleteId: number;
-              athleteName: string;
-              medalha: "ouro" | "prata" | "bronze";
-              position: number;
-            } => Boolean(item),
-          ),
+            }),
+          }];
+        }),
       );
 
       for (const medalist of medalistsInCategory) {
@@ -2567,7 +2662,7 @@ export class UserService {
           continue;
         }
         const position = positionByAthleteId.get(athlete.athleteId) ?? null;
-        const medal = resolveMedalFromPosition(position);
+        const medal = resolveMedalFromPosition(position, { allowDualBronze });
         if (!medal || position === null) continue;
 
         const canonicalCategoryKey = category.cbtmCategoryId
@@ -2807,7 +2902,44 @@ export class UserService {
         athleteName: athlete.athleteName,
         athleteNameNormalized: normalizeAthleteName(athlete.athleteName),
       })[0];
-      positionByAthleteId.set(athlete.athleteId, summary?.position ?? null);
+      const currentPosition = summary?.position ?? null;
+
+      const candidateNames = new Set<string>();
+      const candidateAthleteIds = new Set<number>();
+      for (const match of categoryMatches) {
+        for (const player of match.players) {
+          if (!player) {
+            continue;
+          }
+          const playerName = player?.name ?? null;
+          if (!playerName) {
+            continue;
+          }
+          if (areCompetitiveEntryNamesEquivalent(athlete.athleteName, playerName)) {
+            candidateNames.add(playerName);
+            if (typeof player.athleteId === "number" && player.athleteId > 0) {
+              candidateAthleteIds.add(player.athleteId);
+            }
+          }
+        }
+      }
+
+      const fallbackSummary = computeCategoryClassificationSummaries(categoryMatches, {
+        athleteIds: [...candidateAthleteIds],
+        athleteName: [...candidateNames][0] ?? athlete.athleteName,
+        athleteNameNormalized: normalizeAthleteName([...candidateNames][0] ?? athlete.athleteName),
+      })[0];
+      const fallbackPosition = fallbackSummary?.position ?? null;
+
+      if (
+        fallbackPosition !== null &&
+        (currentPosition === null || fallbackPosition < currentPosition)
+      ) {
+        positionByAthleteId.set(athlete.athleteId, fallbackPosition);
+        continue;
+      }
+
+      positionByAthleteId.set(athlete.athleteId, currentPosition);
     }
 
     return positionByAthleteId;

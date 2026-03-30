@@ -43,3 +43,18 @@ test("mantem podio valido sem alterar quantidade", () => {
   );
 });
 
+test("deduplica medalhistas pela unidade competitiva quando informado", () => {
+  const normalized = normalizeCategoryMedalists([
+    { athleteId: 1, athleteName: "A # B", medalha: "ouro" as const, position: 1, unitKey: "pair:a#b" },
+    { athleteId: 2, athleteName: "A # B", medalha: "ouro" as const, position: 1, unitKey: "pair:a#b" },
+    { athleteId: 3, athleteName: "C # D", medalha: "prata" as const, position: 2, unitKey: "pair:c#d" },
+    { athleteId: 4, athleteName: "E # F", medalha: "bronze" as const, position: 3, unitKey: "pair:e#f" },
+    { athleteId: 5, athleteName: "G # H", medalha: "bronze" as const, position: 4, unitKey: "pair:g#h" },
+  ]);
+
+  assert.equal(normalized.length, 4);
+  assert.deepEqual(
+    normalized.map((item) => item.unitKey),
+    ["pair:a#b", "pair:c#d", "pair:e#f", "pair:g#h"],
+  );
+});

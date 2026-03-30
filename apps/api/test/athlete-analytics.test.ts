@@ -4,6 +4,7 @@ import {
   collectWalkoverLoserAthleteIds,
   computeCategoryClassificationSummaries,
   computeCategoryPerformanceSummaries,
+  inferCategoryMedalExpectation,
   isWalkoverMatch,
   type CategoryAnalyticsMatch,
 } from "../src/user/athlete-analytics";
@@ -201,6 +202,134 @@ test("classificacao de categoria com ate 5 atletas usa grupo unico", () => {
   const classification = computeCategoryClassificationSummaries(matches, { athleteId: 10 })[0];
   assert.equal(classification.mode, "grupo_unico");
   assert.equal(classification.position, 3);
+});
+
+test("reconhece dupla por nome canonico mesmo com separador e ordem diferentes", () => {
+  const matches: CategoryAnalyticsMatch[] = [
+    createMatch({
+      categoryName: "DUPLA MISTA-ABSOLUTO B",
+      phase: "RESULTADOS",
+      round: "Semifinal",
+      players: [
+        { athleteId: null, name: "LEONARDO PINTO # TASSIA OLIVEIRA" },
+        { athleteId: null, name: "ALEXANDRE BATISTA # ANDREZA MOTA" },
+      ],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 0 },
+    }),
+    createMatch({
+      categoryName: "DUPLA MISTA-ABSOLUTO B",
+      phase: "RESULTADOS",
+      round: "Semifinal",
+      players: [
+        { athleteId: null, name: "RACHEL COSTA - DANILO MENEZES" },
+        { athleteId: null, name: "EDSON SILVA # LUDMILLA LIMA" },
+      ],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 1 },
+    }),
+    createMatch({
+      categoryName: "DUPLA MISTA-ABSOLUTO B",
+      phase: "RESULTADOS",
+      round: "Final",
+      players: [
+        { athleteId: null, name: "LEONARDO PINTO # TASSIA OLIVEIRA" },
+        { athleteId: null, name: "RACHEL COSTA - DANILO MENEZES" },
+      ],
+      winnerIndex: 0,
+      setsResult: { p1Sets: 3, p2Sets: 1 },
+    }),
+  ];
+
+  const champion = computeCategoryClassificationSummaries(matches, {
+    athleteName: "TASSIA OLIVEIRA # LEONARDO PINTO",
+  })[0];
+  const vice = computeCategoryClassificationSummaries(matches, {
+    athleteName: "DANILO MENEZES # RACHEL COSTA",
+  })[0];
+
+  assert.equal(champion.position, 1);
+  assert.equal(vice.position, 2);
+});
+
+test("medalhistas esperados em grupo unico de duplas respeitam apenas ouro, prata e bronze", () => {
+  const matches: CategoryAnalyticsMatch[] = [
+    createMatch({
+      categoryName: "ABSOLUTO D (MAS)",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [
+        { athleteId: null, name: "PEDRO NETO # TIAGO HOLANDA" },
+        { athleteId: null, name: "BRUNO GARCIA - ARNALDO SOUTO" },
+      ],
+      winnerIndex: 0,
+    }),
+    createMatch({
+      categoryName: "ABSOLUTO D (MAS)",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [
+        { athleteId: null, name: "CHARLE CARDOSO # LAERCIO SILVA" },
+        { athleteId: null, name: "BRUNO GARCIA - ARNALDO SOUTO" },
+      ],
+      winnerIndex: 1,
+    }),
+    createMatch({
+      categoryName: "ABSOLUTO D (MAS)",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [
+        { athleteId: null, name: "JUCIVAL REIS # EDSON SILVA" },
+        { athleteId: null, name: "BRUNO GARCIA - ARNALDO SOUTO" },
+      ],
+      winnerIndex: 0,
+    }),
+  ];
+
+  const expectation = inferCategoryMedalExpectation(matches);
+  assert.ok(expectation);
+  assert.equal(expectation.mode, "grupo_unico");
+  assert.equal(expectation.expectedMedalists, 3);
+});
+
+test("medalhistas esperados em eliminatoria de duplas aceitam ouro, prata e duplo bronze", () => {
+  const matches: CategoryAnalyticsMatch[] = [
+    createMatch({
+      categoryName: "DUPLA MISTA-ABSOLUTO C",
+      phase: "RESULTADOS",
+      round: "Semifinal",
+      players: [
+        { athleteId: null, name: "EDSON SILVA # LUDMILLA LIMA" },
+        { athleteId: null, name: "ALEXANDRE BATISTA # ANDREZA MOTA" },
+      ],
+      winnerIndex: 0,
+    }),
+    createMatch({
+      categoryName: "DUPLA MISTA-ABSOLUTO C",
+      phase: "RESULTADOS",
+      round: "Semifinal",
+      players: [
+        { athleteId: null, name: "JULIO NASCIMENTO - EDUARDA RIBEIRO" },
+        { athleteId: null, name: "ISACK NERIS - EMANUELA RUIVO" },
+      ],
+      winnerIndex: 1,
+    }),
+    createMatch({
+      categoryName: "DUPLA MISTA-ABSOLUTO C",
+      phase: "RESULTADOS",
+      round: "Final",
+      players: [
+        { athleteId: null, name: "EDSON SILVA # LUDMILLA LIMA" },
+        { athleteId: null, name: "ISACK NERIS - EMANUELA RUIVO" },
+      ],
+      winnerIndex: 1,
+    }),
+  ];
+
+  const expectation = inferCategoryMedalExpectation(matches);
+  assert.ok(expectation);
+  assert.equal(expectation.mode, "eliminatoria");
+  assert.equal(expectation.expectedMedalists, 4);
 });
 
 test("WO na fase de grupos anula confrontos anteriores do atleta para desempate/classificacao", () => {
