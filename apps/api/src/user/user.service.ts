@@ -225,6 +225,8 @@ type CategoryAthleteRef = {
   clubName: string | null;
 };
 
+type CompetitiveEntryRef = CategoryAthleteRef;
+
 type OfficialCategoryAuditRow = {
   categoryId: string;
   categoryName: string;
@@ -490,6 +492,91 @@ function buildMedalistUnitKey(input: {
     return `pair:${normalizeAthleteName(normalizeCompositePairName(input.athleteName))}`;
   }
   return `athlete:${input.athleteId}`;
+}
+
+function stableStringHash(input: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return Math.abs(hash >>> 0);
+}
+
+function buildCompetitiveEntryKey(categoryName: string | null | undefined, athleteName: string, athleteId?: number): string {
+  if (isCompositePairName(athleteName) || isDoublesCategoryName(categoryName)) {
+    return `pair:${normalizeAthleteName(normalizeCompositePairName(athleteName))}`;
+  }
+  return `athlete:${athleteId ?? stableStringHash(normalizeAthleteName(athleteName))}`;
+}
+
+function findEquivalentCompetitiveEntry(
+  athleteName: string,
+  entries: CompetitiveEntryRef[],
+): CompetitiveEntryRef | null {
+  for (const candidate of entries) {
+    if (areCompetitiveEntryNamesEquivalent(candidate.athleteName, athleteName)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function buildCompetitiveEntriesForCategory(input: {
+  categoryId: number;
+  categoryName: string | null | undefined;
+  athletePool: CategoryAthleteRef[];
+  fallbackAthletePool: CategoryAthleteRef[];
+  matches: CategoryAnalyticsMatch[];
+}): CompetitiveEntryRef[] {
+  const entries: CompetitiveEntryRef[] = [];
+  const seenKeys = new Set<string>();
+
+  const pushEntry = (entry: CompetitiveEntryRef) => {
+    const key = buildCompetitiveEntryKey(input.categoryName, entry.athleteName, entry.athleteId);
+    if (seenKeys.has(key)) {
+      return;
+    }
+    seenKeys.add(key);
+    entries.push(entry);
+  };
+
+  for (const athlete of input.athletePool) {
+    pushEntry(athlete);
+  }
+
+  for (const match of input.matches) {
+    for (const player of match.players) {
+      const playerName = compactWhitespace(player?.name ?? "");
+      if (!playerName) {
+        continue;
+      }
+
+      const canonicalName = isCompositePairName(playerName)
+        ? normalizeCompositePairName(playerName)
+        : playerName;
+      const existing =
+        findEquivalentCompetitiveEntry(canonicalName, entries) ??
+        findEquivalentCompetitiveEntry(canonicalName, input.athletePool);
+      if (existing) {
+        pushEntry(existing);
+        continue;
+      }
+
+      const resolvedClub =
+        resolveCompositeAthleteClub(canonicalName, input.athletePool) ??
+        resolveCompositeAthleteClub(canonicalName, input.fallbackAthletePool);
+      const syntheticId = -1 * (stableStringHash(`${input.categoryId}|${normalizeAthleteName(canonicalName)}`) + 1);
+      pushEntry({
+        athleteId: syntheticId,
+        athleteName: canonicalName,
+        clubId: resolvedClub?.clubId ?? null,
+        clubName: resolvedClub?.clubName ?? null,
+      });
+    }
+  }
+
+  return entries;
 }
 
 function isDoublesCategoryName(categoryName: string | null | undefined): boolean {
@@ -1987,19 +2074,26 @@ export class UserService {
       const athletes = [...(athletesByCategory.get(category.id)?.values() ?? [])];
       const fallbackAthletePool = [...scopedAthletesPool.values()];
       const fullCategoryMatches = fullCategoryMatchesMap.get(category.id) ?? [];
+      const competitiveEntries = buildCompetitiveEntriesForCategory({
+        categoryId: category.id,
+        categoryName,
+        athletePool: athletes,
+        fallbackAthletePool,
+        matches: fullCategoryMatches,
+      });
       const medalExpectation = inferCategoryMedalExpectation(fullCategoryMatches);
       const allowDualBronze = (medalExpectation?.expectedMedalists ?? 0) >= 4;
       const walkoverMatchesCount = countWalkoverMatches(fullCategoryMatches);
       const woDisqualifiedAthleteIds = collectWalkoverLoserAthleteIds(fullCategoryMatches);
       const positionByAthleteId = this.computeCategoryPositionByAthleteId(
         fullCategoryMatches,
-        athletes.map((athlete) => ({
+        competitiveEntries.map((athlete) => ({
           athleteId: athlete.athleteId,
           athleteName: athlete.athleteName,
         })),
       );
 
-      const medalistsRaw: EventCategoryMedalist[] = athletes
+      const medalistsRaw: EventCategoryMedalist[] = competitiveEntries
         .flatMap((athlete) => {
           if (woDisqualifiedAthleteIds.has(athlete.athleteId)) {
             return [];
@@ -2011,7 +2105,7 @@ export class UserService {
           }
           const resolvedClub =
             isPlaceholderClubName(athlete.clubName)
-              ? resolveCompositeAthleteClub(athlete.athleteName, athletes) ??
+              ? resolveCompositeAthleteClub(athlete.athleteName, competitiveEntries) ??
                 resolveCompositeAthleteClub(athlete.athleteName, fallbackAthletePool)
               : null;
           return [{
@@ -2056,7 +2150,7 @@ export class UserService {
       const registeredBaseCount =
         typeof officialRegisteredCount === "number" && officialRegisteredCount >= 0
           ? officialRegisteredCount
-          : athletes.length;
+          : competitiveEntries.length;
       const fallbackCalculatedMatchesCount = computeOfficialCategoryMatchesCount(registeredBaseCount, {
         categoryName: category.name,
         eventStartDate: eventRulesByEventId.get(category.eventId)?.startDate ?? null,
@@ -2079,7 +2173,7 @@ export class UserService {
       const athleteCount =
         typeof officialRegisteredCount === "number" && officialRegisteredCount >= 0
           ? officialRegisteredCount
-          : athletes.length;
+          : competitiveEntries.length;
       const diagnostics =
         athleteCount === 0
           ? {
@@ -2325,24 +2419,30 @@ export class UserService {
     for (const categoryId of categoryIds) {
       const athletesInCategory = [...(categoryAthletesMap.get(categoryId)?.values() ?? [])];
       const fallbackAthletePool = [...scopedAthletesPool.values()];
-      if (athletesInCategory.length === 0) {
+      const fullCategoryMatches = fullCategoryMatchesMap.get(categoryId) ?? [];
+      const competitiveEntries = buildCompetitiveEntriesForCategory({
+        categoryId,
+        categoryName: categories.find((category) => category.id === categoryId)?.name ?? null,
+        athletePool: athletesInCategory,
+        fallbackAthletePool,
+        matches: fullCategoryMatches,
+      });
+      if (competitiveEntries.length === 0) {
         continue;
       }
-
-      const fullCategoryMatches = fullCategoryMatchesMap.get(categoryId) ?? [];
       const medalExpectation = inferCategoryMedalExpectation(fullCategoryMatches);
       const allowDualBronze = (medalExpectation?.expectedMedalists ?? 0) >= 4;
       const woDisqualifiedAthleteIds = collectWalkoverLoserAthleteIds(fullCategoryMatches);
       const positionByAthleteId = this.computeCategoryPositionByAthleteId(
         fullCategoryMatches,
-        athletesInCategory.map((athlete) => ({
+        competitiveEntries.map((athlete) => ({
           athleteId: athlete.athleteId,
           athleteName: athlete.athleteName,
         })),
       );
 
       const medalistsInCategory = normalizeCategoryMedalists(
-        athletesInCategory.flatMap((athlete) => {
+        competitiveEntries.flatMap((athlete) => {
           if (woDisqualifiedAthleteIds.has(athlete.athleteId)) {
             return [];
           }
@@ -2353,7 +2453,7 @@ export class UserService {
           }
           const resolvedClub =
             isPlaceholderClubName(athlete.clubName)
-              ? resolveCompositeAthleteClub(athlete.athleteName, athletesInCategory) ??
+              ? resolveCompositeAthleteClub(athlete.athleteName, competitiveEntries) ??
                 resolveCompositeAthleteClub(athlete.athleteName, fallbackAthletePool)
               : null;
           return [{
@@ -2372,7 +2472,7 @@ export class UserService {
       );
 
       for (const medalist of medalistsInCategory) {
-        const athlete = athletesInCategory.find((item) => item.athleteId === medalist.athleteId);
+        const athlete = competitiveEntries.find((item) => item.athleteId === medalist.athleteId);
         if (!athlete) {
           continue;
         }
@@ -2673,14 +2773,21 @@ export class UserService {
 
     for (const category of eligibleCategories) {
       const categoryAthletes = [...(clubAthletesInCategory.get(category.id)?.values() ?? [])];
-      if (categoryAthletes.length === 0) continue;
       const categoryMatches = fullCategoryMatchesMap.get(category.id) ?? [];
+      const competitiveEntries = buildCompetitiveEntriesForCategory({
+        categoryId: category.id,
+        categoryName: category.name,
+        athletePool: categoryAthletes,
+        fallbackAthletePool: categoryAthletes,
+        matches: categoryMatches,
+      });
+      if (competitiveEntries.length === 0) continue;
       const medalExpectation = inferCategoryMedalExpectation(categoryMatches);
       const allowDualBronze = (medalExpectation?.expectedMedalists ?? 0) >= 4;
       const woDisqualifiedAthleteIds = collectWalkoverLoserAthleteIds(categoryMatches);
       const positionByAthleteId = this.computeCategoryPositionByAthleteId(
         categoryMatches,
-        categoryAthletes.map((athlete) => ({
+        competitiveEntries.map((athlete) => ({
           athleteId: athlete.athleteId,
           athleteName: athlete.athleteName,
         })),
@@ -2705,7 +2812,7 @@ export class UserService {
         };
 
       const medalistsInCategory = normalizeCategoryMedalists(
-        categoryAthletes.flatMap((athlete) => {
+        competitiveEntries.flatMap((athlete) => {
           if (woDisqualifiedAthleteIds.has(athlete.athleteId)) {
             return [];
           }
@@ -2730,7 +2837,7 @@ export class UserService {
       );
 
       for (const medalist of medalistsInCategory) {
-        const athlete = categoryAthletes.find((item) => item.athleteId === medalist.athleteId);
+        const athlete = competitiveEntries.find((item) => item.athleteId === medalist.athleteId);
         if (!athlete) {
           continue;
         }

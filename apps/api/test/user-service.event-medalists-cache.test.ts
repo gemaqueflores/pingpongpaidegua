@@ -328,3 +328,249 @@ test("event medalists resolve clube de dupla quando atleta placeholder pode ser 
   assert.equal(category?.categoryName, "ABSOLUTO B (FEM) - DUPLAS");
   assert.equal(category?.medalists[0]?.clubName, "BEL.TT/CAMINHO DO BEM-PA");
 });
+
+test("event medalists inclui dupla projetada por scorePlayers quando vinculo de participante esta parcial", async () => {
+  const prismaRead = {
+    readModelCache: {
+      async findUnique() {
+        return null;
+      },
+    },
+    category: {
+      async findMany() {
+        return [
+          {
+            id: 1889,
+            eventId: 45,
+            name: "ABSOLUTO D (MAS) - DUPLAS",
+            cbtmCategoryId: "110",
+          },
+        ];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [
+          {
+            categoryId: 1889,
+            athlete: {
+              id: 1,
+              nameDisplay: "CHARLE CARDOSO # LAERCIO SILVA",
+              club: { id: 137, name: "CABANA CLUBE - PA" },
+            },
+          },
+          {
+            categoryId: 1889,
+            athlete: {
+              id: 2,
+              nameDisplay: "PEDRO NETO # TIAGO HOLANDA",
+              club: { id: 132, name: "PARÁ CLUBE - PA" },
+            },
+          },
+          {
+            categoryId: 1889,
+            athlete: {
+              id: 3,
+              nameDisplay: "DANIEL SANTOS # DENILSON MENEZES",
+              club: { id: 136, name: "ACADEMIA PING DRIVE LTDA" },
+            },
+          },
+        ];
+      },
+    },
+    match: {
+      async findMany() {
+        return [
+          {
+            id: 1,
+            eventId: 45,
+            categoryId: 1889,
+            phase: "RESULTADOS",
+            round: "Semifinal",
+            tableNumber: "1",
+            matchDatetime: new Date("2026-03-29T10:00:00.000Z"),
+            scoreRaw: "0-3",
+            p1Sets: 0,
+            p2Sets: 3,
+            winnerIndex: 1,
+            gameId: "j1",
+            sourceUrl: null,
+            scorePlayers: [
+              { athleteId: 1, name: "CHARLE CARDOSO # LAERCIO SILVA" },
+              { athleteId: null, name: "ARNALDO SOUTO # BRUNO GARCIA" },
+            ],
+            scoreFinal: null,
+            scoreSets: null,
+            setsJson: null,
+            category: {
+              id: 1889,
+              name: "ABSOLUTO D (MAS) - DUPLAS",
+              cbtmCategoryId: "110",
+            },
+            participants: [
+              {
+                athlete: {
+                  id: 1,
+                  nameDisplay: "CHARLE CARDOSO # LAERCIO SILVA",
+                  club: { id: 137, name: "CABANA CLUBE - PA" },
+                },
+              },
+            ],
+          },
+          {
+            id: 2,
+            eventId: 45,
+            categoryId: 1889,
+            phase: "RESULTADOS",
+            round: "Semifinal",
+            tableNumber: "2",
+            matchDatetime: new Date("2026-03-29T10:30:00.000Z"),
+            scoreRaw: "3-0",
+            p1Sets: 3,
+            p2Sets: 0,
+            winnerIndex: 0,
+            gameId: "j2",
+            sourceUrl: null,
+            scorePlayers: [
+              { athleteId: 2, name: "PEDRO NETO # TIAGO HOLANDA" },
+              { athleteId: 3, name: "DANIEL SANTOS # DENILSON MENEZES" },
+            ],
+            scoreFinal: null,
+            scoreSets: null,
+            setsJson: null,
+            category: {
+              id: 1889,
+              name: "ABSOLUTO D (MAS) - DUPLAS",
+              cbtmCategoryId: "110",
+            },
+            participants: [
+              {
+                athlete: {
+                  id: 2,
+                  nameDisplay: "PEDRO NETO # TIAGO HOLANDA",
+                  club: { id: 132, name: "PARÁ CLUBE - PA" },
+                },
+              },
+              {
+                athlete: {
+                  id: 3,
+                  nameDisplay: "DANIEL SANTOS # DENILSON MENEZES",
+                  club: { id: 136, name: "ACADEMIA PING DRIVE LTDA" },
+                },
+              },
+            ],
+          },
+          {
+            id: 3,
+            eventId: 45,
+            categoryId: 1889,
+            phase: "RESULTADOS",
+            round: "Final",
+            tableNumber: "1",
+            matchDatetime: new Date("2026-03-29T12:00:00.000Z"),
+            scoreRaw: "0-3",
+            p1Sets: 0,
+            p2Sets: 3,
+            winnerIndex: 1,
+            gameId: "j3",
+            sourceUrl: null,
+            scorePlayers: [
+              { athleteId: null, name: "ARNALDO SOUTO # BRUNO GARCIA" },
+              { athleteId: 2, name: "PEDRO NETO # TIAGO HOLANDA" },
+            ],
+            scoreFinal: null,
+            scoreSets: null,
+            setsJson: null,
+            category: {
+              id: 1889,
+              name: "ABSOLUTO D (MAS) - DUPLAS",
+              cbtmCategoryId: "110",
+            },
+            participants: [
+              {
+                athlete: {
+                  id: 2,
+                  nameDisplay: "PEDRO NETO # TIAGO HOLANDA",
+                  club: { id: 132, name: "PARÁ CLUBE - PA" },
+                },
+              },
+            ],
+          },
+        ];
+      },
+    },
+    event: {
+      async findMany() {
+        return [
+          {
+            id: 45,
+            dataInicio: new Date("2026-03-28T00:00:00.000Z"),
+            inicioRealizacao: new Date("2026-03-28T00:00:00.000Z"),
+            ratingMatchFormat: "RR_K1",
+          },
+        ];
+      },
+    },
+    scrapeRun: {
+      async findMany() {
+        return [];
+      },
+    },
+  };
+
+  const prismaWrite = {
+    readModelCache: {
+      async upsert(input: {
+        where: { key: string };
+        create: { key: string; sourceScrapeRunId: number | null; payload: unknown };
+        update: { sourceScrapeRunId: number | null; payload: unknown };
+      }) {
+        return {
+          key: input.where.key,
+          sourceScrapeRunId: input.update.sourceScrapeRunId,
+          payload: input.update.payload,
+          updatedAt: new Date(),
+        };
+      },
+    },
+  };
+
+  const service = new UserService(prismaRead as never, prismaWrite as never) as UserService & {
+    resolveEventScope(eventId: number): Promise<{ canonicalEventId: number; allEventIds: number[]; childSuffixByEventId: Map<number, string> }>;
+    ensureEvent(eventId: number): Promise<Record<string, unknown>>;
+    getLatestReliableScrapeRunIdForScope(eventIds: number[]): Promise<number>;
+  };
+
+  service.resolveEventScope = async (eventId: number) => ({
+    canonicalEventId: eventId,
+    allEventIds: [eventId],
+    childSuffixByEventId: new Map(),
+  });
+  service.ensureEvent = async (eventId: number) => ({
+    id: eventId,
+    cbtmEventId: 5476,
+    nome: "2TMB26 - DUPLAS",
+    nivel: "ESTADUAL",
+    inicioInscricoes: new Date("2026-02-25T00:00:00.000Z"),
+    fimInscricoes: new Date("2026-03-20T00:00:00.000Z"),
+    inicioRealizacao: new Date("2026-03-28T00:00:00.000Z"),
+    fimRealizacao: new Date("2026-03-29T00:00:00.000Z"),
+    dataInicio: new Date("2026-03-28T00:00:00.000Z"),
+    dataFim: new Date("2026-03-29T00:00:00.000Z"),
+    concluido: true,
+  });
+  service.getLatestReliableScrapeRunIdForScope = async () => 101;
+
+  const response = await service.listEventCategoryMedalists(45);
+  const category = response.categories[0];
+  assert.equal(category?.categoryName, "ABSOLUTO D (MAS) - DUPLAS");
+  assert.deepEqual(
+    category?.medalists.map((item) => [item.medalha, item.clubName, item.athleteName]),
+    [
+      ["ouro", "PARÁ CLUBE - PA", "PEDRO NETO # TIAGO HOLANDA"],
+      ["prata", null, "ARNALDO SOUTO # BRUNO GARCIA"],
+      ["bronze", "CABANA CLUBE - PA", "CHARLE CARDOSO # LAERCIO SILVA"],
+      ["bronze", "ACADEMIA PING DRIVE LTDA", "DANIEL SANTOS # DENILSON MENEZES"],
+    ],
+  );
+});
