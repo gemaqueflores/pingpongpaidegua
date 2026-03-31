@@ -2801,13 +2801,22 @@ export class UserService {
         fallbackAthletePool: categoryAthletes,
         matches: categoryMatches,
       });
-      if (competitiveEntries.length === 0) continue;
+      const clubCompetitiveEntries = competitiveEntries.filter((entry) => {
+        if (entry.clubId === clubId) {
+          return true;
+        }
+        if (athleteGroupKeyById.has(entry.athleteId)) {
+          return true;
+        }
+        return resolveCompositeAthleteClub(entry.athleteName, categoryAthletes)?.clubId === clubId;
+      });
+      if (clubCompetitiveEntries.length === 0) continue;
       const medalExpectation = inferCategoryMedalExpectation(categoryMatches);
       const allowDualBronze = (medalExpectation?.expectedMedalists ?? 0) >= 4;
       const woDisqualifiedAthleteIds = collectWalkoverLoserAthleteIds(categoryMatches);
       const positionByAthleteId = this.computeCategoryPositionByAthleteId(
         categoryMatches,
-        competitiveEntries.map((athlete) => ({
+        clubCompetitiveEntries.map((athlete) => ({
           athleteId: athlete.athleteId,
           athleteName: athlete.athleteName,
         })),
@@ -2832,7 +2841,7 @@ export class UserService {
         };
 
       const medalistsInCategory = normalizeCategoryMedalists(
-        competitiveEntries.flatMap((athlete) => {
+        clubCompetitiveEntries.flatMap((athlete) => {
           if (woDisqualifiedAthleteIds.has(athlete.athleteId)) {
             return [];
           }
@@ -2857,7 +2866,7 @@ export class UserService {
       );
 
       for (const medalist of medalistsInCategory) {
-        const athlete = competitiveEntries.find((item) => item.athleteId === medalist.athleteId);
+        const athlete = clubCompetitiveEntries.find((item) => item.athleteId === medalist.athleteId);
         if (!athlete) {
           continue;
         }
