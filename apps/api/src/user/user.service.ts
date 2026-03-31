@@ -190,6 +190,7 @@ type EfficiencyHistoryMedalist = {
   athleteName: string;
   categoryName: string;
   medalha: "ouro" | "prata" | "bronze";
+  unitKey?: string | null;
 };
 
 type EfficiencyEventLevel = "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN" | null;
@@ -588,7 +589,7 @@ function isDoublesCategoryName(categoryName: string | null | undefined): boolean
   if (!normalized) {
     return false;
   }
-  return /\bDUPLA(?:S)?\b/.test(normalized);
+  return /\bDUPLA(?:S)?\b/i.test(normalized);
 }
 
 function isDoublesEventName(eventName: string | null | undefined): boolean {
@@ -596,7 +597,7 @@ function isDoublesEventName(eventName: string | null | undefined): boolean {
   if (!normalized) {
     return false;
   }
-  return /\bDUPLA(?:S)?\b/.test(normalized);
+  return /\bDUPLA(?:S)?\b/i.test(normalized);
 }
 
 function toNonNegativeInt(value: number | null | undefined): number {
@@ -2930,6 +2931,7 @@ export class UserService {
             athlete.athleteName,
           categoryName: categoryById.get(category.id)?.name ?? "-",
           medalha: medal,
+          unitKey,
         });
       }
 
@@ -2986,7 +2988,7 @@ export class UserService {
           const dedupKey =
             isDoublesEventName(row.eventName) || isDoublesCategoryName(medalist.categoryName)
               ? `pair:${normalizeAthleteName(normalizeCompositePairName(medalist.athleteName))}:${medalist.medalha}`
-              : `athlete:${medalist.athleteId}:${medalist.medalha}`;
+              : `athlete:${medalist.athleteId}:${normalizeText(medalist.categoryName)}:${medalist.medalha}`;
           const existing = medalistsByKey.get(dedupKey);
           if (!existing) {
             medalistsByKey.set(dedupKey, medalist);
