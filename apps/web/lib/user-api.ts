@@ -71,6 +71,7 @@ export interface EventEfficiencyRow {
 
 export interface EventEfficiencyResponse {
   eventId: number;
+  eventWeight?: number;
   weights: {
     pesoOuro: number;
     pesoPrata: number;

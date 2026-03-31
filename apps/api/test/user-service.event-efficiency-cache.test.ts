@@ -118,6 +118,7 @@ test("event efficiency persiste read model e reutiliza cache valido no mesmo scr
 
   const first = await harness.service.listEventEfficiency(1);
   assert.equal(first.eventId, 1);
+  assert.equal(first.eventWeight, 3);
   assert.equal(first.ranking.length, 1);
   assert.equal(first.weights.pesoOuro, 130);
   assert.equal(harness.getComputeCalls(), 1);

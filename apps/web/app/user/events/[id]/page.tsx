@@ -399,6 +399,11 @@ export default function EventDetailPage() {
   const rankedEfficiencyRows = useMemo(() => {
     const rows = [...(efficiencyData?.ranking ?? [])];
     rows.sort((left, right) => {
+      const leftTotal = efficiencyMode === "pontuacao" ? left.totalPontuacao : left.totalQuantidade;
+      const rightTotal = efficiencyMode === "pontuacao" ? right.totalPontuacao : right.totalQuantidade;
+      if (leftTotal !== rightTotal) {
+        return rightTotal - leftTotal;
+      }
       if (left.ouro !== right.ouro) {
         return right.ouro - left.ouro;
       }
@@ -407,11 +412,6 @@ export default function EventDetailPage() {
       }
       if (left.bronze !== right.bronze) {
         return right.bronze - left.bronze;
-      }
-      const leftTotal = efficiencyMode === "pontuacao" ? left.totalPontuacao : left.totalQuantidade;
-      const rightTotal = efficiencyMode === "pontuacao" ? right.totalPontuacao : right.totalQuantidade;
-      if (leftTotal !== rightTotal) {
-        return rightTotal - leftTotal;
       }
       return left.clubName.localeCompare(right.clubName, "pt-BR", { sensitivity: "base" });
     });
@@ -707,6 +707,7 @@ export default function EventDetailPage() {
           {efficiencyData ? (
             <p className="arena-muted" style={{ marginTop: 0 }}>
               Exibir por: {efficiencyMode === "pontuacao" ? "Pontuação" : "Quantidade"} | Pesos atuais: Ouro {efficiencyData.weights.pesoOuro}, Prata {efficiencyData.weights.pesoPrata}, Bronze {efficiencyData.weights.pesoBronze}
+              {typeof efficiencyData.eventWeight === "number" ? ` | Peso do evento: ${efficiencyData.eventWeight}` : ""}
             </p>
           ) : null}
 

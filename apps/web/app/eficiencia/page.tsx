@@ -35,6 +35,9 @@ export default function EfficiencyHubPage() {
 
   const filtered = useMemo(() => {
     const rows = [...(data?.ranking ?? [])].sort((left, right) => {
+      if (right.totalPontuacao !== left.totalPontuacao) {
+        return right.totalPontuacao - left.totalPontuacao;
+      }
       if (right.ouro !== left.ouro) {
         return right.ouro - left.ouro;
       }
@@ -84,7 +87,7 @@ export default function EfficiencyHubPage() {
                   <div>
                     <h3>{club.clubName}</h3>
                     <p className="efficiency-club-total">
-                      Total: <strong>{formatNumber(club.totalQuantidade)}</strong>
+                      Pontuação: <strong>{formatNumber(club.totalPontuacao)}</strong>
                     </p>
                   </div>
                   <div className="row" style={{ justifyContent: "space-between" }}>

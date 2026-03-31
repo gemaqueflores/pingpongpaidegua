@@ -23,6 +23,7 @@ import {
 } from "@cbtm/shared";
 import { Prisma } from "@prisma/client";
 import { PrismaReadService, PrismaService } from "../common/prisma.service";
+import { loadCbtmRulesConfig } from "../rules/cbtm-config-loader";
 import {
   collectWalkoverLoserAthleteIds,
   computeCategoryClassificationSummaries,
@@ -62,6 +63,7 @@ const STATE_CIRCUIT_EVENT_LEVELS = ["ESTADUAL", "OPEN"] as const;
 const STATE_CIRCUIT_ELIGIBILITY_CACHE_TTL_MS = Number(
   process.env.STATE_CIRCUIT_ELIGIBILITY_CACHE_TTL_MS ?? "300000",
 );
+const CBTM_RULES_CONFIG = loadCbtmRulesConfig();
 
 type PaginationWindow = {
   skip: number;
@@ -189,6 +191,8 @@ type EfficiencyHistoryMedalist = {
   categoryName: string;
   medalha: "ouro" | "prata" | "bronze";
 };
+
+type EfficiencyEventLevel = "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN" | null;
 
 type EventCategoryMedalist = {
   athleteId: number;
@@ -1866,8 +1870,10 @@ export class UserService {
       latestReliableRunId,
       compute: async () => {
         const response = await this.computeEfficiencyRanking({ eventIds: scope.allEventIds });
+        const eventWeight = this.resolveEfficiencyEventWeight(event.nivel ?? null, event.nome ?? null);
         return {
           eventId: scope.canonicalEventId,
+          eventWeight,
           ...response,
         };
       },
@@ -2294,9 +2300,21 @@ export class UserService {
         select: {
           id: true,
           name: true,
+          eventId: true,
         },
       }),
     ]);
+
+    const eventIdsForWeights = [...new Set(categories.map((category) => category.eventId))];
+    const eventsById = new Map(
+      (
+        await this.prisma.event.findMany({
+          where: { id: { in: eventIdsForWeights } },
+          select: { id: true, nivel: true, nome: true },
+        })
+      ).map((event) => [event.id, event]),
+    );
+    const categoryById = new Map(categories.map((category) => [category.id, category]));
 
     const rowsByClubId = new Map<number, ClubEfficiencyRow>();
     const athleteClubByAthleteId = new Map<number, number>();
@@ -2417,6 +2435,9 @@ export class UserService {
     }
 
     for (const categoryId of categoryIds) {
+      const category = categoryById.get(categoryId);
+      const categoryEvent = category ? eventsById.get(category.eventId) ?? null : null;
+      const eventWeight = this.resolveEfficiencyEventWeight(categoryEvent?.nivel ?? null, categoryEvent?.nome ?? null);
       const athletesInCategory = [...(categoryAthletesMap.get(categoryId)?.values() ?? [])];
       const fallbackAthletePool = [...scopedAthletesPool.values()];
       const fullCategoryMatches = fullCategoryMatchesMap.get(categoryId) ?? [];
@@ -2498,19 +2519,20 @@ export class UserService {
         }
 
         row[medal] += 1;
+        row.pontuacao[medal] += this.getEfficiencyMedalWeight(medal, weights) * eventWeight;
       }
     }
 
     for (const row of rowsByClubId.values()) {
       row.totalQuantidade = row.ouro + row.prata + row.bronze;
-      row.pontuacao.ouro = row.ouro * weights.pesoOuro;
-      row.pontuacao.prata = row.prata * weights.pesoPrata;
-      row.pontuacao.bronze = row.bronze * weights.pesoBronze;
       row.pontuacao.total = row.pontuacao.ouro + row.pontuacao.prata + row.pontuacao.bronze;
       row.totalPontuacao = row.pontuacao.total;
     }
 
     const ranking = [...rowsByClubId.values()].sort((left, right) => {
+      if (left.totalPontuacao !== right.totalPontuacao) {
+        return right.totalPontuacao - left.totalPontuacao;
+      }
       if (left.ouro !== right.ouro) {
         return right.ouro - left.ouro;
       }
@@ -2519,9 +2541,6 @@ export class UserService {
       }
       if (left.bronze !== right.bronze) {
         return right.bronze - left.bronze;
-      }
-      if (left.totalPontuacao !== right.totalPontuacao) {
-        return right.totalPontuacao - left.totalPontuacao;
       }
       return left.clubName.localeCompare(right.clubName, "pt-BR", { sensitivity: "base" });
     });
@@ -2769,6 +2788,7 @@ export class UserService {
       }
     >();
     const contributionByAthleteGroupKey = new Map<string, EfficiencyMedalCounter>();
+    const contributionByAthleteEventKey = new Map<string, EfficiencyMedalCounter>();
     const medalistDedup = new Set<string>();
 
     for (const category of eligibleCategories) {
@@ -2863,6 +2883,11 @@ export class UserService {
           contributionByAthleteGroupKey.get(athleteGroupKey) ?? createEmptyEfficiencyMedalCounter();
         contribution[medal] += 1;
         contributionByAthleteGroupKey.set(athleteGroupKey, contribution);
+        const athleteEventKey = `${athleteGroupKey}:${event.id}`;
+        const contributionByEvent =
+          contributionByAthleteEventKey.get(athleteEventKey) ?? createEmptyEfficiencyMedalCounter();
+        contributionByEvent[medal] += 1;
+        contributionByAthleteEventKey.set(athleteEventKey, contributionByEvent);
 
         historyEntry.medalists.push({
           athleteId: athlete.athleteId,
@@ -2921,10 +2946,11 @@ export class UserService {
 
     const history = [...historyByEvent.values()]
       .map((row) => {
+        const eventWeight = this.resolveEfficiencyCompetitionTypeWeight(row.eventType, row.eventName);
         const pontuacao = {
-          ouro: row.medals.ouro * weights.pesoOuro,
-          prata: row.medals.prata * weights.pesoPrata,
-          bronze: row.medals.bronze * weights.pesoBronze,
+          ouro: row.medals.ouro * weights.pesoOuro * eventWeight,
+          prata: row.medals.prata * weights.pesoPrata * eventWeight,
+          bronze: row.medals.bronze * weights.pesoBronze * eventWeight,
           total: 0,
         };
         pontuacao.total = pontuacao.ouro + pontuacao.prata + pontuacao.bronze;
@@ -2959,12 +2985,22 @@ export class UserService {
     const athletesContribution = [...athleteNameByGroupKey.entries()]
       .map(([groupKey, athleteName]) => {
         const medals = contributionByAthleteGroupKey.get(groupKey) ?? createEmptyEfficiencyMedalCounter();
-        const pontuacao = {
-          ouro: medals.ouro * weights.pesoOuro,
-          prata: medals.prata * weights.pesoPrata,
-          bronze: medals.bronze * weights.pesoBronze,
-          total: 0,
-        };
+        const pontuacao = { ouro: 0, prata: 0, bronze: 0, total: 0 };
+        const athleteEventIds = athleteEventSetByGroupKey.get(groupKey) ?? new Set<number>();
+        for (const eventId of athleteEventIds) {
+          const historyEntry = historyByEvent.get(eventId);
+          if (!historyEntry) {
+            continue;
+          }
+          const contributionByEvent = contributionByAthleteEventKey.get(`${groupKey}:${eventId}`);
+          if (!contributionByEvent) {
+            continue;
+          }
+          const eventWeight = this.resolveEfficiencyCompetitionTypeWeight(historyEntry.eventType, historyEntry.eventName);
+          pontuacao.ouro += contributionByEvent.ouro * weights.pesoOuro * eventWeight;
+          pontuacao.prata += contributionByEvent.prata * weights.pesoPrata * eventWeight;
+          pontuacao.bronze += contributionByEvent.bronze * weights.pesoBronze * eventWeight;
+        }
         pontuacao.total = pontuacao.ouro + pontuacao.prata + pontuacao.bronze;
         return {
           athleteId: athletePrimaryIdByGroupKey.get(groupKey) ?? 0,
@@ -2979,6 +3015,7 @@ export class UserService {
       })
       .filter((row) => row.totalQuantidade > 0)
       .sort((left, right) => {
+        if (left.pontuacao.total !== right.pontuacao.total) return right.pontuacao.total - left.pontuacao.total;
         if (left.ouro !== right.ouro) return right.ouro - left.ouro;
         if (left.prata !== right.prata) return right.prata - left.prata;
         if (left.bronze !== right.bronze) return right.bronze - left.bronze;
@@ -2993,9 +3030,9 @@ export class UserService {
       total: totalEfficiencyMedals(totals),
     };
     const pontuacao = {
-      ouro: quantidade.ouro * weights.pesoOuro,
-      prata: quantidade.prata * weights.pesoPrata,
-      bronze: quantidade.bronze * weights.pesoBronze,
+      ouro: history.reduce((sum, row) => sum + row.pontuacao.ouro, 0),
+      prata: history.reduce((sum, row) => sum + row.pontuacao.prata, 0),
+      bronze: history.reduce((sum, row) => sum + row.pontuacao.bronze, 0),
       total: 0,
     };
     pontuacao.total = pontuacao.ouro + pontuacao.prata + pontuacao.bronze;
@@ -5519,6 +5556,45 @@ export class UserService {
       pesoPrata: config.pesoPrata,
       pesoBronze: config.pesoBronze,
     };
+  }
+
+  private getEfficiencyMedalWeight(
+    medal: "ouro" | "prata" | "bronze",
+    weights: { pesoOuro: number; pesoPrata: number; pesoBronze: number } = DEFAULT_EFFICIENCY_WEIGHTS,
+  ): number {
+    if (medal === "ouro") return weights.pesoOuro;
+    if (medal === "prata") return weights.pesoPrata;
+    return weights.pesoBronze;
+  }
+
+  private resolveEfficiencyCompetitionTypeWeight(eventType: EfficiencyCompetitionType, eventName?: string | null): number {
+    switch (eventType) {
+      case "ESTADUAL":
+        return CBTM_RULES_CONFIG.ratingEventWeights.ESTADUAL;
+      case "BRASILEIRAO":
+        return CBTM_RULES_CONFIG.ratingEventWeights.BRASILEIRAO;
+      case "OPEN":
+        return CBTM_RULES_CONFIG.ratingEventWeights.REGIONAL;
+      case "COPA":
+        return this.resolveCopaEventWeight(eventName);
+      default:
+        return 1;
+    }
+  }
+
+  private resolveEfficiencyEventWeight(level: EfficiencyEventLevel, eventName?: string | null): number {
+    if (level === "ESTADUAL") return CBTM_RULES_CONFIG.ratingEventWeights.ESTADUAL;
+    if (level === "NACIONAL") return CBTM_RULES_CONFIG.ratingEventWeights.BRASILEIRAO;
+    if (level === "OPEN") return CBTM_RULES_CONFIG.ratingEventWeights.REGIONAL;
+    if (level === "COPA") return this.resolveCopaEventWeight(eventName);
+    return 1;
+  }
+
+  private resolveCopaEventWeight(eventName?: string | null): number {
+    const normalized = normalizeText(eventName ?? "");
+    if (normalized.includes("ouro")) return CBTM_RULES_CONFIG.ratingEventWeights.COPA_BRASIL_OURO;
+    if (normalized.includes("prata")) return CBTM_RULES_CONFIG.ratingEventWeights.COPA_BRASIL_PRATA;
+    return CBTM_RULES_CONFIG.ratingEventWeights.COPA_BRASIL_PRATA;
   }
 
   private buildEventAthleteKey(nameNormalized: string, clubNormalizedName: string | null): string {
