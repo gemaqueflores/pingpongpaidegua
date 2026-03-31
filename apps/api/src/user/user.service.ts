@@ -1988,7 +1988,7 @@ export class UserService {
       const fallbackAthletePool = [...scopedAthletesPool.values()];
       const fullCategoryMatches = fullCategoryMatchesMap.get(category.id) ?? [];
       const medalExpectation = inferCategoryMedalExpectation(fullCategoryMatches);
-      const allowDualBronze = medalExpectation?.mode !== "grupo_unico";
+      const allowDualBronze = (medalExpectation?.expectedMedalists ?? 0) >= 4;
       const walkoverMatchesCount = countWalkoverMatches(fullCategoryMatches);
       const woDisqualifiedAthleteIds = collectWalkoverLoserAthleteIds(fullCategoryMatches);
       const positionByAthleteId = this.computeCategoryPositionByAthleteId(
@@ -2331,7 +2331,7 @@ export class UserService {
 
       const fullCategoryMatches = fullCategoryMatchesMap.get(categoryId) ?? [];
       const medalExpectation = inferCategoryMedalExpectation(fullCategoryMatches);
-      const allowDualBronze = medalExpectation?.mode !== "grupo_unico";
+      const allowDualBronze = (medalExpectation?.expectedMedalists ?? 0) >= 4;
       const woDisqualifiedAthleteIds = collectWalkoverLoserAthleteIds(fullCategoryMatches);
       const positionByAthleteId = this.computeCategoryPositionByAthleteId(
         fullCategoryMatches,
@@ -2676,7 +2676,7 @@ export class UserService {
       if (categoryAthletes.length === 0) continue;
       const categoryMatches = fullCategoryMatchesMap.get(category.id) ?? [];
       const medalExpectation = inferCategoryMedalExpectation(categoryMatches);
-      const allowDualBronze = medalExpectation?.mode !== "grupo_unico";
+      const allowDualBronze = (medalExpectation?.expectedMedalists ?? 0) >= 4;
       const woDisqualifiedAthleteIds = collectWalkoverLoserAthleteIds(categoryMatches);
       const positionByAthleteId = this.computeCategoryPositionByAthleteId(
         categoryMatches,

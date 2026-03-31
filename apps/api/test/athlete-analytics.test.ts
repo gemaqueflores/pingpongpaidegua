@@ -252,7 +252,7 @@ test("reconhece dupla por nome canonico mesmo com separador e ordem diferentes",
   assert.equal(vice.position, 2);
 });
 
-test("medalhistas esperados em grupo unico de duplas respeitam apenas ouro, prata e bronze", () => {
+test("grupo unico com mais de 3 unidades competitivas mantem duplo bronze", () => {
   const matches: CategoryAnalyticsMatch[] = [
     createMatch({
       categoryName: "ABSOLUTO D (MAS)",
@@ -281,6 +281,46 @@ test("medalhistas esperados em grupo unico de duplas respeitam apenas ouro, prat
       players: [
         { athleteId: null, name: "JUCIVAL REIS # EDSON SILVA" },
         { athleteId: null, name: "BRUNO GARCIA - ARNALDO SOUTO" },
+      ],
+      winnerIndex: 0,
+    }),
+  ];
+
+  const expectation = inferCategoryMedalExpectation(matches);
+  assert.ok(expectation);
+  assert.equal(expectation.mode, "grupo_unico");
+  assert.equal(expectation.expectedMedalists, 4);
+});
+
+test("categoria com apenas 3 unidades competitivas limita podio a ouro, prata e bronze", () => {
+  const matches: CategoryAnalyticsMatch[] = [
+    createMatch({
+      categoryName: "ABSOLUTO D (MAS)",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [
+        { athleteId: null, name: "DUPLA A" },
+        { athleteId: null, name: "DUPLA B" },
+      ],
+      winnerIndex: 0,
+    }),
+    createMatch({
+      categoryName: "ABSOLUTO D (MAS)",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [
+        { athleteId: null, name: "DUPLA A" },
+        { athleteId: null, name: "DUPLA C" },
+      ],
+      winnerIndex: 0,
+    }),
+    createMatch({
+      categoryName: "ABSOLUTO D (MAS)",
+      phase: "RESULTADOS",
+      round: "Única 01",
+      players: [
+        { athleteId: null, name: "DUPLA B" },
+        { athleteId: null, name: "DUPLA C" },
       ],
       winnerIndex: 0,
     }),

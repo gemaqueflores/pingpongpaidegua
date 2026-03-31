@@ -956,9 +956,7 @@ export function inferCategoryMedalExpectation(matches: CategoryAnalyticsMatch[])
       (structuralParticipants.size > 0 && structuralParticipants.size <= 5 && !hasEliminationStructure));
 
   const participantCount = effectiveParticipants.size;
-  const expectedMedalists = isSingleGroup
-    ? Math.min(participantCount, 3)
-    : Math.min(participantCount, 4);
+  const expectedMedalists = Math.min(participantCount, 4);
 
   return {
     mode: isSingleGroup ? "grupo_unico" : "eliminatoria",
