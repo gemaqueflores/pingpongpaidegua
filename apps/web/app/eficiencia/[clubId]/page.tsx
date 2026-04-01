@@ -37,6 +37,15 @@ export default function EficienciaClubeCanonicalPage() {
       .finally(() => setLoading(false));
   }, [clubId]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    document.title = data?.club.name
+      ? `${data.club.name} | PingPong Paid'egua`
+      : "Eficiência do clube | PingPong Paid'egua";
+  }, [data?.club.name]);
+
   return (
     <UserShell>
       <main className="container grid user-page">
