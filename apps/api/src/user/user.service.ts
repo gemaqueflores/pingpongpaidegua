@@ -633,6 +633,34 @@ function computeCategoryMatchMetrics(input: {
   };
 }
 
+function countEffectiveCategoriesByEvent(input: {
+  categories: Array<{ id: number; eventId: number }>;
+  officialRegisteredByCategoryId: Map<number, number>;
+  athleteCountByCategory: Map<number, number>;
+  publishedByCategoryId: Map<number, number>;
+}): Map<number, number> {
+  const countByEvent = new Map<number, number>();
+
+  for (const category of input.categories) {
+    const officialRegisteredCount = input.officialRegisteredByCategoryId.get(category.id);
+    const athleteCount = input.athleteCountByCategory.get(category.id) ?? 0;
+    const publishedMatchesCount = input.publishedByCategoryId.get(category.id) ?? 0;
+
+    const isCompetitiveCategory =
+      (typeof officialRegisteredCount === "number" && officialRegisteredCount > 0) ||
+      athleteCount > 1 ||
+      publishedMatchesCount > 0;
+
+    if (!isCompetitiveCategory) {
+      continue;
+    }
+
+    countByEvent.set(category.eventId, (countByEvent.get(category.eventId) ?? 0) + 1);
+  }
+
+  return countByEvent;
+}
+
 function escapeHtml(value: string): string {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -1076,7 +1104,6 @@ export class UserService {
     const allScopedEventIds = [...new Set([...scopeByEventId.values()].flatMap((scope) => scope.allEventIds))];
 
     const [
-      categoriesCountByEvent,
       registrationMetrics,
       groupMatchesByEvent,
       publishedResultsByEvent,
@@ -1084,16 +1111,6 @@ export class UserService {
       categoriesForAudit,
       athleteRegistrationsByCategory,
     ] = await Promise.all([
-      this.prisma.category.groupBy({
-        by: ["eventId"],
-        where: {
-          eventId: { in: allScopedEventIds },
-          cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
-        },
-        _count: {
-          _all: true,
-        },
-      }),
       this.loadEventRegistrationMetrics(allScopedEventIds),
       this.prisma.match.groupBy({
         by: ["eventId"],
@@ -1153,11 +1170,6 @@ export class UserService {
         },
       }),
     ]);
-
-    const categoriasMap = new Map<number, number>();
-    for (const row of categoriesCountByEvent) {
-      categoriasMap.set(row.eventId, row._count._all);
-    }
 
     const athleteCountByCategory = new Map<number, number>();
     for (const row of athleteRegistrationsByCategory) {
@@ -1221,6 +1233,12 @@ export class UserService {
     for (const row of publishedMatchesByCategory) {
       publishedByCategoryId.set(row.categoryId, row._count._all);
     }
+    const effectiveCategoryCountByEvent = countEffectiveCategoriesByEvent({
+      categories: categoriesForAudit,
+      officialRegisteredByCategoryId,
+      athleteCountByCategory,
+      publishedByCategoryId,
+    });
     const walkoversByCategoryId = await this.countWalkoversByCategoryIds(allScopedEventIds, categoryIdsForAudit);
     const metricsByEventId = new Map<number, { published: number; calculated: number; wo: number; played: number }>();
     for (const category of categoriesForAudit) {
@@ -1262,7 +1280,10 @@ export class UserService {
         childSuffixByEventId: new Map<number, string>(),
       };
 
-      const totalCategorias = scope.allEventIds.reduce((sum, currentEventId) => sum + (categoriasMap.get(currentEventId) ?? 0), 0);
+      const totalCategorias = scope.allEventIds.reduce(
+        (sum, currentEventId) => sum + (effectiveCategoryCountByEvent.get(currentEventId) ?? 0),
+        0,
+      );
       const associacoesAtletaCategoria = scope.allEventIds.reduce(
         (sum, currentEventId) => sum + (athleteCategoryAssociationsByEvent.get(currentEventId) ?? 0),
         0,
@@ -1377,7 +1398,6 @@ export class UserService {
       compute: async () => {
         const allEventIds = scope.allEventIds;
         const [
-          categoriesCountByEvent,
           registrationMetrics,
           groupMatchesByEvent,
           publishedResultsByEvent,
@@ -1386,14 +1406,6 @@ export class UserService {
           categoriesForAudit,
           athleteRegistrationsByCategory,
         ] = await Promise.all([
-      this.prisma.category.groupBy({
-        by: ["eventId"],
-        where: {
-          eventId: { in: allEventIds },
-          cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
-        },
-        _count: { _all: true },
-      }),
       this.loadEventRegistrationMetrics(allEventIds),
       this.prisma.match.groupBy({
         by: ["eventId"],
@@ -1460,10 +1472,6 @@ export class UserService {
       }),
         ]);
 
-        const categoriasMap = new Map<number, number>();
-        for (const row of categoriesCountByEvent) {
-          categoriasMap.set(row.eventId, row._count._all);
-        }
         const athleteCountByCategory = new Map<number, number>();
         for (const row of athleteRegistrationsByCategory) {
           athleteCountByCategory.set(row.categoryId, row._count._all);
@@ -1503,7 +1511,6 @@ export class UserService {
           }
         }
 
-        const totalCategorias = allEventIds.reduce((sum, currentEventId) => sum + (categoriasMap.get(currentEventId) ?? 0), 0);
         const associacoesAtletaCategoria = allEventIds.reduce(
           (sum, currentEventId) => sum + (athleteCategoryAssociationsByEvent.get(currentEventId) ?? 0),
           0,
@@ -1562,6 +1569,16 @@ export class UserService {
         for (const row of publishedMatchesByCategory) {
           publishedByCategoryId.set(row.categoryId, row._count._all);
         }
+        const effectiveCategoryCountByEvent = countEffectiveCategoriesByEvent({
+          categories: categoriesForAudit,
+          officialRegisteredByCategoryId,
+          athleteCountByCategory,
+          publishedByCategoryId,
+        });
+        const totalCategorias = allEventIds.reduce(
+          (sum, currentEventId) => sum + (effectiveCategoryCountByEvent.get(currentEventId) ?? 0),
+          0,
+        );
         const walkoversByCategoryId = await this.countWalkoversByCategoryIds(allEventIds, categoryIdsForAudit);
         const metricsByEventId = new Map<number, { published: number; calculated: number; wo: number; played: number }>();
         for (const category of categoriesForAudit) {

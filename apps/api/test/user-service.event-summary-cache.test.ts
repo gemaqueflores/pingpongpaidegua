@@ -11,7 +11,7 @@ function createServiceHarness() {
         updatedAt: Date;
       }
     | null = null;
-  let categoryGroupByCalls = 0;
+  let categoryFindManyCalls = 0;
 
   const prismaRead = {
     readModelCache: {
@@ -27,11 +27,8 @@ function createServiceHarness() {
       },
     },
     category: {
-      async groupBy() {
-        categoryGroupByCalls += 1;
-        return [{ eventId: 1, _count: { _all: 1 } }];
-      },
       async findMany() {
+        categoryFindManyCalls += 1;
         return [{ id: 10, eventId: 1, name: "ABSOLUTO E (MAS)", cbtmCategoryId: 111 }];
       },
     },
@@ -148,7 +145,7 @@ function createServiceHarness() {
 
   return {
     service,
-    getCategoryGroupByCalls: () => categoryGroupByCalls,
+    getCategoryFindManyCalls: () => categoryFindManyCalls,
   };
 }
 
@@ -163,10 +160,10 @@ test("event summary persiste read model e reutiliza cache valido no mesmo scrape
   assert.equal(first.totalPartidasWo, 1);
   assert.equal(first.totalPartidasJogadas, 4);
 
-  const categoryCallsAfterFirst = harness.getCategoryGroupByCalls();
+  const categoryCallsAfterFirst = harness.getCategoryFindManyCalls();
   assert.ok(categoryCallsAfterFirst > 0);
 
   const second = await harness.service.getEventSummary(1);
   assert.deepEqual(second, first);
-  assert.equal(harness.getCategoryGroupByCalls(), categoryCallsAfterFirst);
+  assert.equal(harness.getCategoryFindManyCalls(), categoryCallsAfterFirst);
 });
