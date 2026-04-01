@@ -86,6 +86,28 @@ export class AuthService {
     };
   }
 
+  private async findAdminAccountByUsername(username: string): Promise<AuthAccount | null> {
+    const normalizedInput = this.normalizeUserKey(username);
+    if (!normalizedInput) {
+      return null;
+    }
+
+    const existing = await this.prisma.adminCredential.findUnique({
+      where: { username },
+    });
+
+    if (!existing) {
+      return null;
+    }
+
+    return {
+      id: existing.id,
+      username: existing.username,
+      passwordHash: existing.passwordHash,
+      role: "ADMIN",
+    };
+  }
+
   private normalizeUserKey(value: string): string {
     return String(value ?? "").trim().toLowerCase();
   }
@@ -157,8 +179,12 @@ export class AuthService {
       throw new UnauthorizedException("Limite de tentativas excedido. Tente novamente mais tarde.");
     }
 
-    const account = await this.ensureAdminAccount();
-    const validUser = account.username === username ? account : null;
+    const bootstrapAccount = await this.ensureAdminAccount();
+    const validUser =
+      (await this.findAdminAccountByUsername(username)) ??
+      (this.normalizeUserKey(bootstrapAccount.username) === this.normalizeUserKey(username)
+        ? bootstrapAccount
+        : null);
 
     if (!validUser || !compareSync(password, validUser.passwordHash)) {
       const failedCount = (attempt?.failedCount ?? 0) + 1;

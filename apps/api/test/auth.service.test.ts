@@ -16,11 +16,13 @@ type ResetRow = {
 function createPrismaMock() {
   const rows: ResetRow[] = [];
   let nextId = 1;
-  const adminStore = {
-    id: 1,
-    username: process.env.ADMIN_USERNAME ?? "admin",
-    passwordHash: process.env.ADMIN_PASSWORD_HASH ?? hashSync("senha-correta", 4),
-  };
+  const adminStore = [
+    {
+      id: 1,
+      username: process.env.ADMIN_USERNAME ?? "admin",
+      passwordHash: process.env.ADMIN_PASSWORD_HASH ?? hashSync("senha-correta", 4),
+    },
+  ];
 
   return {
     rows,
@@ -52,34 +54,38 @@ function createPrismaMock() {
       },
       adminCredential: {
         findUnique: async ({ where }: { where: { username: string } }) => {
-          if (where.username !== adminStore.username) {
-            return null;
-          }
-          return {
-            id: adminStore.id,
-            username: adminStore.username,
-            passwordHash: adminStore.passwordHash,
-          };
+          const row = adminStore.find((item) => item.username === where.username);
+          return row
+            ? {
+                id: row.id,
+                username: row.username,
+                passwordHash: row.passwordHash,
+              }
+            : null;
         },
         create: async ({ data }: { data: { username: string; passwordHash: string } }) => {
-          adminStore.id = adminStore.id + 1;
-          adminStore.username = data.username;
-          adminStore.passwordHash = data.passwordHash;
+          const row = {
+            id: Math.max(...adminStore.map((item) => item.id)) + 1,
+            username: data.username,
+            passwordHash: data.passwordHash,
+          };
+          adminStore.push(row);
           return {
-            id: adminStore.id,
-            username: adminStore.username,
-            passwordHash: adminStore.passwordHash,
+            id: row.id,
+            username: row.username,
+            passwordHash: row.passwordHash,
           };
         },
         update: async ({ where, data }: { where: { id: number }; data: { passwordHash: string } }) => {
-          if (where.id !== adminStore.id) {
+          const target = adminStore.find((item) => item.id === where.id);
+          if (!target) {
             throw new Error("admin_not_found");
           }
-          adminStore.passwordHash = data.passwordHash;
+          target.passwordHash = data.passwordHash;
           return {
-            id: adminStore.id,
-            username: adminStore.username,
-            passwordHash: adminStore.passwordHash,
+            id: target.id,
+            username: target.username,
+            passwordHash: target.passwordHash,
           };
         },
       },
@@ -166,6 +172,42 @@ test("sucesso de login reseta contador de falhas", async () => {
     ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),
     ADMIN_LOCKOUT_MINUTES: "10",
     ADMIN_MAX_LOGIN_ATTEMPTS: "3",
+  });
+});
+
+test("permite login com credencial administrativa legada persistida no banco", async () => {
+  await withEnv(async () => {
+    const jwtService = new JwtService({
+      secret: "test-secret",
+      signOptions: { expiresIn: "1h" },
+    });
+    const prismaMock = createPrismaMock();
+    const legacyHash = hashSync("senha-legada", 4);
+    prismaMock.prisma.adminCredential.findUnique = async ({ where }: { where: { username: string } }) => {
+      if (where.username === "mush1n-d0sh4") {
+        return {
+          id: 99,
+          username: "mush1n-d0sh4",
+          passwordHash: legacyHash,
+        };
+      }
+      if (where.username === "admin-local") {
+        return {
+          id: 1,
+          username: "admin-local",
+          passwordHash: process.env.ADMIN_PASSWORD_HASH!,
+        };
+      }
+      return null;
+    };
+
+    const authService = new AuthService(jwtService, prismaMock.prisma);
+    const success = await authService.login("mush1n-d0sh4", "senha-legada", "ip-legacy");
+    assert.equal(typeof success.accessToken, "string");
+    assert.equal(success.role, "ADMIN");
+  }, {
+    ADMIN_USERNAME: "admin-local",
+    ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),
   });
 });
 
