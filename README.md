@@ -1,120 +1,130 @@
-# appcbtmeventos (monorepo)
+# appcbtmeventos (PingPong Paid'egua)
 
-Sistema full-stack para extração, normalização, persistência e consulta de eventos CBTM (URAL Base), com scraping de callbacks DevExpress (DX).
+Monorepo para captura, normalizacao, persistencia, auditoria e consulta publica de eventos CBTM.
 
-URL base CBTM:
-`https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID={EVENT_ID}`
+O projeto cobre o ciclo completo de um evento:
+- scraping de inscricoes, grupos e resultados
+- parse e normalizacao de dados oficiais
+- persistencia e reconciliacao no PostgreSQL
+- read models publicos e administrativos
+- frontend publico e painel administrativo
 
-Referência real usada para parser e testes offline:
-- `EVENT_ID=5246`
-- categoria `ABSOLUTO E (MAS)`
-- fixture real: `fixtures/results.txt`
-- fixtures multi-categoria: `fixtures/golden/*.txt`
+## Documentacao da Raiz
+- `README.md`: visao funcional, arquitetura e operacao do repositorio.
+- `AGENTS.md`: contexto permanente do projeto para agentes e assistentes.
+- `PROMPTS.md`: catalogo de prompts operacionais reutilizaveis.
+
+## Stack
+- API: NestJS + Prisma + PostgreSQL
+- Worker: BullMQ + Playwright + parser compartilhado
+- Web: Next.js
+- Shared: `packages/shared`
+- Parser: `packages/parser`
+- Cache e filas: Redis
+- Infra local e producao: Docker Compose
+- Infra alvo: Oracle Cloud Always Free
 
 ## Estrutura
 
 ```text
 .
-├─ apps
-│  ├─ api        # NestJS + Prisma + JWT
-│  ├─ worker     # BullMQ + Playwright + pipeline capture/parse/upsert
-│  └─ web        # Next.js (Admin e Usuário)
-├─ packages
-│  ├─ parser     # parser DX offline (results.txt -> dataset)
-│  └─ shared     # normalização, match_key, matching determinístico
-├─ prisma
-│  ├─ schema.prisma
-│  └─ migrations
-├─ fixtures
-│  ├─ results.txt
-│  └─ golden
-│     ├─ ABSOLUTO_E_(MAS).txt
-│     ├─ MASTER_30FEM.txt
-│     └─ ROM.txt
-├─ docs
-│  ├─ matching-athletes.md
-│  └─ parser-offline.md
-├─ docker
-│  ├─ api.Dockerfile
-│  ├─ worker.Dockerfile
-│  └─ web.Dockerfile
-└─ docker-compose.yml
+|- apps
+|  |- api
+|  |- worker
+|  `- web
+|- packages
+|  |- parser
+|  `- shared
+|- prisma
+|- fixtures
+|- docs
+|- scripts
+|- docker
+|- AGENTS.md
+|- PROMPTS.md
+|- README.md
+`- docker-compose.yml
 ```
 
-## Stack
-- API: NestJS + Prisma + PostgreSQL
-- Worker: Playwright + BullMQ + Redis
-- Frontend: Next.js (Home publica para usuario + Login JWT apenas no Admin)
-- Infra local: Docker Compose
+## Visao Arquitetural
+O pipeline principal do worker segue esta ordem:
+1. captura (`INSCRICOES`, `GRUPOS`, `RESULTADOS`)
+2. persistencia de `raw_captures`
+3. parse em `@cbtm/parser`
+4. upsert e reconciliacao no banco
+5. auditoria do scrape run
+6. publicacao e aquecimento seletivo de read models
 
-## Arquitetura
+Observacoes importantes:
+- `Fase Eliminatoria` nao e fonte primaria de scraping.
+- Eventos podem ser simples ou agregados por configuracao administrativa.
+- Redis nao substitui a verdade persistida no PostgreSQL.
+- O projeto prioriza resiliencia e degradacao controlada para o Always Free.
 
-Pipeline do worker:
-1. `capture` (live via Playwright por padrão, ou `fixture`)
-2. `persist raw` (`raw_captures`)
-3. `parse` (`@cbtm/parser`)
-4. `upsert` (`events`, `athletes`, `matches`, `scrape_runs`, conflitos)
+## Dominio
+Entidades centrais:
+- `Event`
+- `Category`
+- `Athlete`
+- `Match`
+- `ScrapeRun`
+- `ReadModelCache`
 
-O parser não roda embutido no scraping; ele opera desacoplado sobre os payloads/HTML retornados.
+Regras de dominio relevantes no estado atual:
+- fontes validas: `INSCRICOES`, `GRUPOS`, `RESULTADOS`
+- `WO` e `WO duplo` nao contam como partida jogada
+- `bye` avanca, mas nao conta como partida jogada
+- podio padrao: `1 ouro`, `1 prata`, `ate 2 bronzes`
+- excecoes de podio dependem de regra oficial ou configuracao validada
+- quadro de medalhas/eficiencia do site contabiliza categorias `Rating (R*)`
+- em duplas e duplas mistas, a unidade competitiva e a dupla, nao cada atleta separadamente
 
-## Modelo de dados (pontos principais)
-- `events`, `clubs`, `athletes`, `categories`
-- `athlete_categories` (N:N)
-- `matches`, `match_participants`
-- `scrape_runs`, `raw_captures`
-- `athlete_aliases`
-- `athlete_match_conflicts`
+## Quadro de Medalhas e Eficiencia
+Pesos atuais do site:
+- ouro: `130`
+- prata: `80`
+- bronze: `50`
 
-Campos de atleta para matching:
-- `name_display`, `name_normalized`
-- `ranking_points`, `rating_points`
-- `created_from_warning`
+Pontuacao por evento:
+- `pontuacao = quantidade x peso_da_medalha x peso_do_evento`
 
-## Normalização
-Implementada em `packages/shared/src/index.ts`:
-- trim
-- espaços únicos
-- lowercase
-- remoção de acentos
+Desempate do ranking:
+1. `pontuacao total`
+2. `ouro`
+3. `prata`
+4. `bronze`
 
-Aplicada em nomes de atleta/clube/categoria e aliases.
+Pesos de evento atualmente usados no projeto:
+- `BRASILEIRAO = 18`
+- `SELETIVA_NACIONAL = 12`
+- `COPA_BRASIL_OURO = 9`
+- `COPA_BRASIL_PRATA = 6`
+- `ESTADUAL = 3`
+- `REGIONAL = 1`
 
-## match_key
-`matches.match_key` é determinístico (SHA-1) e único, baseado em:
-- `event_id`
-- `category.normalized_name`
-- `phase`
-- `round` (ou placeholder)
-- `table_number` (ou placeholder)
-- `match_datetime` (ou placeholder)
-- atletas normalizados em ordem alfabética
+Observacao:
+- o quadro do site pode divergir do trofeu oficial da federacao quando a federacao usar outra regra administrativa ou excluir categorias `R*`.
 
-## Matching de atleta (nome completo x reduzido)
+## Duplas e Duplas Mistas
+O site oficial publica dados de duplas de forma inconsistente entre abas.
+Exemplos comuns:
+- inscricoes: `ATLETA A # ATLETA B`
+- grupos: apenas um integrante da dupla
+- resultados: `ATLETA A - ATLETA B`
 
-Implementado em `packages/shared/src/index.ts` e usado no upsert do worker.
+Por isso, o projeto normaliza pares e prioriza:
+- unidade competitiva canonica
+- reconciliacao por aliases
+- deduplicacao por evento/categoria quando necessario
+- preservacao do clube correto da dupla ou dupla mista
 
-Fases:
-1. `alias-exato`: nome curto bate em alias já conhecido.
-2. `forte-ranking-rating`: pontos iguais + compatibilidade de nome.
-3. `heuristica`: com limiar alto e penalidade de ambiguidade.
-
-Aceite:
-- `score >= 80`
-- diferença para segundo melhor `>= 15`
-
-Sem aceite:
-- gera conflito em `athlete_match_conflicts`
-- cria placeholder (`SEM CLUBE`) para não perder o vínculo do jogo
-- conflito pode ser resolvido no Admin API/UI.
-
-## API
-
-Auth:
+## API Principal
+### Auth
 - `POST /auth/login`
 - `POST /auth/forgot-password`
 - `POST /auth/reset-password`
 
-Admin:
+### Admin
 - `GET /admin/events`
 - `POST /admin/events`
 - `PUT /admin/events/{id}`
@@ -122,287 +132,125 @@ Admin:
 - `POST /admin/events/{id}/mark-completed`
 - `POST /admin/events/{id}/scrape-now`
 - `GET /admin/events/{id}/scrape-runs`
-- `POST /admin/events/raw-captures/cleanup`
-- `POST /admin/events/{id}/raw-captures/cleanup`
 - `GET /admin/events/{id}/athlete-conflicts`
 - `POST /admin/events/{id}/athlete-conflicts/{conflictId}/resolve`
+- `POST /admin/events/raw-captures/cleanup`
+- `POST /admin/events/{id}/raw-captures/cleanup`
 
-User:
+### Publica
 - `GET /events`
+- `GET /events/{id}`
 - `GET /events/{id}/athletes?search=`
 - `GET /events/{id}/clubs?search=`
 - `GET /events/{id}/clubs/{clubId}/athletes`
-- `GET /events/{id}/athletes/{athleteId}/summary?orderBy=phase_hierarchy_datetime|category_phase_datetime`
+- `GET /events/{id}/athletes/{athleteId}/summary`
+- `GET /events/{id}/efficiency`
+- `GET /events/{id}/medalists`
+- `GET /clubs/{clubId}/efficiency-career`
 - `GET /athletes/directory?search=`
 - `GET /athletes/{athleteKey}/career`
 
-Rotas de UI:
-- Home usuario: `http://localhost:3000/`
-- Login admin: `http://localhost:3000/admin/login`
-- Painel admin: `http://localhost:3000/admin`
-- Carreira do atleta: `http://localhost:3000/user/career/{athleteKey}`
+## Web
+Rotas principais:
+- home publica: `http://localhost:3000/`
+- login admin: `http://localhost:3000/admin/login`
+- painel admin: `http://localhost:3000/admin`
+- carreira do atleta: `http://localhost:3000/user/career/{athleteKey}`
+- eficiencia do clube: `http://localhost:3000/eficiencia/{clubId}`
 
-## Como subir (Docker)
+Tambem existem paginas institucionais publicas:
+- `/sobre`
+- `/contato`
+- `/privacidade`
 
-Pré-requisito: Docker Desktop em execução.
+## Ambiente Local
+Pre-requisito: Docker Desktop ativo.
+
+Subir infraestrutura + backend + worker:
 
 ```bash
 docker compose up --build -d
 docker compose ps
 ```
 
-Isso sobe backend e infraestrutura local. O frontend do monorepo via Docker continua sob o profile `local-ui`.
-
-Para subir o frontend local do monorepo via Docker, use também o profile `local-ui`:
+Subir tambem o frontend do monorepo via Docker:
 
 ```bash
 docker compose --profile local-ui up --build -d
 ```
 
-Serviços:
+Servicos locais:
 - API: `http://localhost:4000`
 - Web: `http://localhost:3000`
 - Postgres: `localhost:5432`
 - Redis: `localhost:6379`
 
-Credenciais locais:
-- Usuário admin padrão do ambiente local: `admin-local`
-- Senha padrão apenas para desenvolvimento local via `docker-compose.yml`: `admin-local-change-me`
-- Em produção, configure obrigatoriamente `JWT_SECRET`, `ADMIN_USERNAME` e `ADMIN_PASSWORD_HASH`
+Credenciais locais de desenvolvimento:
+- usuario admin: `admin-local`
+- senha local padrao: `admin-local-change-me`
 
-## Fluxo de uso
-1. Abrir `http://localhost:3000`.
-2. Navegar no modo usuario (publico) por evento/atleta/clube.
-3. Para administrar, abrir `http://localhost:3000/admin/login` e fazer login.
-4. Criar evento com `cbtmEventId=5246` (se ainda nao existir).
-5. Acompanhar `scrape-runs` e conflitos.
-6. Resolver conflitos de atleta quando houver.
+Em producao, configure obrigatoriamente:
+- `JWT_SECRET`
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD_HASH`
 
-## Compartilhamento social (User)
-- Páginas com compartilhamento:
-  - `user/career/{athleteKey}`
-  - `user/events/{id}/group-simulator`
-- Canais:
-  - WhatsApp
-  - Telegram
-  - Instagram (feed/story/reels via download da arte gerada)
+## Variaveis e Operacao
+Valores de conexao locais padrao nos `.env.example`:
+- API write: `connection_limit=6`
+- API read: `connection_limit=10`
+- Worker write: `connection_limit=4`
+- Worker read: `connection_limit=2`
 
-## Design system web
-- Tokens centralizados: `apps/web/lib/designTokens.ts`
-- Cores principais:
-  - `primaryBg: #0A1233`
-  - `cardBg: #121E52`
-  - `accent: #FFC300`
-  - `textPrimary: #FFFFFF`
-  - `textSecondary: #9FB0FF`
-  - `win: #2ECC71`
-  - `loss: #E74C3C`
-- Espaçamento:
-  - `xs=8px`, `sm=16px`, `md=24px`, `lg=32px`, `xl=48px`
-- Tipografia:
-  - Títulos: Montserrat (bold)
-  - Corpo: Inter (regular)
-- Raios:
-  - `card=20px`, `component=12px`
+Esses limites existem para respeitar a Oracle Cloud Always Free e nao devem crescer sem necessidade real.
 
-## Componentes reutilizáveis
-- Base UI em `apps/web/components/ui`:
-  - `Card` (com variantes: `event`, `athlete`, `group`, `match`, `stat`)
-  - `Hero` / `HeroTitle`
-  - `Badge`
-  - `Skeleton`
-  - `StatBlock`
-  - `EventCard`
-  - `MatchCard`
-- Compartilhamento em `apps/web/components/share/ShareActions.tsx`:
-  - Botões para WhatsApp, Instagram, Telegram e exportação PNG.
-
-## Templates sociais e exportação
-- Geração de imagem em `apps/web/lib/share-image.ts`.
-- Templates ativos:
-  - Card de carreira de atleta.
-  - Card de simulador de grupos.
-- Formatos suportados:
-  - `portrait` (1080x1350, 4:5)
-  - `square` (1080x1080, 1:1)
-  - `landscape` (1920x1080)
-- Fluxo:
-  1. UI monta payload (título, métricas, grupos etc.).
-  2. `createShareImageBlob` / `createGroupSimulationShareImageBlob` gera PNG.
-  3. `downloadBlob` exporta arquivo.
-
-## Estratégia de performance UI
-- Home:
-  - eventos em grid de cards ordenados por situação/data.
-  - lista de atletas com paginação incremental (`Carregar mais`).
-- Carregamento:
-  - skeleton loaders nos blocos críticos.
-- Responsividade:
-  - grid adaptativo para cards e faixas horizontais com `overflow-x` controlado.
-
-## Testes visuais (snapshot de componentes)
-- Testes em `apps/web/tests/ui-snapshots.test.tsx`.
-- Cobertura atual:
-  - `Hero`
-  - `EventCard`
-  - `StatBlock`
-  - `MatchCard`
-  - contrato de exportação de templates em `share-image`.
-- Comando:
-  - `npm run test --workspace apps/web`
-
-## Perfil de baixo custo (scrape a cada 2 horas)
-- `SCRAPER_REFRESH_CRON_MS` padrao no worker: `7200000` (2 horas).
-- Para rodar scrape sem worker 24/7, use:
-  - `npm run scrape:once --workspace apps/worker`
-- Workflow pronto para agendamento no GitHub Actions:
-  - `.github/workflows/scrape-every-2h.yml`
-  - Agenda automatica: a cada 2 horas (`0 */2 * * *`).
-  - Execucao manual: `workflow_dispatch` com `event_ids` opcional.
-  - Execucao do scrape via SSH na VM Oracle (sem expor Postgres na internet).
-  - Secrets obrigatorios:
-    - `ORACLE_SSH_HOST`
-    - `ORACLE_SSH_USER`
-    - `ORACLE_SSH_KEY`
-
-## Operacao leve na VM (Oracle Always Free)
-- Self-heal dos containers:
-  - Instalar: `bash scripts/vm/install-self-heal.sh`
-  - Recovery: `scripts/vm/ppg-recover.sh`
-- Saude da VM e housekeeping leve:
-  - Instalar: `bash scripts/vm/install-vm-ops.sh`
-  - Health log: `.runtime/ppg-vm-health.log`
-  - Housekeeping log: `.runtime/ppg-housekeeping.log`
-- O housekeeping:
-  - remove containers parados
-  - remove imagens Docker nao utilizadas com idade configuravel
-  - nao remove volumes
-  - nao reinicia servicos
-- Tuning leve para Always Free:
-  - pools Prisma e `max_connections` do Postgres foram reduzidos para perfil conservador
-  - prewarm de read models no worker e limitado para evitar picos apos scrape
-
-## Publicacao online (producao)
-1. Configure DNS do dominio para o servidor.
-2. No servidor, instale Docker e Docker Compose plugin.
-3. Ajuste variaveis sensiveis em `.env`:
-   - `JWT_SECRET` forte
-   - `ADMIN_USERNAME`
-   - `ADMIN_PASSWORD_HASH` (bcrypt)
-   - `ADMIN_RESET_EMAIL` (default: `gemaqueflores@gmail.com`)
-   - `ADMIN_MAX_LOGIN_ATTEMPTS` (default: `3`)
-   - `ADMIN_LOCKOUT_MINUTES` (default: `15`)
-   - `ADMIN_RESET_TOKEN_TTL_MINUTES` (default: `30`)
-   - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
-   - `DATABASE_URL`
-   - `REDIS_URL`
-   - `RAW_CAPTURE_RETENTION_DAYS_SUCCESS` (default `14`)
-   - `RAW_CAPTURE_RETENTION_DAYS_ERROR` (default `0`, preserva ERROR/PARTIAL sem limite de dias)
-   - `RAW_CAPTURE_MAX_RUNS_PER_EVENT` (default `20`)
-   - `RAW_CAPTURE_CLEANUP_ENABLED` (default `true` no worker)
-   - `RAW_CAPTURE_CLEANUP_EVERY_MS` (default `86400000`)
-   - gerar hash: `node -e "console.log(require('bcryptjs').hashSync('SuaSenhaForte', 12))"`
-4. Suba os servicos:
-   - `docker compose up --build -d`
-5. Coloque um reverse proxy (Nginx/Traefik/Caddy) na frente do frontend e API.
-6. Habilite HTTPS com certificado TLS (Let's Encrypt).
-7. Para atualizar sem downtime longo:
-   - `docker compose pull`
-   - `docker compose up -d --build`
-8. Para Oracle + Vercel com DuckDNS e HTTPS sem Cloudflare:
-   - `docs/runbook-producao-oracle-vercel.md`
-
-## Execução local sem Docker
+## Build e Testes
+Comandos uteis:
 
 ```bash
 npm install
-npm run prisma:generate
-npm run prisma:seed
-npm run build
-npm test
-npm run smoke:fixture
+npm run build --workspace apps-api
+npm run build --workspace apps-worker
+npm run build --workspace apps-web
+npm run test --workspace apps-api
+npm run test --workspace apps-worker
 ```
 
-## Testes
-- Suite completa do monorepo:
-  - `npm test`
-- Parser offline (fixture real):
-  - `packages/parser/test/parser.test.ts`
-  - `packages/parser/test/golden-samples.test.ts`
-  - `packages/parser/test/athlete-matching.test.ts`
-- Matching determinístico:
-  - `packages/shared/test/matching.test.ts`
-  - `packages/shared/test/performance.test.ts`
-- API e worker:
-  - `npm run test --workspace apps-api`
-  - `npm run test --workspace apps-worker`
-- Smoke:
-  - `npm run smoke:fixture`
+Testes importantes ja existentes cobrem, entre outros:
+- read models e cache
+- deduplicacao de duplas e duplas mistas
+- regras de podio
+- regras de WO e WO duplo
+- sincronizacao de inscricoes
+- integridade do worker antes do upsert
 
-Documentacao adicional:
-- `docs/placares-aproveitamento-status.md`
+## Operacao em VM
+A producao atual usa uma VM Oracle Cloud Always Free com Docker Compose.
+Medidas operacionais importantes ja adotadas:
+- housekeeping leve de Docker
+- health check periodico da VM
+- limite conservador de conexoes Prisma/Postgres
+- prewarm menos agressivo de read models
+- self-heal com baixo impacto
 
-## Notas de UI responsiva
+Scripts relacionados:
+- `scripts/vm/ppg-vm-health.sh`
+- `scripts/vm/ppg-housekeeping.sh`
+- `scripts/vm/install-vm-ops.sh`
 
-### Breakpoints padrao
-- `mobile`: `< 640px`
-- `tablet`: `640px - 1023px`
-- `desktop`: `>= 1024px`
+## Fluxo de Trabalho Recomendado
+1. Auditar a implementacao atual.
+2. Identificar a camada do problema.
+3. Aplicar a menor correcao auditavel.
+4. Ajustar testes.
+5. Validar build e testes do workspace afetado.
+6. So depois subir para producao.
 
-### Container global
-- Classe: `.container`
-- `max-width: 1200px`
-- Padding:
-  - mobile: `16px`
-  - tablet: `24px`
-  - desktop: `32px`
+## Referencias de Fixture
+Fixtures usadas para parser e testes offline:
+- `fixtures/results.txt`
+- `fixtures/golden/*.txt`
 
-### Componentes novos
-- `apps/web/components/ui/SegmentedControl.tsx`
-  - Controle segmentado para filtros/tabs consistentes.
-- `apps/web/components/ui/SearchInput.tsx`
-  - Busca com debounce opcional e icone padronizado.
-- `apps/web/components/ui/FilterDrawer.tsx`
-  - Filtros colapsaveis no mobile.
-- `apps/web/components/ui/EmptyState.tsx`
-  - Estado vazio consistente com titulo + descricao.
-- `apps/web/components/ui/DataTableResponsive.tsx`
-  - Estrutura table-to-cards (desktop tabela, mobile cards).
-
-### Padroes aplicados
-- Filtros mobile com drawer em `Home` e `Eventos`.
-- Busca padronizada em `Atletas`, `Eficiencia` e `Evento > Atletas/Clubes`.
-- Segmented control padronizado em:
-  - `Home` (filtros)
-  - `Eventos` (filtros)
-  - `Evento/[id]` (tabs e eficiencia)
-  - `Group Simulator` (escopo)
-  - `Resumo do atleta do evento` (agrupamento de jogos)
-- Empty states padronizados nas listagens filtraveis.
-
-### Como usar `DataTableResponsive`
-- Passe `columns`, `rows`, `mobileCard` e `empty`.
-- Exemplo:
-  - desktop: colunas em `<table className="data-table">`
-  - mobile: renderizacao em cards via `mobileCard`.
-
-### Como usar `FilterDrawer` e `FilterBar`
-- `FilterDrawer` e focado em mobile; aciona painel colapsavel.
-- Para desktop, mantenha controles em linha (ex.: `SegmentedControl`) dentro do card.
-- Regra geral:
-  - mobile: drawer/colapsavel
-  - desktop: inline
-
-### Decisoes principais
-- Mantida arquitetura atual (rotas canonicas consumindo paginas de `app/user/*` quando necessario).
-- Nao alterados contratos de API.
-- Prioridade em componentes reutilizaveis e consistencia de interacao mobile-first.
-
-## Migrations Prisma
-- `prisma/migrations/20260209120000_init`
-- `prisma/migrations/20260209121000_athlete_alias_and_conflicts`
-
-## Sanitização
-O repositório mantém somente os componentes ativos da stack (apps, packages, prisma, docker, fixtures e docs).
-Artefatos temporários de execução (logs `tmp-api-*.log`) e acervo legado (`_archive`) não fazem parte da base ativa.
-
+## Notas Finais
+- O projeto privilegia evidencia e rastreabilidade sobre heuristica solta.
+- Divergencias com federacao ou site oficial devem ser explicadas com base em captura persistida, regra validada ou configuracao explicita.
+- Quando houver diferenca entre visao analitica do site e trofeu oficial, a diferenca deve ser documentada, nao mascarada.

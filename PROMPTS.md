@@ -1,5 +1,10 @@
 # Catalogo de Prompts Operacionais
 
+## Como usar este arquivo
+- Use `AGENTS.md` para contexto permanente do projeto.
+- Use este arquivo para prompts de execucao no VSCode, Cursor, Codex, Copilot, Claude ou Gemini.
+- Os prompts abaixo assumem o estado atual do monorepo e nao devem redefinir a arquitetura do projeto.
+
 ## Prompt A: Auditoria e Evolucao de Regras
 
 Persona:
@@ -50,7 +55,7 @@ Restricoes:
 - Sem remodelagem Prisma sem necessidade clara.
 - Sempre prefira a menor mudanca correta, auditavel e compativel.
 
-## Prompt B: Debug de Worker/Scraping
+## Prompt B: Debug de Worker e Scraping
 
 Atue como Engenheiro de Dados e Runtime. Analise o log do worker de scraping anexo.
 
@@ -59,8 +64,8 @@ Objetivo:
   1. mudanca no DOM do site alvo
   2. timeout ou degradacao de rede
   3. erro de parser
-  4. erro de persistencia/upsert Prisma
-  5. erro de cache/read model
+  4. erro de persistencia ou upsert Prisma
+  5. erro de cache ou read model
 
 Instrucoes:
 - audite primeiro os arquivos realmente envolvidos
@@ -120,3 +125,18 @@ Entregaveis:
 - camada exata afetada
 - menor correcao possivel
 - comandos de validacao local antes de orientar deploy
+
+## Prompt F: Auditoria de Quadro de Medalhas e Eficiencia
+
+Audite um evento completo com foco em:
+- medalhistas por categoria
+- eficiencia por clube
+- impacto de `R*`
+- peso do evento
+- divergencias com planilhas externas
+
+Instrucoes:
+- separar quadro do site de trofeu administrativo da federacao quando as regras divergirem
+- validar unidade competitiva em duplas e duplas mistas
+- explicar divergencias com evidencia publicada, captura persistida ou regra validada
+- nao ajustar dado em producao sem prova objetiva de que a origem oficial esta errada

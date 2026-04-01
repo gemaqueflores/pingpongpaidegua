@@ -3,6 +3,7 @@
 ## 1. Papel deste arquivo
 - Este arquivo define o contexto permanente do projeto para agentes.
 - A documentacao funcional e arquitetural detalhada fica no `README.md`.
+- O catalogo de prompts operacionais fica no `PROMPTS.md`.
 - Em caso de divergencia:
   1. regras oficiais CBTM explicitamente validadas no projeto ou no manual
   2. decisoes de negocio registradas no projeto
@@ -38,7 +39,7 @@
 - Toda mudanca deve ser incremental, com minimo risco e validacao objetiva.
 - Nao inventar regras esportivas.
 - Regra ausente ou ambigua deve ser tratada como `parametrizavel`.
-- Nao usar dados ficticios para "fechar numeros".
+- Nao usar dados ficticios para fechar numeros.
 - Divergencias com baseline externa devem ser explicadas com evidencia.
 
 ## 6. Contexto operacional
@@ -70,6 +71,11 @@
 - Podio:
   - padrao: 1 ouro, 1 prata, ate 2 bronzes
   - excecoes devem seguir regra oficial ou configuracao explicitamente validada
+- Quadro de medalhas e eficiencia do site:
+  - contabiliza categorias `Rating (R*)`
+  - usa unidade competitiva em duplas e duplas mistas
+  - pontuacao segue `quantidade x peso_da_medalha x peso_do_evento`
+  - desempate segue `pontuacao > ouro > prata > bronze`
 - Auditoria:
   - separar `partidasPublicadas`, `partidasPrevistas`, `partidasJogadas` e `wo`
   - nao mascarar divergencias entre valores calculados e valores publicados
