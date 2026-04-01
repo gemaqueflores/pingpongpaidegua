@@ -4186,19 +4186,55 @@ export class UserService {
       }
       return best;
     }, athleteRecords[0].nameDisplay);
+    const pairCareer = athleteRecords.some((athlete) => isCompositePairName(athlete.nameDisplay));
     const federation = athleteRecords.find((item) => item.stateCode && item.region) ?? athleteRecords[0];
 
     const athleteIds = athleteRecords.map((athlete) => athlete.id);
-    const matches = await this.prisma.match.findMany({
+    const athleteEventIds = [...new Set(athleteRecords.map((athlete) => athlete.eventId))];
+    const athleteCategoryLinks = await this.prisma.athleteCategory.findMany({
       where: {
-        participants: {
-          some: {
-            athleteId: {
-              in: athleteIds,
-            },
-          },
+        athleteId: {
+          in: athleteIds,
         },
       },
+      select: {
+        categoryId: true,
+      },
+    });
+    const athleteCategoryIds = [...new Set(athleteCategoryLinks.map((link) => link.categoryId))];
+    const athleteNameKeys = this.buildAthleteNameKeys(canonicalName, normalizeAthleteName(canonicalName));
+    const matches = await this.prisma.match.findMany({
+      where: pairCareer
+        ? {
+            OR: [
+              {
+                participants: {
+                  some: {
+                    athleteId: {
+                      in: athleteIds,
+                    },
+                  },
+                },
+              },
+              {
+                eventId: {
+                  in: athleteEventIds,
+                },
+                categoryId: {
+                  in: athleteCategoryIds,
+                },
+              },
+            ],
+          }
+        : {
+            participants: {
+              some: {
+                athleteId: {
+                  in: athleteIds,
+                },
+              },
+            },
+          },
       include: {
         event: true,
         category: true,
@@ -4216,18 +4252,18 @@ export class UserService {
 
     const summaries: AthleteSummaryMatch[] = [];
     for (const match of matches) {
-      // Regra atual: histórico de carreira do atleta considera apenas jogos individuais.
-      if (isDoublesEventName(match.event?.nome) || isDoublesCategoryName(match.category?.name)) {
+      // Carreira de pares precisa manter confrontos de duplas e duplas mistas.
+      if (!pairCareer && (isDoublesEventName(match.event?.nome) || isDoublesCategoryName(match.category?.name))) {
         continue;
       }
       const participantIds = match.participants.map((participant) => participant.athleteId);
       const matchedAthleteIds = participantIds.filter((id) => athleteIds.includes(id));
-      if (matchedAthleteIds.length === 0) {
+      if (!pairCareer && matchedAthleteIds.length === 0) {
         continue;
       }
 
-      const primaryAthleteId = [...matchedAthleteIds].sort((a, b) => a - b)[0];
-      const summary = this.buildAthleteSummaryMatch(match, primaryAthleteId);
+      const primaryAthleteId = pairCareer ? athleteIds[0] : [...matchedAthleteIds].sort((a, b) => a - b)[0];
+      const summary = this.buildAthleteSummaryMatch(match, primaryAthleteId, athleteNameKeys);
       if (!summary) {
         continue;
       }
@@ -4511,6 +4547,21 @@ export class UserService {
         keys.add(normalized);
       }
     }
+
+    if (isCompositePairName(fullDisplay)) {
+      const normalizedPair = normalizeAthleteName(normalizeCompositePairName(fullDisplay));
+      if (normalizedPair) {
+        keys.add(normalizedPair);
+      }
+
+      for (const part of splitPairNameParts(fullDisplay)) {
+        const normalizedPart = normalizeAthleteName(part);
+        if (normalizedPart) {
+          keys.add(normalizedPart);
+        }
+      }
+    }
+
     return keys;
   }
 
@@ -4518,6 +4569,11 @@ export class UserService {
     players: [AthleteSummaryPlayer | null, AthleteSummaryPlayer | null],
     athleteNameKeys: Set<string>,
   ): 0 | 1 | null {
+    const containsCanonicalPair = (playerName: string | null | undefined): boolean => {
+      const normalizedPair = normalizeAthleteName(normalizeCompositePairName(playerName));
+      return Boolean(normalizedPair && athleteNameKeys.has(normalizedPair));
+    };
+
     const containsAthlete = (playerName: string | null | undefined): boolean => {
       const parts = splitPairNameParts(playerName);
       if (parts.length < 2) {
@@ -4531,6 +4587,15 @@ export class UserService {
       }
       return false;
     };
+
+    const p0Pair = containsCanonicalPair(players[0]?.name);
+    const p1Pair = containsCanonicalPair(players[1]?.name);
+    if (p0Pair && !p1Pair) {
+      return 0;
+    }
+    if (p1Pair && !p0Pair) {
+      return 1;
+    }
 
     const p0 = containsAthlete(players[0]?.name);
     const p1 = containsAthlete(players[1]?.name);
