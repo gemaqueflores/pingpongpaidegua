@@ -35,3 +35,7 @@ tmp_*.json
 tmp_*.html
 tmp_*.py
 tmp_*.txt
+
+# Local private keys and secrets
+.local-secrets/
+

@@ -17,6 +17,7 @@ import { config } from "../config";
 import { prisma } from "../prisma";
 import { buildResolverCandidates, resolveByCategoryHistory } from "./athlete-resolution";
 import { inferAthleteFederationFromClub } from "./athlete-federation";
+import { canonicalizeDatasetCategoryNames, canonicalizeEventScopedCategoryName } from "./category-labels";
 import { mergeMatchesAcrossSources } from "./match-merge";
 import { applyParenseEligibilityScopeToDataset, DatasetScopeStats } from "./parense-scope";
 import {
@@ -1043,7 +1044,7 @@ export class UpsertService {
       dataset,
       warnings,
     });
-    dataset = scopeResult.dataset;
+    dataset = canonicalizeDatasetCategoryNames(event?.nome ?? null, scopeResult.dataset);
     const allowAutoCreateWarningAthlete =
       config.conflictAutoCreateWarningAthleteEnabled &&
       Boolean(event?.concluido);
@@ -1051,6 +1052,7 @@ export class UpsertService {
     if (processRegistrations) {
       await this.reconcileCategoriesWithSource(eventId, dataset.categories, updated, warnings);
       await this.repairMisnormalizedCategories(eventId, updated, warnings);
+      await this.repairEventScopedCategoryAliases(eventId, event?.nome ?? null, updated, warnings);
     }
 
     await this.preloadState({
@@ -4088,6 +4090,123 @@ export class UpsertService {
       inc(updated, "categories_merged_misnormalized");
       warnings.push(
         `Saneamento de categorias consolidou ${merged} categoria(s) com nome duplicado e normalized_name inconsistente no evento ${eventId}.`,
+      );
+    }
+  }
+
+  private async repairEventScopedCategoryAliases(
+    eventId: number,
+    eventName: string | null,
+    updated: Record<string, number>,
+    warnings: string[],
+  ): Promise<void> {
+    const categories = await prisma.category.findMany({
+      where: { eventId },
+      select: {
+        id: true,
+        name: true,
+        normalizedName: true,
+        cbtmCategoryId: true,
+      },
+    });
+    if (categories.length === 0) {
+      return;
+    }
+
+    const byNormalized = new Map<string, (typeof categories)[number]>();
+    for (const category of categories) {
+      if (!byNormalized.has(category.normalizedName)) {
+        byNormalized.set(category.normalizedName, category);
+      }
+    }
+
+    let renamed = 0;
+    let merged = 0;
+
+    for (const source of categories) {
+      const expectedName = canonicalizeEventScopedCategoryName(eventName, source.name);
+      const expectedNormalized = normalizeText(expectedName);
+      if (!expectedName || !expectedNormalized) {
+        continue;
+      }
+      if (source.name === expectedName && source.normalizedName === expectedNormalized) {
+        continue;
+      }
+
+      const target = byNormalized.get(expectedNormalized) ?? null;
+      if (!target || target.id === source.id) {
+        await prisma.category.update({
+          where: { id: source.id },
+          data: {
+            name: expectedName,
+            normalizedName: expectedNormalized,
+          },
+        });
+        source.name = expectedName;
+        source.normalizedName = expectedNormalized;
+        byNormalized.set(expectedNormalized, source);
+        renamed += 1;
+        continue;
+      }
+
+      await prisma.$transaction(async (tx) => {
+        const athleteIdsAtTarget = await tx.athleteCategory.findMany({
+          where: { categoryId: target.id },
+          select: { athleteId: true },
+        });
+        if (athleteIdsAtTarget.length > 0) {
+          await tx.athleteCategory.deleteMany({
+            where: {
+              categoryId: source.id,
+              athleteId: { in: athleteIdsAtTarget.map((row) => row.athleteId) },
+            },
+          });
+        }
+
+        await tx.athleteCategory.updateMany({
+          where: { categoryId: source.id },
+          data: { categoryId: target.id },
+        });
+
+        await tx.match.updateMany({
+          where: {
+            eventId,
+            categoryId: source.id,
+          },
+          data: {
+            categoryId: target.id,
+          },
+        });
+
+        if (!target.cbtmCategoryId && source.cbtmCategoryId) {
+          await tx.category.update({
+            where: { id: target.id },
+            data: { cbtmCategoryId: source.cbtmCategoryId },
+          });
+        }
+
+        const refs = await Promise.all([
+          tx.athleteCategory.count({ where: { categoryId: source.id } }),
+          tx.match.count({ where: { eventId, categoryId: source.id } }),
+        ]);
+        if (refs[0] === 0 && refs[1] === 0) {
+          await tx.category.delete({ where: { id: source.id } });
+        }
+      });
+
+      merged += 1;
+    }
+
+    if (renamed > 0) {
+      inc(updated, "categories_alias_renamed");
+      warnings.push(
+        `Saneamento de aliases de categoria renomeou ${renamed} registro(s) no evento ${eventId}.`,
+      );
+    }
+    if (merged > 0) {
+      inc(updated, "categories_alias_merged");
+      warnings.push(
+        `Saneamento de aliases de categoria consolidou ${merged} categoria(s) no evento ${eventId}.`,
       );
     }
   }
