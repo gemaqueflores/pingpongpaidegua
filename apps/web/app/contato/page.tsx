@@ -15,7 +15,7 @@ export default function ContatoPage() {
   return (
     <UserShell>
       <main className="container grid user-page">
-        <PageHeader title="Contato" subtitle="Canais públicos do projeto" compact />
+        <PageHeader title="Contato" subtitle="Canais públicos do projeto e da fabricante" compact />
 
         <Card className="grid" variant="event">
           <h2>Fale conosco</h2>
@@ -24,6 +24,9 @@ export default function ContatoPage() {
           </p>
           <p className="arena-muted">
             Responsável: {siteContent.responsibleName} {"\u00b7"} {siteContent.cityState}
+          </p>
+          <p className="arena-muted">
+            Empresa autora: {siteContent.brand.name} {"\u00b7"} {siteContent.brand.tagline}
           </p>
         </Card>
 

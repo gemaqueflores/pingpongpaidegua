@@ -15,20 +15,21 @@ export default function PrivacidadePage() {
   return (
     <UserShell>
       <main className="container grid user-page">
-        <PageHeader title="Privacidade" subtitle="Uso de dados e transparência" compact />
+        <PageHeader title="Privacidade" subtitle="Uso de dados, transparência e autoria" compact />
 
         <Card className="grid" variant="event">
           <h2>Dados públicos de eventos</h2>
           <p className="arena-muted">
-            O {siteContent.projectName} utiliza informações públicas de eventos esportivos para
-            fins de consulta, organização e análise esportiva.
+            O {siteContent.projectName} utiliza informações públicas de eventos esportivos para fins
+            de consulta, organização e análise esportiva.
           </p>
         </Card>
 
         <Card className="grid" variant="event">
-          <h2>Contato e solicitações</h2>
+          <h2>Operação do produto</h2>
           <p className="arena-muted">
-            Solicitações relacionadas ao site podem ser enviadas para{" "}
+            O produto é fabricado e operado pela {siteContent.brand.name}, sob responsabilidade de{" "}
+            {siteContent.responsibleName}, com contato principal em{" "}
             <a href={`mailto:${siteContent.contactEmail}`}>{siteContent.contactEmail}</a>.
           </p>
         </Card>

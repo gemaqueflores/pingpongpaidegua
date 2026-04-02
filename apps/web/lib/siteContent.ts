@@ -2,13 +2,21 @@ export const siteContent = {
   projectName: "PingPong Paid'egua",
   contactEmail: "gemaqueflores@gmail.com",
   responsibleName: "Leonardo Flores",
-  cityState: "Bel\u00e9m/PA",
+  cityState: "Belém/PA",
   shortDescription:
-    "Plataforma independente de acompanhamento, an\u00e1lise e consulta de eventos de t\u00eanis de mesa no Brasil.",
+    "Plataforma independente de acompanhamento, análise e consulta de eventos de tênis de mesa no Brasil.",
   heroStatement:
-    "Acompanhamento de eventos, atletas, clubes e resultados de t\u00eanis de mesa com foco em integridade e an\u00e1lise esportiva.",
+    "Acompanhamento de eventos, atletas, clubes e resultados de tênis de mesa com foco em integridade e análise esportiva.",
   amazonAffiliateDisclosure:
-    "Este site pode conter links de afiliado. Se voc\u00ea realizar uma compra por esses links, o projeto pode receber comiss\u00e3o sem custo adicional para voc\u00ea.",
+    "Este site pode conter links de afiliado. Se você realizar uma compra por esses links, o projeto pode receber comissão sem custo adicional para você.",
+  brand: {
+    name: "FloresTech",
+    tagline: "Tech Solutions",
+    role: "Fabricante e autora do projeto",
+    statement:
+      "Produto desenvolvido, mantido e assinado pela FloresTech, empresa responsável pela arquitetura, evolução técnica e operação do projeto.",
+    logoPath: "/branding/florestech.png",
+  },
   socialLinks: {
     instagram: "https://www.instagram.com/gemaqueflores/",
     youtube: "https://www.youtube.com/@mushindosha",
@@ -20,7 +28,7 @@ export const siteContent = {
 export function buildWaitlistMailto(email?: string): string {
   const subject = encodeURIComponent("Lista de espera - PingPong Paid'egua");
   const lines = [
-    "Ol\u00e1,",
+    "Olá,",
     "",
     "Quero receber novidades do PingPong Paid'egua.",
     email ? `Meu e-mail: ${email}` : "",

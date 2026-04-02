@@ -1,8 +1,23 @@
+import Image from "next/image";
 import { siteContent } from "../../lib/siteContent";
 
 export function PublicFooter() {
   return (
     <footer className="arena-footer public-site-footer">
+      <div className="public-site-footer-brand">
+        <Image
+          src={siteContent.brand.logoPath}
+          alt={`${siteContent.brand.name} logo`}
+          width={72}
+          height={72}
+          className="public-site-footer-brand-logo"
+        />
+        <div className="public-site-footer-brand-copy">
+          <strong>{siteContent.brand.name}</strong>
+          <span>{siteContent.brand.role}</span>
+          <p>{siteContent.brand.statement}</p>
+        </div>
+      </div>
       <div className="public-site-footer-links">
         <a href="/sobre">Sobre</a>
         <a href="/contato">Contato</a>

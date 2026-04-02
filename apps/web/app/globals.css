@@ -2775,6 +2775,71 @@ a {
   text-align: left;
 }
 
+.public-site-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.public-site-footer-brand-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+
+.public-site-footer-brand-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.public-site-footer-brand-copy strong {
+  color: var(--text-main);
+  font-size: 1rem;
+}
+
+.public-site-footer-brand-copy span {
+  color: var(--accent-gold);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.public-site-footer-brand-copy p {
+  margin: 0;
+}
+
+.institutional-brand-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.institutional-brand-card-logo {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.2);
+}
+
+.institutional-brand-card-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.institutional-brand-card-copy strong {
+  color: var(--text-main);
+  font-size: 1.15rem;
+}
+
+.institutional-brand-card-copy span {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
 .public-site-footer p {
   margin: 0;
   color: var(--text-muted);
@@ -2793,6 +2858,12 @@ a {
 
 @media (max-width: 640px) {
   .public-site-footer {
+    text-align: center;
+  }
+
+  .public-site-footer-brand,
+  .institutional-brand-card {
+    flex-direction: column;
     text-align: center;
   }
 

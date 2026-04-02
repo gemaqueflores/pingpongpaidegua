@@ -18,10 +18,13 @@ export const viewport: Viewport = {
 export const metadata = {
   metadataBase: new URL(SITE_URL),
   ...buildMetadata({
-    title: `${siteContent.projectName} | T?nis de Mesa`,
+    title: `${siteContent.projectName} | Tênis de Mesa`,
     description: siteContent.shortDescription,
     path: "/",
   }),
+  authors: [{ name: `${siteContent.brand.name} / ${siteContent.responsibleName}` }],
+  creator: siteContent.brand.name,
+  applicationName: siteContent.projectName,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -383,6 +383,10 @@ export default function HomePage() {
             <Badge tone="default">Projeto independente</Badge>
           </div>
           <p className="arena-muted">{siteContent.shortDescription}</p>
+          <p className="arena-muted">
+            Fabricado e assinado por <strong>{siteContent.brand.name}</strong>, empresa autora da
+            plataforma e responsável pela evolução técnica do produto.
+          </p>
           <div className="institutional-grid">
             <article className="athlete-list-card compact-summary-card">
               <h3>Como funciona</h3>

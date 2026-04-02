@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { UserShell } from "../../components/user/UserShell";
 import { PublicFooter } from "../../components/user/PublicFooter";
 import { Card } from "../../components/ui/Card";
@@ -15,20 +16,34 @@ export default function SobrePage() {
   return (
     <UserShell>
       <main className="container grid user-page">
-        <PageHeader
-          title={siteContent.projectName}
-          subtitle={siteContent.heroStatement}
-          compact
-        />
+        <PageHeader title={siteContent.projectName} subtitle={siteContent.heroStatement} compact />
 
         <Card className="grid" variant="event">
           <h2>Proposta</h2>
           <p className="arena-muted">{siteContent.shortDescription}</p>
           <p className="arena-muted">
             O projeto foi criado para oferecer leitura pública, acompanhamento de eventos,
-            consulta de atletas, eficiência de clubes e análise de resultados de tênis de mesa
-            com foco em consistência e transparência.
+            consulta de atletas, eficiência de clubes e análise de resultados de tênis de mesa com
+            foco em consistência e transparência.
           </p>
+        </Card>
+
+        <Card className="grid" variant="event">
+          <h2>Autoria e fabricante</h2>
+          <div className="institutional-brand-card">
+            <Image
+              src={siteContent.brand.logoPath}
+              alt={`${siteContent.brand.name} logo`}
+              width={120}
+              height={120}
+              className="institutional-brand-card-logo"
+            />
+            <div className="institutional-brand-card-copy">
+              <strong>{siteContent.brand.name}</strong>
+              <span>{siteContent.brand.tagline}</span>
+              <p className="arena-muted">{siteContent.brand.statement}</p>
+            </div>
+          </div>
         </Card>
 
         <Card className="grid" variant="event">
