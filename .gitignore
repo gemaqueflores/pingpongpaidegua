@@ -39,3 +39,6 @@ tmp_*.txt
 # Local private keys and secrets
 .local-secrets/
 
+# Runtime artifacts generated on VM/local ops
+.runtime/
+
