@@ -3110,12 +3110,17 @@ export class UserService {
     const recomputedContributionByGroupKey = new Map<string, EfficiencyMedalCounter>();
     const recomputedEventSetByGroupKey = new Map<string, Set<number>>();
     const recomputedPointsByGroupKey = new Map<string, { ouro: number; prata: number; bronze: number; total: number }>();
+    const recomputedDisplayNameByGroupKey = new Map<string, string>();
     for (const row of history) {
       for (const medalist of row.medalists) {
         const groupKey = athleteGroupKeyById.get(medalist.athleteId) ?? `name:${normalizeAthleteName(medalist.athleteName)}`;
         const medals = recomputedContributionByGroupKey.get(groupKey) ?? createEmptyEfficiencyMedalCounter();
         medals[medalist.medalha] += 1;
         recomputedContributionByGroupKey.set(groupKey, medals);
+        const currentDisplayName = recomputedDisplayNameByGroupKey.get(groupKey);
+        if (!currentDisplayName || medalist.athleteName.length > currentDisplayName.length) {
+          recomputedDisplayNameByGroupKey.set(groupKey, medalist.athleteName);
+        }
         const eventSet = recomputedEventSetByGroupKey.get(groupKey) ?? new Set<number>();
         eventSet.add(row.eventId);
         recomputedEventSetByGroupKey.set(groupKey, eventSet);
@@ -3135,7 +3140,10 @@ export class UserService {
         const pontuacao = recomputedPointsByGroupKey.get(groupKey) ?? { ouro: 0, prata: 0, bronze: 0, total: 0 };
         return {
           athleteId: athletePrimaryIdByGroupKey.get(groupKey) ?? 0,
-          athleteName: athleteNameByGroupKey.get(groupKey) ?? groupKey.replace(/^name:/, ""),
+          athleteName:
+            athleteNameByGroupKey.get(groupKey) ??
+            recomputedDisplayNameByGroupKey.get(groupKey) ??
+            groupKey.replace(/^name:/, ""),
           eventos: recomputedEventSetByGroupKey.get(groupKey)?.size ?? 0,
           ouro: medals.ouro,
           prata: medals.prata,

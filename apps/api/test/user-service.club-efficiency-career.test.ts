@@ -282,3 +282,115 @@ test("club efficiency career deduplica a mesma dupla no mesmo evento e prioriza 
   assert.equal(result.history[0]?.bronze, 1);
   assert.equal(result.history[0]?.totalQuantidade, 1);
 });
+
+test("club efficiency career preserva nome canonico da dupla ao recomputar athletesContribution", async () => {
+  const prisma = {
+    club: {
+      async findUnique() {
+        return { id: 1, name: "CLUBE A" };
+      },
+    },
+    athlete: {
+      async findMany() {
+        return [{ id: 999, nameDisplay: "ATLETA BASE", eventId: 45 }];
+      },
+    },
+    event: {
+      async findMany() {
+        return [
+          {
+            id: 45,
+            nome: "2TMB26 - DUPLAS",
+            nivel: "ESTADUAL",
+            concluido: true,
+            inicioRealizacao: new Date("2026-03-28T00:00:00.000Z"),
+            fimRealizacao: new Date("2026-03-29T00:00:00.000Z"),
+            dataInicio: new Date("2026-03-28T00:00:00.000Z"),
+            dataFim: new Date("2026-03-29T00:00:00.000Z"),
+          },
+        ];
+      },
+    },
+    category: {
+      async findMany() {
+        return [
+          {
+            id: 200,
+            eventId: 45,
+            name: "ABSOLUTO B (FEM) - DUPLAS",
+            cbtmCategoryId: "200",
+          },
+        ];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [];
+      },
+    },
+    match: {
+      async findMany() {
+        return [
+          {
+            id: 900,
+            eventId: 45,
+            categoryId: 200,
+            category: { id: 200, name: "ABSOLUTO B (FEM) - DUPLAS" },
+            participants: [
+              {
+                athlete: {
+                  id: 100,
+                  clubId: 1,
+                  nameDisplay: "ANDREZA MOTA - LUDMILLA LIMA",
+                  club: { name: "CLUBE A" },
+                },
+              },
+            ],
+          },
+        ];
+      },
+    },
+  };
+
+  const service = new UserService(prisma as never, prisma as never) as UserService & {
+    buildCategoryAnalyticsMatchFromRaw: () => unknown;
+    computeCategoryPositionByAthleteId: (
+      categoryMatches: unknown[],
+      athletes: Array<{ athleteId: number; athleteName: string }>,
+    ) => Map<number, number | null>;
+  };
+
+  service.buildCategoryAnalyticsMatchFromRaw = () => ({
+    categoryName: "ABSOLUTO B (FEM) - DUPLAS",
+    players: [
+      { athleteId: 100, name: "ANDREZA MOTA - LUDMILLA LIMA" },
+      { athleteId: -101, name: "CARLA - DORA" },
+    ],
+    winnerIndex: 0,
+    scoreRaw: "3-0",
+    scoreFinal: { setsA: 3, setsB: 0 },
+    scoreSets: [
+      { set: 1, a: 11, b: 5 },
+      { set: 2, a: 11, b: 6 },
+      { set: 3, a: 11, b: 7 },
+    ],
+    sets: [
+      { p1: 11, p2: 5 },
+      { p1: 11, p2: 6 },
+      { p1: 11, p2: 7 },
+    ],
+    phase: "RESULTADOS",
+    round: "Única 01",
+    matchDatetime: new Date("2026-03-28T10:00:00.000Z"),
+  });
+
+  service.computeCategoryPositionByAthleteId = (_matches, athletes) =>
+    new Map(athletes.map((athlete) => [athlete.athleteId, athlete.athleteName === "ANDREZA MOTA - LUDMILLA LIMA" ? 1 : 2]));
+
+  const result = await service.getClubEfficiencyCareer(1);
+
+  assert.equal(result.history.length, 1);
+  assert.equal(result.athletesContribution.length, 1);
+  assert.equal(result.athletesContribution[0]?.athleteName, "ANDREZA MOTA - LUDMILLA LIMA");
+  assert.equal(result.athletesContribution[0]?.ouro, 1);
+});
