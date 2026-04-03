@@ -1695,6 +1695,11 @@ export class UserService {
         eventId: { in: scope.allEventIds },
         createdFromWarning: false,
         clubId: { in: [...eligibleClubIds] },
+        categories: {
+          some: {
+            registrationStatus: "INSCRITO",
+          },
+        },
         AND: [
           {
             nameDisplay: {
@@ -1789,9 +1794,14 @@ export class UserService {
               ? {
                   some: {
                     categoryId,
+                    registrationStatus: "INSCRITO",
                   },
                 }
-              : { some: {} },
+              : {
+                  some: {
+                    registrationStatus: "INSCRITO",
+                  },
+                },
           },
         },
       },
@@ -1823,9 +1833,14 @@ export class UserService {
           ? {
               some: {
                 categoryId,
+                registrationStatus: "INSCRITO",
               },
             }
-          : { some: {} },
+          : {
+              some: {
+                registrationStatus: "INSCRITO",
+              },
+            },
       },
       select: {
         clubId: true,
@@ -3595,9 +3610,14 @@ export class UserService {
               ? {
                   some: {
                     categoryId,
+                    registrationStatus: "INSCRITO",
                   },
                 }
-              : { some: {} },
+              : {
+                  some: {
+                    registrationStatus: "INSCRITO",
+                  },
+                },
           },
         },
       },
@@ -3621,9 +3641,14 @@ export class UserService {
           ? {
               some: {
                 categoryId,
+                registrationStatus: "INSCRITO",
               },
             }
-          : { some: {} },
+          : {
+              some: {
+                registrationStatus: "INSCRITO",
+              },
+            },
       },
       select: {
         id: true,
