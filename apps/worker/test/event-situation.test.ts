@@ -112,14 +112,14 @@ test("buildEventScrapePolicy segue ciclo de vida para blocos de captura", () => 
   assert.equal(preEvent.captureGrupos, true);
   assert.equal(preEvent.captureResultados, true);
   assert.equal(preEvent.fetchEliminatoria, false);
-  assert.equal(preEvent.recommendedIntervalMs, 2 * 60 * 60 * 1000);
+  assert.equal(preEvent.recommendedIntervalMs, 30 * 60 * 1000);
 
   const inProgress = buildEventScrapePolicy(input, { now: dt("2026-03-21T12:00:00.000Z") });
   assert.equal(inProgress.captureInscricoes, false);
   assert.equal(inProgress.captureGrupos, false);
   assert.equal(inProgress.captureResultados, true);
   assert.equal(inProgress.fetchEliminatoria, false);
-  assert.equal(inProgress.recommendedIntervalMs, 30 * 60 * 1000);
+  assert.equal(inProgress.recommendedIntervalMs, 15 * 60 * 1000);
 
   const publishedGrids = buildEventScrapePolicy(
     {
@@ -133,7 +133,7 @@ test("buildEventScrapePolicy segue ciclo de vida para blocos de captura", () => 
   assert.equal(publishedGrids.captureGrupos, true);
   assert.equal(publishedGrids.captureResultados, true);
   assert.equal(publishedGrids.fetchEliminatoria, false);
-  assert.equal(publishedGrids.recommendedIntervalMs, 45 * 60 * 1000);
+  assert.equal(publishedGrids.recommendedIntervalMs, 20 * 60 * 1000);
 });
 
 test("buildEventScrapePolicy aplica janela de inscricoes encerradas e definicao de confrontos", () => {
@@ -149,7 +149,7 @@ test("buildEventScrapePolicy aplica janela de inscricoes encerradas e definicao 
   assert.equal(closedRegistrations.captureGrupos, false);
   assert.equal(closedRegistrations.captureResultados, false);
   assert.equal(closedRegistrations.fetchEliminatoria, false);
-  assert.equal(closedRegistrations.recommendedIntervalMs, 6 * 60 * 60 * 1000);
+  assert.equal(closedRegistrations.recommendedIntervalMs, 60 * 60 * 1000);
   assert.equal(closedRegistrations.reason, "inscricoes-encerradas-sanitizacao");
 
   const matchDefinition = buildEventScrapePolicy(input, { now: dt("2026-03-18T12:00:00.000Z") });
@@ -167,7 +167,7 @@ test("buildEventScrapePolicy aplica janela de inscricoes encerradas e definicao 
   assert.equal(groupFormation.reason, "formacao-de-grupos");
 });
 
-test("buildEventScrapePolicy usa janela pre-evento 16h-07h com intervalo de 90 minutos", () => {
+test("buildEventScrapePolicy usa janela pre-evento 16h-07h com intervalo de 20 minutos", () => {
   const input = {
     inicioInscricoes: dt("2026-03-01T00:00:00.000Z"),
     fimInscricoes: dt("2026-03-10T23:59:59.000Z"),
@@ -180,11 +180,11 @@ test("buildEventScrapePolicy usa janela pre-evento 16h-07h com intervalo de 90 m
   assert.equal(inWindow.captureGrupos, true);
   assert.equal(inWindow.captureResultados, true);
   assert.equal(inWindow.fetchEliminatoria, false);
-  assert.equal(inWindow.recommendedIntervalMs, 90 * 60 * 1000);
-  assert.equal(inWindow.reason, "pre-evento-confrontos-90min");
+  assert.equal(inWindow.recommendedIntervalMs, 20 * 60 * 1000);
+  assert.equal(inWindow.reason, "pre-evento-confrontos-20min");
 
   const outOfWindow = buildEventScrapePolicy(input, { now: dt("2026-03-20T11:00:00.000Z") });
-  assert.notEqual(outOfWindow.reason, "pre-evento-confrontos-90min");
+  assert.notEqual(outOfWindow.reason, "pre-evento-confrontos-20min");
 });
 
 test("shouldRunEventAutoScrape aplica intervalo recomendado", () => {

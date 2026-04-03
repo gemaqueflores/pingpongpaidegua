@@ -64,9 +64,9 @@ export const DEFAULT_EVENT_SCRAPE_INTERVAL_MS: Readonly<Record<
 >> = {
   PRE_INSCRICOES: 5 * 60 * 60 * 1000,
   INSCRICOES_ABERTAS: 6 * 60 * 60 * 1000,
-  POS_INSCRICOES_PRE_EVENTO: 3 * 60 * 60 * 1000,
-  GRADES_PUBLICADAS_PRE_JOGO: 45 * 60 * 1000,
-  EM_ANDAMENTO: 30 * 60 * 1000,
+  POS_INSCRICOES_PRE_EVENTO: 60 * 60 * 1000,
+  GRADES_PUBLICADAS_PRE_JOGO: 20 * 60 * 1000,
+  EM_ANDAMENTO: 15 * 60 * 1000,
 };
 
 export const DEFAULT_EVENT_CACHE_TIMING: Readonly<Required<EventCacheTimingOptions>> = {
@@ -359,8 +359,8 @@ export function buildEventScrapePolicy(
           captureGrupos: true,
           captureResultados: true,
           fetchEliminatoria: false,
-          recommendedIntervalMs: 90 * 60 * 1000,
-          reason: "pre-evento-confrontos-90min",
+          recommendedIntervalMs: 20 * 60 * 1000,
+          reason: "pre-evento-confrontos-20min",
         };
       }
       if (!timeline.fimInscricoes) {
@@ -384,7 +384,7 @@ export function buildEventScrapePolicy(
             captureGrupos: false,
             captureResultados: false,
             fetchEliminatoria: false,
-            recommendedIntervalMs: 6 * 60 * 60 * 1000,
+            recommendedIntervalMs: 60 * 60 * 1000,
             reason: "inscricoes-encerradas-sanitizacao",
           };
         case "FORMACAO_GRUPOS":
@@ -394,7 +394,7 @@ export function buildEventScrapePolicy(
             captureGrupos: true,
             captureResultados: true,
             fetchEliminatoria: false,
-            recommendedIntervalMs: 2 * 60 * 60 * 1000,
+            recommendedIntervalMs: 30 * 60 * 1000,
             reason: "formacao-de-grupos",
           };
         case "DEFINICAO_CONFRONTOS":
@@ -418,8 +418,8 @@ export function buildEventScrapePolicy(
           captureGrupos: true,
           captureResultados: true,
           fetchEliminatoria: false,
-          recommendedIntervalMs: 90 * 60 * 1000,
-          reason: "pre-evento-confrontos-90min",
+          recommendedIntervalMs: 20 * 60 * 1000,
+          reason: "pre-evento-confrontos-20min",
         };
       }
       return {
@@ -429,7 +429,7 @@ export function buildEventScrapePolicy(
         captureResultados: true,
         fetchEliminatoria: false,
         recommendedIntervalMs:
-          intervalBySituationMs.GRADES_PUBLICADAS_PRE_JOGO ?? 45 * 60 * 1000,
+          intervalBySituationMs.GRADES_PUBLICADAS_PRE_JOGO ?? 20 * 60 * 1000,
         reason: "grades-publicadas-pre-jogo",
       };
     case "EM_ANDAMENTO":
@@ -439,7 +439,7 @@ export function buildEventScrapePolicy(
         captureGrupos: false,
         captureResultados: true,
         fetchEliminatoria: false,
-        recommendedIntervalMs: intervalBySituationMs.EM_ANDAMENTO ?? 30 * 60 * 1000,
+        recommendedIntervalMs: intervalBySituationMs.EM_ANDAMENTO ?? 15 * 60 * 1000,
         reason: "em-andamento",
       };
     case "POS_EVENTO":

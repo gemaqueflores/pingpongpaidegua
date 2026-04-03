@@ -72,8 +72,8 @@ describe("event cache policy", () => {
       { now: dt("2026-03-20T12:00:00.000Z") },
     );
 
-    expect(policy.recommendedIntervalMs).toBe(30 * 60 * 1000);
-    expect(computeEventRecoveryStaleThresholdMs(policy)).toBe(60 * 60 * 1000);
+    expect(policy.recommendedIntervalMs).toBe(15 * 60 * 1000);
+    expect(computeEventRecoveryStaleThresholdMs(policy)).toBe(30 * 60 * 1000);
   });
 
   it("resolve stale lock a partir do env com fallback unico", () => {
