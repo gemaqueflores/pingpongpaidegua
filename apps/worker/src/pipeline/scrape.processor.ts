@@ -655,7 +655,29 @@ export class ScrapeProcessor {
         );
       }
 
-      const upsertResult = await this.upsertService.upsert(eventId, dataset, { processRegistrations });
+      const observedRegistrationCategoryIds = new Set(
+        capture.categoriesDiscovered
+          .filter((category) => category.valid)
+          .map((category) => compactWhitespace(category.categoryId))
+          .filter(Boolean),
+      );
+      const observedRegistrationCategoryNames = new Set(
+        capture.categoriesDiscovered
+          .filter((category) => category.valid)
+          .map((category) => normalizeText(category.categoryName))
+          .filter(Boolean),
+      );
+
+      const upsertResult = await this.upsertService.upsert(eventId, dataset, {
+        processRegistrations,
+        authoritativeRegistrationAbsence:
+          processRegistrations &&
+          scrapePolicy.captureInscricoes &&
+          !preUpsertGuardrailReason &&
+          observedRegistrationCategoryIds.size > 0,
+        observedRegistrationCategoryIds,
+        observedRegistrationCategoryNames,
+      });
       const combinedWarnings = [...upsertResult.warnings, ...capture.warnings];
       const prePostWarnings = this.buildPersistedWarnings(combinedWarnings);
       const postScrape = await this.withDbRetry(

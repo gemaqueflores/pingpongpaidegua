@@ -281,6 +281,9 @@ test("syncMutableRegistrationCategories bloqueia remocoes ate confirmar 2 runs c
           registrationStatus: "INSCRITO" | "PRE_INSCRITO" | "OUTRO" | null;
         }
       >;
+      authoritativeRegistrationAbsence: boolean;
+      observedRegistrationCategoryIds: Set<string>;
+      observedRegistrationCategoryNames: Set<string>;
       updated: Record<string, number>;
       warnings: string[];
     }): Promise<{
@@ -418,6 +421,9 @@ test("syncMutableRegistrationCategories bloqueia remocoes ate confirmar 2 runs c
     const stats = await service.syncMutableRegistrationCategories({
       eventId: 43,
       observedRegistrationPairs,
+      authoritativeRegistrationAbsence: false,
+      observedRegistrationCategoryIds: new Set(),
+      observedRegistrationCategoryNames: new Set(),
       updated,
       warnings,
     });
@@ -447,6 +453,9 @@ test("syncMutableRegistrationCategories remove vinculos obsoletos apos confirmac
           registrationStatus: "INSCRITO" | "PRE_INSCRITO" | "OUTRO" | null;
         }
       >;
+      authoritativeRegistrationAbsence: boolean;
+      observedRegistrationCategoryIds: Set<string>;
+      observedRegistrationCategoryNames: Set<string>;
       updated: Record<string, number>;
       warnings: string[];
     }): Promise<{
@@ -597,6 +606,9 @@ test("syncMutableRegistrationCategories remove vinculos obsoletos apos confirmac
     const stats = await service.syncMutableRegistrationCategories({
       eventId: 43,
       observedRegistrationPairs,
+      authoritativeRegistrationAbsence: false,
+      observedRegistrationCategoryIds: new Set(),
+      observedRegistrationCategoryNames: new Set(),
       updated,
       warnings,
     });
@@ -627,6 +639,9 @@ test("syncMutableRegistrationCategories remove categoria ausente apos 2 runs con
           registrationStatus: "INSCRITO" | "PRE_INSCRITO" | "OUTRO" | null;
         }
       >;
+      authoritativeRegistrationAbsence: boolean;
+      observedRegistrationCategoryIds: Set<string>;
+      observedRegistrationCategoryNames: Set<string>;
       updated: Record<string, number>;
       warnings: string[];
     }): Promise<{
@@ -689,6 +704,9 @@ test("syncMutableRegistrationCategories remove categoria ausente apos 2 runs con
     const stats = await service.syncMutableRegistrationCategories({
       eventId: 49,
       observedRegistrationPairs: new Map(),
+      authoritativeRegistrationAbsence: false,
+      observedRegistrationCategoryIds: new Set(),
+      observedRegistrationCategoryNames: new Set(),
       updated,
       warnings,
     });
@@ -722,6 +740,9 @@ test("syncMutableRegistrationCategories remove categoria ausente no mesmo run qu
           registrationStatus: "INSCRITO" | "PRE_INSCRITO" | "OUTRO" | null;
         }
       >;
+      authoritativeRegistrationAbsence: boolean;
+      observedRegistrationCategoryIds: Set<string>;
+      observedRegistrationCategoryNames: Set<string>;
       updated: Record<string, number>;
       warnings: string[];
     }): Promise<{
@@ -790,6 +811,9 @@ test("syncMutableRegistrationCategories remove categoria ausente no mesmo run qu
           },
         ],
       ]),
+      authoritativeRegistrationAbsence: false,
+      observedRegistrationCategoryIds: new Set(),
+      observedRegistrationCategoryNames: new Set(),
       updated,
       warnings,
     });
@@ -822,6 +846,9 @@ test("syncMutableRegistrationCategories trata cancelamento de categoria ausente 
           registrationStatus: "INSCRITO" | "PRE_INSCRITO" | "OUTRO" | null;
         }
       >;
+      authoritativeRegistrationAbsence: boolean;
+      observedRegistrationCategoryIds: Set<string>;
+      observedRegistrationCategoryNames: Set<string>;
       updated: Record<string, number>;
       warnings: string[];
     }): Promise<{
@@ -884,6 +911,9 @@ test("syncMutableRegistrationCategories trata cancelamento de categoria ausente 
     const stats = await service.syncMutableRegistrationCategories({
       eventId: 51,
       observedRegistrationPairs: new Map(),
+      authoritativeRegistrationAbsence: false,
+      observedRegistrationCategoryIds: new Set(),
+      observedRegistrationCategoryNames: new Set(),
       updated,
       warnings,
     });
@@ -895,6 +925,291 @@ test("syncMutableRegistrationCategories trata cancelamento de categoria ausente 
     assert.equal(updated.athlete_categories_removed_from_snapshot, 2);
     assert.deepEqual(stats.categoriesConfirmedForRemoval, ["VETERANO 70#901"]);
     assert.match(warnings[0] ?? "", /confirmou cancelamento da categoria/i);
+  } finally {
+    prisma.athleteCategory.findMany = originalAthleteCategoryFindMany;
+    prisma.athleteCategory.deleteMany = originalAthleteCategoryDeleteMany;
+    prisma.scrapeRun.findMany = originalScrapeRunFindMany;
+  }
+});
+
+test("syncMutableRegistrationCategories remove imediatamente categoria e atletas ausentes das fontes oficiais", async () => {
+  const service = new UpsertService() as unknown as {
+    syncMutableRegistrationCategories(input: {
+      eventId: number;
+      observedRegistrationPairs: Map<
+        string,
+        {
+          athleteId: number;
+          categoryId: number;
+          categoryName: string;
+          registrationStatus: "INSCRITO" | "PRE_INSCRITO" | "OUTRO" | null;
+        }
+      >;
+      authoritativeRegistrationAbsence: boolean;
+      observedRegistrationCategoryIds: Set<string>;
+      observedRegistrationCategoryNames: Set<string>;
+      updated: Record<string, number>;
+      warnings: string[];
+    }): Promise<{
+      categoryHashes: Record<string, string>;
+      categoryCoverage: Record<string, number>;
+      categoryGapTotals: Record<string, number>;
+      categoriesConfirmedForRemoval: string[];
+      categoriesBlockedByConfirmation: string[];
+      categoriesBlockedByCoverage: string[];
+    }>;
+  };
+
+  const originalAthleteCategoryFindMany = prisma.athleteCategory.findMany;
+  const originalAthleteCategoryDeleteMany = prisma.athleteCategory.deleteMany;
+  const originalScrapeRunFindMany = prisma.scrapeRun.findMany;
+
+  const deletedPairs: Array<{ athleteId: number; categoryIds: number[] }> = [];
+  prisma.athleteCategory.findMany = (async () => [
+    {
+      athleteId: 51,
+      categoryId: 1001,
+      registrationStatus: "INSCRITO",
+      athlete: { id: 51, nameDisplay: "ATLETA S" },
+      category: { id: 1001, name: "SUB-19 FEM", cbtmCategoryId: "100" },
+    },
+    {
+      athleteId: 52,
+      categoryId: 1001,
+      registrationStatus: "INSCRITO",
+      athlete: { id: 52, nameDisplay: "ATLETA T" },
+      category: { id: 1001, name: "SUB-19 FEM", cbtmCategoryId: "100" },
+    },
+  ]) as typeof prisma.athleteCategory.findMany;
+  prisma.athleteCategory.deleteMany = (async (args) => {
+    deletedPairs.push({
+      athleteId: args.where.athleteId,
+      categoryIds: args.where.categoryId.in,
+    });
+    return { count: args.where.categoryId.in.length };
+  }) as typeof prisma.athleteCategory.deleteMany;
+  prisma.scrapeRun.findMany = (async () => []) as typeof prisma.scrapeRun.findMany;
+
+  try {
+    const updated: Record<string, number> = {};
+    const warnings: string[] = [];
+
+    const stats = await service.syncMutableRegistrationCategories({
+      eventId: 52,
+      observedRegistrationPairs: new Map([
+        [
+          "99|1002",
+          {
+            athleteId: 99,
+            categoryId: 1002,
+            categoryName: "SUB-21 FEM",
+            registrationStatus: "INSCRITO" as const,
+          },
+        ],
+      ]),
+      authoritativeRegistrationAbsence: true,
+      observedRegistrationCategoryIds: new Set(["200"]),
+      observedRegistrationCategoryNames: new Set(["sub 21 fem"]),
+      updated,
+      warnings,
+    });
+
+    assert.deepEqual(deletedPairs, [
+      { athleteId: 51, categoryIds: [1001] },
+      { athleteId: 52, categoryIds: [1001] },
+    ]);
+    assert.equal(updated.athlete_categories_removed_from_snapshot, 2);
+    assert.deepEqual(stats.categoriesConfirmedForRemoval, ["SUB-19 FEM#1001"]);
+    assert.ok(warnings.some((warning) => /ausencia oficial da categoria/i.test(warning)));
+  } finally {
+    prisma.athleteCategory.findMany = originalAthleteCategoryFindMany;
+    prisma.athleteCategory.deleteMany = originalAthleteCategoryDeleteMany;
+    prisma.scrapeRun.findMany = originalScrapeRunFindMany;
+  }
+});
+
+test("syncMutableRegistrationCategories remove imediatamente atleta ausente de categoria ainda publicada nas fontes oficiais", async () => {
+  const service = new UpsertService() as unknown as {
+    syncMutableRegistrationCategories(input: {
+      eventId: number;
+      observedRegistrationPairs: Map<
+        string,
+        {
+          athleteId: number;
+          categoryId: number;
+          categoryName: string;
+          registrationStatus: "INSCRITO" | "PRE_INSCRITO" | "OUTRO" | null;
+        }
+      >;
+      authoritativeRegistrationAbsence: boolean;
+      observedRegistrationCategoryIds: Set<string>;
+      observedRegistrationCategoryNames: Set<string>;
+      updated: Record<string, number>;
+      warnings: string[];
+    }): Promise<{
+      categoryHashes: Record<string, string>;
+      categoryCoverage: Record<string, number>;
+      categoryGapTotals: Record<string, number>;
+      categoriesConfirmedForRemoval: string[];
+      categoriesBlockedByConfirmation: string[];
+      categoriesBlockedByCoverage: string[];
+    }>;
+  };
+
+  const originalAthleteCategoryFindMany = prisma.athleteCategory.findMany;
+  const originalAthleteCategoryDeleteMany = prisma.athleteCategory.deleteMany;
+  const originalScrapeRunFindMany = prisma.scrapeRun.findMany;
+
+  const deletedPairs: Array<{ athleteId: number; categoryIds: number[] }> = [];
+  prisma.athleteCategory.findMany = (async () => [
+    {
+      athleteId: 61,
+      categoryId: 1101,
+      registrationStatus: "INSCRITO",
+      athlete: { id: 61, nameDisplay: "ATLETA U" },
+      category: { id: 1101, name: "ADULTO FEM", cbtmCategoryId: "110" },
+    },
+    {
+      athleteId: 62,
+      categoryId: 1101,
+      registrationStatus: "INSCRITO",
+      athlete: { id: 62, nameDisplay: "ATLETA V" },
+      category: { id: 1101, name: "ADULTO FEM", cbtmCategoryId: "110" },
+    },
+    {
+      athleteId: 63,
+      categoryId: 1101,
+      registrationStatus: "INSCRITO",
+      athlete: { id: 63, nameDisplay: "ATLETA W" },
+      category: { id: 1101, name: "ADULTO FEM", cbtmCategoryId: "110" },
+    },
+    {
+      athleteId: 64,
+      categoryId: 1101,
+      registrationStatus: "INSCRITO",
+      athlete: { id: 64, nameDisplay: "ATLETA X" },
+      category: { id: 1101, name: "ADULTO FEM", cbtmCategoryId: "110" },
+    },
+    {
+      athleteId: 65,
+      categoryId: 1101,
+      registrationStatus: "INSCRITO",
+      athlete: { id: 65, nameDisplay: "ATLETA Y" },
+      category: { id: 1101, name: "ADULTO FEM", cbtmCategoryId: "110" },
+    },
+    {
+      athleteId: 66,
+      categoryId: 1101,
+      registrationStatus: "INSCRITO",
+      athlete: { id: 66, nameDisplay: "ATLETA Z" },
+      category: { id: 1101, name: "ADULTO FEM", cbtmCategoryId: "110" },
+    },
+    {
+      athleteId: 67,
+      categoryId: 1101,
+      registrationStatus: "INSCRITO",
+      athlete: { id: 67, nameDisplay: "ATLETA AA" },
+      category: { id: 1101, name: "ADULTO FEM", cbtmCategoryId: "110" },
+    },
+    {
+      athleteId: 68,
+      categoryId: 1101,
+      registrationStatus: "INSCRITO",
+      athlete: { id: 68, nameDisplay: "ATLETA AB" },
+      category: { id: 1101, name: "ADULTO FEM", cbtmCategoryId: "110" },
+    },
+  ]) as typeof prisma.athleteCategory.findMany;
+  prisma.athleteCategory.deleteMany = (async (args) => {
+    deletedPairs.push({
+      athleteId: args.where.athleteId,
+      categoryIds: args.where.categoryId.in,
+    });
+    return { count: args.where.categoryId.in.length };
+  }) as typeof prisma.athleteCategory.deleteMany;
+  prisma.scrapeRun.findMany = (async () => []) as typeof prisma.scrapeRun.findMany;
+
+  try {
+    const updated: Record<string, number> = {};
+    const warnings: string[] = [];
+
+    const stats = await service.syncMutableRegistrationCategories({
+      eventId: 53,
+      observedRegistrationPairs: new Map([
+        [
+          "61|1101",
+          {
+            athleteId: 61,
+            categoryId: 1101,
+            categoryName: "ADULTO FEM",
+            registrationStatus: "INSCRITO" as const,
+          },
+        ],
+        [
+          "63|1101",
+          {
+            athleteId: 63,
+            categoryId: 1101,
+            categoryName: "ADULTO FEM",
+            registrationStatus: "INSCRITO" as const,
+          },
+        ],
+        [
+          "64|1101",
+          {
+            athleteId: 64,
+            categoryId: 1101,
+            categoryName: "ADULTO FEM",
+            registrationStatus: "INSCRITO" as const,
+          },
+        ],
+        [
+          "65|1101",
+          {
+            athleteId: 65,
+            categoryId: 1101,
+            categoryName: "ADULTO FEM",
+            registrationStatus: "INSCRITO" as const,
+          },
+        ],
+        [
+          "66|1101",
+          {
+            athleteId: 66,
+            categoryId: 1101,
+            categoryName: "ADULTO FEM",
+            registrationStatus: "INSCRITO" as const,
+          },
+        ],
+        [
+          "67|1101",
+          {
+            athleteId: 67,
+            categoryId: 1101,
+            categoryName: "ADULTO FEM",
+            registrationStatus: "INSCRITO" as const,
+          },
+        ],
+        [
+          "68|1101",
+          {
+            athleteId: 68,
+            categoryId: 1101,
+            categoryName: "ADULTO FEM",
+            registrationStatus: "INSCRITO" as const,
+          },
+        ],
+      ]),
+      authoritativeRegistrationAbsence: true,
+      observedRegistrationCategoryIds: new Set(["110"]),
+      observedRegistrationCategoryNames: new Set(["adulto fem"]),
+      updated,
+      warnings,
+    });
+
+    assert.deepEqual(deletedPairs, [{ athleteId: 62, categoryIds: [1101] }]);
+    assert.equal(updated.athlete_categories_removed_from_snapshot, 1);
+    assert.deepEqual(stats.categoriesConfirmedForRemoval, ["ADULTO FEM#1101"]);
+    assert.ok(warnings.some((warning) => /ausencia oficial de 1 inscricao/i.test(warning)));
   } finally {
     prisma.athleteCategory.findMany = originalAthleteCategoryFindMany;
     prisma.athleteCategory.deleteMany = originalAthleteCategoryDeleteMany;

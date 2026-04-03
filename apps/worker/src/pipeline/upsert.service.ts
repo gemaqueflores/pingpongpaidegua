@@ -40,6 +40,9 @@ interface UpsertResult {
 
 interface UpsertOptions {
   processRegistrations?: boolean;
+  authoritativeRegistrationAbsence?: boolean;
+  observedRegistrationCategoryIds?: Set<string>;
+  observedRegistrationCategoryNames?: Set<string>;
 }
 
 interface CachedClub {
@@ -1003,6 +1006,9 @@ export class UpsertService {
 
   async upsert(eventId: number, dataset: ParsedDataset, options?: UpsertOptions): Promise<UpsertResult> {
     const processRegistrations = options?.processRegistrations ?? true;
+    const authoritativeRegistrationAbsence = options?.authoritativeRegistrationAbsence ?? false;
+    const observedRegistrationCategoryIds = options?.observedRegistrationCategoryIds ?? new Set<string>();
+    const observedRegistrationCategoryNames = options?.observedRegistrationCategoryNames ?? new Set<string>();
     const inserted: Record<string, number> = {};
     const updated: Record<string, number> = {};
     const warnings: string[] = [...dataset.warnings];
@@ -1236,6 +1242,9 @@ export class UpsertService {
       registrationSyncStats = await this.syncMutableRegistrationCategories({
         eventId,
         observedRegistrationPairs,
+        authoritativeRegistrationAbsence,
+        observedRegistrationCategoryIds,
+        observedRegistrationCategoryNames,
         updated,
         warnings,
       });
@@ -2143,6 +2152,9 @@ export class UpsertService {
   private async syncMutableRegistrationCategories(input: {
     eventId: number;
     observedRegistrationPairs: Map<string, ObservedRegistrationPair>;
+    authoritativeRegistrationAbsence: boolean;
+    observedRegistrationCategoryIds: Set<string>;
+    observedRegistrationCategoryNames: Set<string>;
     updated: Record<string, number>;
     warnings: string[];
   }): Promise<RegistrationSyncExtractionStats> {
@@ -2225,6 +2237,8 @@ export class UpsertService {
         registrationStatus: RegistrationStatus | null;
         athleteName: string;
         categoryName: string;
+        categoryNormalizedName: string;
+        cbtmCategoryId: string | null;
       }>
     >();
     for (const row of existing) {
@@ -2239,6 +2253,8 @@ export class UpsertService {
         registrationStatus: row.registrationStatus,
         athleteName: row.athlete.nameDisplay,
         categoryName: row.category.name,
+        categoryNormalizedName: normalizeText(row.category.name),
+        cbtmCategoryId: row.category.cbtmCategoryId,
       });
       currentPairsByCategory.set(row.categoryId, bucket);
     }
@@ -2266,6 +2282,26 @@ export class UpsertService {
         extractionStats.categoryHashes[categoryKey] = emptyCategoryHash;
         extractionStats.categoryGapTotals[categoryKey] = currentPairs.length;
         extractionStats.categoryCoverage[categoryKey] = 0;
+        const currentCategoryId = compactWhitespace(currentPairs[0]?.cbtmCategoryId ?? "");
+        const currentCategoryNormalizedName = normalizeText(currentPairs[0]?.categoryNormalizedName ?? categoryName);
+        const authoritativeMissingCategory =
+          input.authoritativeRegistrationAbsence &&
+          ((currentCategoryId && !input.observedRegistrationCategoryIds.has(currentCategoryId)) ||
+            (!currentCategoryId &&
+              currentCategoryNormalizedName &&
+              !input.observedRegistrationCategoryNames.has(currentCategoryNormalizedName)));
+
+        if (authoritativeMissingCategory) {
+          extractionStats.categoriesConfirmedForRemoval.push(label);
+          categoryRemovalsAllowed.set(categoryId, {
+            categoryName,
+            removableKeys: new Set(currentPairs.map((pair) => `${pair.athleteId}|${pair.categoryId}`)),
+          });
+          input.warnings.push(
+            `Sincronizacao de inscricoes confirmou ausencia oficial da categoria '${categoryName}' no evento ${input.eventId}; categoria e vinculos antigos serao removidos.`,
+          );
+          continue;
+        }
 
         const mergeDetection = detectRegistrationCategoryMerge({
           missingCategoryId: categoryId,
@@ -2350,6 +2386,18 @@ export class UpsertService {
           `Sincronizacao de inscricoes bloqueou remocoes em '${observed.categoryName}' no evento ${input.eventId} por baixa cobertura (coverage=${Math.round(
             coverage * 100,
           )}%, observados=${observed.observedPairKeys.size}, atuais=${currentPairs.length}, remocoes=${removablePairs.length}).`,
+        );
+        continue;
+      }
+
+      if (input.authoritativeRegistrationAbsence) {
+        extractionStats.categoriesConfirmedForRemoval.push(label);
+        categoryRemovalsAllowed.set(categoryId, {
+          categoryName: observed.categoryName,
+          removableKeys: new Set(removablePairs.map((pair) => `${pair.athleteId}|${pair.categoryId}`)),
+        });
+        input.warnings.push(
+          `Sincronizacao de inscricoes confirmou ausencia oficial de ${removablePairs.length} inscricao(oes) em '${observed.categoryName}' no evento ${input.eventId}; vinculos antigos serao removidos.`,
         );
         continue;
       }
