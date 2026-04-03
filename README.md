@@ -257,6 +257,7 @@ Scripts relacionados:
 - `scripts/vm/ppg-vm-health.sh`
 - `scripts/vm/ppg-event-watch.sh`
 - `scripts/vm/ppg-send-alert.sh`
+- `scripts/vm/alerts.env.example`
 - `scripts/vm/ppg-housekeeping.sh`
 - `scripts/vm/install-vm-ops.sh`
 - `scripts/vm/install-ssh-hardening.sh`
