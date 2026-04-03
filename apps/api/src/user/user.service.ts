@@ -4388,7 +4388,18 @@ export class UserService {
     const events = (
       await Promise.all(
         [...eventBuckets.values()].map(async (bucket) => {
-          const categoryIdsForClassification = [...bucket.categories.keys()];
+          const bucketMatches =
+            pairCareer && bucket.matches.some((match) => Boolean(match.category.cbtmCategoryId))
+              ? bucket.matches.filter((match) => Boolean(match.category.cbtmCategoryId))
+              : bucket.matches;
+          const bucketCategories = new Map<number, { id: number; name: string }>();
+          for (const match of bucketMatches) {
+            bucketCategories.set(match.category.id, {
+              id: match.category.id,
+              name: match.category.name,
+            });
+          }
+          const categoryIdsForClassification = [...bucketCategories.keys()];
           const fullCategoryMatchesRaw =
             categoryIdsForClassification.length > 0
               ? await this.prisma.match.findMany({
@@ -4416,7 +4427,7 @@ export class UserService {
             .map((match) => this.buildCategoryAnalyticsMatchFromRaw(match))
             .filter((item): item is CategoryAnalyticsMatch => Boolean(item));
 
-          const categoryMatches = bucket.matches.map((match) => this.toCategoryAnalyticsMatch(match));
+          const categoryMatches = bucketMatches.map((match) => this.toCategoryAnalyticsMatch(match));
           const perf = computeCategoryPerformanceSummaries(categoryMatches, {
             athleteIds,
             athleteName: canonicalName,
@@ -4433,12 +4444,12 @@ export class UserService {
 
           return {
             ...bucket.event,
-            categories: [...bucket.categories.values()].sort((a, b) =>
+            categories: [...bucketCategories.values()].sort((a, b) =>
               a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
             ),
-            matches: bucket.matches,
+            matches: bucketMatches,
             performance: calculateAthletePointPerformance(
-              bucket.matches.map((match) => this.toMatchPerformanceInput(match)),
+              bucketMatches.map((match) => this.toMatchPerformanceInput(match)),
               {
                 athleteIds,
                 athleteName: canonicalName,
