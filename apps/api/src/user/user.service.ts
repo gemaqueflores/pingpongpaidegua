@@ -113,6 +113,7 @@ type AthleteSummaryMatch = {
     name: string;
   } | null;
   athleteKey: string | null;
+  isProjectedParticipant?: boolean;
   opponent: {
     id: number;
     name: string;
@@ -3905,15 +3906,17 @@ export class UserService {
       const deduplicated = this.deduplicateMatches(matchSummaries);
       this.sortMatches(deduplicated.matches, normalizedOrderBy);
 
+      const analyticalMatches = deduplicated.matches.filter((match) => !match.isProjectedParticipant);
+
       const performance = calculateAthletePointPerformance(
-        deduplicated.matches.map((match) => this.toMatchPerformanceInput(match)),
+        analyticalMatches.map((match) => this.toMatchPerformanceInput(match)),
         {
           athleteId: rawAthleteId,
           athleteName: athlete.nameDisplay,
           athleteNameNormalized: athlete.nameNormalized,
         },
       );
-      const categoryMatches = deduplicated.matches.map((match) => this.toCategoryAnalyticsMatch(match));
+      const categoryMatches = analyticalMatches.map((match) => this.toCategoryAnalyticsMatch(match));
       const performanceByCategoryRaw = computeCategoryPerformanceSummaries(categoryMatches, {
         athleteId: rawAthleteId,
         athleteName: athlete.nameDisplay,
@@ -4488,8 +4491,9 @@ export class UserService {
     const participants = match.participants.map((participant) => participant.athlete);
     const ordered = this.resolveOrderedPlayers(match.scorePlayers, participants);
 
-    let athleteIndex: 0 | 1 | null =
+    const directAthleteIndex: 0 | 1 | null =
       ordered.players[0]?.id === athleteId ? 0 : ordered.players[1]?.id === athleteId ? 1 : null;
+    let athleteIndex: 0 | 1 | null = directAthleteIndex;
 
     if (athleteIndex === null && athleteNameKeys && athleteNameKeys.size > 0) {
       athleteIndex = this.resolveProjectedAthleteIndexFromPair(ordered.players, athleteNameKeys);
@@ -4563,6 +4567,7 @@ export class UserService {
             }
           : null,
       athleteKey: athletePlayer ? normalizeAthleteName(athletePlayer.name) : null,
+      isProjectedParticipant: directAthleteIndex === null && athleteIndex !== null,
       opponent:
         opponentPlayer && opponentPlayer.id
           ? {
