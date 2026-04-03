@@ -268,9 +268,48 @@ Monitoramento funcional de evento:
 - pode disparar `post-scrape-reprocess` com cooldown quando encontrar inconsistencias de publicacao
 
 Alertas operacionais:
-- `ppg-vm-health`, `ppg-event-watch` e `ppg-recover` suportam webhook opcional
-- habilitacao via `PPG_ALERT_WEBHOOK_URL`
+- `ppg-vm-health`, `ppg-event-watch` e `ppg-recover` suportam alertas por `Discord`, `Telegram` e `WhatsApp`
 - cooldown configuravel via `PPG_ALERT_COOLDOWN_SECONDS`
+- roteamento por tipo do alerta:
+  - `PPG_ALERT_ROUTES_DEFAULT`
+  - `PPG_ALERT_ROUTES_WARN`
+  - `PPG_ALERT_ROUTES_FAIL`
+  - `PPG_ALERT_ROUTES_{ALERT_KEY}`
+- cada rota aceita uma lista separada por virgula no formato:
+  - `discord`
+  - `telegram`
+  - `whatsapp`
+  - ou com perfil:
+    - `discord:ops`
+    - `telegram:diretoria`
+    - `whatsapp:critico`
+- exemplos:
+  - `PPG_ALERT_ROUTES_WARN=discord:ops,telegram:ops`
+  - `PPG_ALERT_ROUTES_FAIL=discord:ops,telegram:ops,whatsapp:critico`
+  - `PPG_ALERT_ROUTES_RECOVER_FAILED=discord:ops,telegram:ops,whatsapp:critico`
+
+Credenciais por canal:
+- Discord:
+  - padrao: `PPG_DISCORD_WEBHOOK_URL`
+  - por perfil: `PPG_DISCORD_WEBHOOK_URL_OPS`
+- Telegram:
+  - padrao: `PPG_TELEGRAM_BOT_TOKEN`, `PPG_TELEGRAM_CHAT_ID`
+  - por perfil: `PPG_TELEGRAM_BOT_TOKEN_OPS`, `PPG_TELEGRAM_CHAT_ID_OPS`
+- WhatsApp Cloud API:
+  - padrao:
+    - `PPG_WHATSAPP_TOKEN`
+    - `PPG_WHATSAPP_PHONE_NUMBER_ID`
+    - `PPG_WHATSAPP_TO`
+    - `PPG_WHATSAPP_MESSAGE_TYPE`
+    - `PPG_WHATSAPP_TEMPLATE_NAME`
+    - `PPG_WHATSAPP_TEMPLATE_LANG`
+  - por perfil:
+    - `PPG_WHATSAPP_TOKEN_CRITICO`
+    - `PPG_WHATSAPP_PHONE_NUMBER_ID_CRITICO`
+    - `PPG_WHATSAPP_TO_CRITICO`
+    - `PPG_WHATSAPP_MESSAGE_TYPE_CRITICO`
+    - `PPG_WHATSAPP_TEMPLATE_NAME_CRITICO`
+    - `PPG_WHATSAPP_TEMPLATE_LANG_CRITICO`
 
 ## Fluxo de Trabalho Recomendado
 1. Auditar a implementacao atual.
