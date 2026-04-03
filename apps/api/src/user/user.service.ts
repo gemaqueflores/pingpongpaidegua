@@ -3757,7 +3757,7 @@ export class UserService {
       "athlete-summary",
       scope.canonicalEventId,
       routeAthleteId,
-      `${normalizedOrderBy}:v2`,
+      `${normalizedOrderBy}:v3`,
     );
     return this.resolveEventReadModelCache({
       event,
