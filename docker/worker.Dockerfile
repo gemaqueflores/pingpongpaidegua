@@ -14,6 +14,7 @@ COPY apps/worker ./apps/worker
 COPY packages/shared ./packages/shared
 COPY packages/parser ./packages/parser
 COPY fixtures ./fixtures
+COPY scripts ./scripts
 
 RUN npm run prisma:generate
 RUN npm run build --workspace @cbtm/shared
