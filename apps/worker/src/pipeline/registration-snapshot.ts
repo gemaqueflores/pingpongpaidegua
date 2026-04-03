@@ -48,6 +48,50 @@ export interface RegistrationCategoryPair {
   registrationStatus: "INSCRITO" | "PRE_INSCRITO" | "OUTRO" | null;
 }
 
+export function detectRegistrationCategoryMerge(input: {
+  missingCategoryId: number;
+  currentPairs: RegistrationCategoryPair[];
+  observedPairs: Iterable<RegistrationCategoryPair>;
+}): {
+  merged: boolean;
+  migratedAthleteCount: number;
+  totalAthleteCount: number;
+  targetCategoryIds: number[];
+} {
+  const totalAthleteCount = input.currentPairs.length;
+  if (totalAthleteCount === 0) {
+    return {
+      merged: false,
+      migratedAthleteCount: 0,
+      totalAthleteCount: 0,
+      targetCategoryIds: [],
+    };
+  }
+
+  const sourceAthleteIds = new Set(input.currentPairs.map((pair) => pair.athleteId));
+  const migratedAthletes = new Set<number>();
+  const targetCategoryIds = new Set<number>();
+
+  for (const pair of input.observedPairs) {
+    if (!sourceAthleteIds.has(pair.athleteId)) {
+      continue;
+    }
+    if (pair.categoryId === input.missingCategoryId) {
+      continue;
+    }
+
+    migratedAthletes.add(pair.athleteId);
+    targetCategoryIds.add(pair.categoryId);
+  }
+
+  return {
+    merged: migratedAthletes.size === totalAthleteCount,
+    migratedAthleteCount: migratedAthletes.size,
+    totalAthleteCount,
+    targetCategoryIds: [...targetCategoryIds].sort((a, b) => a - b),
+  };
+}
+
 export function computeEventRegistrationPairRemovals(input: {
   currentPairs: RegistrationCategoryPair[];
   observedPairKeys: Set<string>;

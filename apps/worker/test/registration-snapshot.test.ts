@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   computeEventRegistrationPairRemovals,
   computeRegistrationCategoryRemovals,
+  detectRegistrationCategoryMerge,
   shouldAllowDestructiveRegistrationSync,
   shouldSyncRegistrationSnapshot,
 } from "../src/pipeline/registration-snapshot";
@@ -87,6 +88,42 @@ test("computeEventRegistrationPairRemovals preserva pares protegidos e remove pa
     { athleteId: 1, categoryId: 10, registrationStatus: "INSCRITO" },
     { athleteId: 2, categoryId: 20, registrationStatus: null },
   ]);
+});
+
+test("detectRegistrationCategoryMerge confirma merge quando todos os atletas reaparecem em outras categorias", () => {
+  const result = detectRegistrationCategoryMerge({
+    missingCategoryId: 10,
+    currentPairs: [
+      { athleteId: 1, categoryId: 10, registrationStatus: "INSCRITO" },
+      { athleteId: 2, categoryId: 10, registrationStatus: "INSCRITO" },
+    ],
+    observedPairs: [
+      { athleteId: 1, categoryId: 20, registrationStatus: "INSCRITO" },
+      { athleteId: 2, categoryId: 20, registrationStatus: "INSCRITO" },
+      { athleteId: 3, categoryId: 20, registrationStatus: "INSCRITO" },
+    ],
+  });
+
+  assert.equal(result.merged, true);
+  assert.equal(result.migratedAthleteCount, 2);
+  assert.equal(result.totalAthleteCount, 2);
+  assert.deepEqual(result.targetCategoryIds, [20]);
+});
+
+test("detectRegistrationCategoryMerge nao confirma merge quando parte dos atletas nao reaparece", () => {
+  const result = detectRegistrationCategoryMerge({
+    missingCategoryId: 10,
+    currentPairs: [
+      { athleteId: 1, categoryId: 10, registrationStatus: "INSCRITO" },
+      { athleteId: 2, categoryId: 10, registrationStatus: "INSCRITO" },
+    ],
+    observedPairs: [{ athleteId: 1, categoryId: 20, registrationStatus: "INSCRITO" }],
+  });
+
+  assert.equal(result.merged, false);
+  assert.equal(result.migratedAthleteCount, 1);
+  assert.equal(result.totalAthleteCount, 2);
+  assert.deepEqual(result.targetCategoryIds, [20]);
 });
 
 test("shouldAllowDestructiveRegistrationSync bloqueia sincronizacao destrutiva com baixa cobertura", () => {

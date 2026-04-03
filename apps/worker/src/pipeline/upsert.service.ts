@@ -22,6 +22,7 @@ import { mergeMatchesAcrossSources } from "./match-merge";
 import { applyParenseEligibilityScopeToDataset, DatasetScopeStats } from "./parense-scope";
 import {
   computeEventRegistrationPairRemovals,
+  detectRegistrationCategoryMerge,
   shouldAllowDestructiveRegistrationSync,
   shouldSyncRegistrationSnapshot,
 } from "./registration-snapshot";
@@ -2264,6 +2265,27 @@ export class UpsertService {
         extractionStats.categoryHashes[categoryKey] = emptyCategoryHash;
         extractionStats.categoryGapTotals[categoryKey] = currentPairs.length;
         extractionStats.categoryCoverage[categoryKey] = 0;
+
+        const mergeDetection = detectRegistrationCategoryMerge({
+          missingCategoryId: categoryId,
+          currentPairs: currentPairs.map((pair) => ({
+            athleteId: pair.athleteId,
+            categoryId: pair.categoryId,
+            registrationStatus: pair.registrationStatus,
+          })),
+          observedPairs: input.observedRegistrationPairs.values(),
+        });
+        if (mergeDetection.merged) {
+          extractionStats.categoriesConfirmedForRemoval.push(label);
+          categoryRemovalsAllowed.set(categoryId, {
+            categoryName,
+            removableKeys: new Set(currentPairs.map((pair) => `${pair.athleteId}|${pair.categoryId}`)),
+          });
+          input.warnings.push(
+            `Sincronizacao de inscricoes confirmou merge de categoria ausente '${categoryName}' no evento ${input.eventId} (atletas migrados=${mergeDetection.migratedAthleteCount}/${mergeDetection.totalAthleteCount}, destinos=${mergeDetection.targetCategoryIds.join(",") || "desconhecido"}).`,
+          );
+          continue;
+        }
 
         const previous = previousCategoryHashes.get(categoryKey);
         if (!previous || previous.hash !== emptyCategoryHash || previous.coverage !== 0) {
