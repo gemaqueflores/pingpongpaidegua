@@ -85,7 +85,10 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
 
 function parseArgs(argv: string[]): Args {
   const args: Args = {
-    apiBase: process.env.EVENT_WATCH_API_BASE_URL ?? "http://localhost:4000",
+    apiBase:
+      process.env.EVENT_WATCH_API_BASE_URL ??
+      process.env.READ_MODEL_PREWARM_API_BASE_URL ??
+      "http://api:4000",
     maxEvents: parsePositiveNumber(process.env.EVENT_WATCH_MAX_EVENTS, 6),
     postEventHours: parsePositiveNumber(process.env.EVENT_WATCH_POST_EVENT_HOURS, 18),
     autoPostReprocess: parseBoolean(process.env.EVENT_WATCH_AUTO_POST_REPROCESS, true),
