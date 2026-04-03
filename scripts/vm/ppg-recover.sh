@@ -12,6 +12,8 @@ ALERT_HELPER="/usr/local/bin/ppg-send-alert.sh"
 RECOVERY_COOLDOWN_SECONDS="${RECOVERY_COOLDOWN_SECONDS:-600}"
 RECOVERY_FAILURE_WINDOW_SECONDS="${RECOVERY_FAILURE_WINDOW_SECONDS:-3600}"
 RECOVERY_MAX_FAILURES="${RECOVERY_MAX_FAILURES:-6}"
+RECOVERY_RESTART_WORKER_ON_STALE_LOCKS="${RECOVERY_RESTART_WORKER_ON_STALE_LOCKS:-true}"
+RECOVERY_STALE_LOCK_RESTART_MS="${RECOVERY_STALE_LOCK_RESTART_MS:-900000}"
 
 if [[ ! -d "$APP_DIR" ]]; then
   exit 0
@@ -50,6 +52,7 @@ fi
 services=(postgres redis api worker)
 reasons=()
 needs_recover=0
+restart_worker=0
 for svc in "${services[@]}"; do
   id="$("${COMPOSE_CMD[@]}" ps "$svc" --status running --quiet 2>/dev/null || true)"
   if [[ -z "$id" ]]; then
@@ -64,6 +67,19 @@ for svc in "${services[@]}"; do
     reasons+=("${svc}:unhealthy")
   fi
 done
+
+if [[ "$RECOVERY_RESTART_WORKER_ON_STALE_LOCKS" == "true" ]]; then
+  stale_lock_count="$(
+    "${COMPOSE_CMD[@]}" exec -T postgres psql -U postgres -d cbtm -At -c \
+      "SELECT count(*) FROM events WHERE scrape_locked_at IS NOT NULL AND scrape_locked_at < NOW() - (${RECOVERY_STALE_LOCK_RESTART_MS} || ' milliseconds')::interval;" 2>/dev/null \
+      | tr -d '[:space:]' || echo "0"
+  )"
+  if [[ "$stale_lock_count" =~ ^[0-9]+$ ]] && (( stale_lock_count > 0 )); then
+    needs_recover=1
+    restart_worker=1
+    reasons+=("worker:stale-scrape-locks=${stale_lock_count}")
+  fi
+fi
 
 if [[ "$needs_recover" -eq 1 ]]; then
   now_epoch="$(date +%s)"
@@ -106,6 +122,10 @@ if [[ "$needs_recover" -eq 1 ]]; then
   fi
 
   echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) recovery_attempt reasons=${reasons[*]}"
+  if [[ "$restart_worker" -eq 1 ]]; then
+    "${COMPOSE_CMD[@]}" restart worker >/dev/null 2>&1 || true
+    sleep 5
+  fi
   "${COMPOSE_CMD[@]}" up -d --no-recreate postgres redis api worker >/dev/null 2>&1 || true
   sleep 8
 

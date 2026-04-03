@@ -250,6 +250,7 @@ Medidas operacionais importantes ja adotadas:
 - limite conservador de conexoes Prisma/Postgres
 - prewarm calibrado para a VM A1
 - self-heal com baixo impacto
+- reinicio automatico do `worker` quando houver `scrape_locked_at` stale persistente
 - workflow de scrape alinhado ao intervalo operacional de evento (`30 min`)
 - hardening basico de SSH com `fail2ban` e `ufw`
 
