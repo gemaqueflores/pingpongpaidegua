@@ -17,6 +17,7 @@
     "audit:event": "tsx scripts/audit-event-integrity.ts",
     "quality:gate": "tsx scripts/production-quality-gate.ts",
     "ops:autonomy-check": "tsx scripts/autonomy-sanity-check.ts",
+    "ops:event-watch": "tsx scripts/live-event-watch.ts",
     "drift:check": "tsx scripts/drift-check.ts",
     "validate:update:local": "tsx scripts/validate-update.ts --target=local",
     "validate:update:prod": "tsx scripts/validate-update.ts --target=prod",

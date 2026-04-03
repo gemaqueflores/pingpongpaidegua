@@ -1,4 +1,4 @@
-name: Scrape Events Every 2h
+name: Scrape Events Every 30m
 
 permissions:
   contents: read
@@ -9,7 +9,7 @@ concurrency:
 
 on:
   schedule:
-    - cron: "0 */2 * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
     inputs:
       event_ids:

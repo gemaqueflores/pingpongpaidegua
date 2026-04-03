@@ -245,14 +245,23 @@ A producao atual usa uma VM Oracle Cloud Always Free com Docker Compose.
 Medidas operacionais importantes ja adotadas:
 - housekeeping leve de Docker
 - health check periodico da VM
+- watchdog funcional de eventos criticos
 - limite conservador de conexoes Prisma/Postgres
-- prewarm menos agressivo de read models
+- prewarm calibrado para a VM A1
 - self-heal com baixo impacto
+- workflow de scrape alinhado ao intervalo operacional de evento (`30 min`)
 
 Scripts relacionados:
 - `scripts/vm/ppg-vm-health.sh`
+- `scripts/vm/ppg-event-watch.sh`
 - `scripts/vm/ppg-housekeeping.sh`
 - `scripts/vm/install-vm-ops.sh`
+
+Monitoramento funcional de evento:
+- roda na VM a cada `10 min`
+- observa eventos em `GRADES_PUBLICADAS_PRE_JOGO`, `EM_ANDAMENTO` e `POS_EVENTO` recente
+- audita inconsistencias entre resumo do evento e quadro de medalhistas
+- pode disparar `post-scrape-reprocess` com cooldown quando encontrar inconsistencias de publicacao
 
 ## Fluxo de Trabalho Recomendado
 1. Auditar a implementacao atual.
