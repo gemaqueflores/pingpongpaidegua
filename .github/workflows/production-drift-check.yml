@@ -1,5 +1,12 @@
 name: Production Drift Check
 
+permissions:
+  contents: read
+
+concurrency:
+  group: production-drift-check
+  cancel-in-progress: false
+
 on:
   schedule:
     - cron: "15 * * * *"
@@ -22,6 +29,7 @@ jobs:
           ORACLE_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
           ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
           ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
+          ORACLE_SSH_PORT: ${{ secrets.ORACLE_SSH_PORT }}
         run: |
           set -euo pipefail
           missing=()
@@ -42,7 +50,8 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$ORACLE_SSH_PRIVATE_KEY" > ~/.ssh/oracle_vm_key
           chmod 600 ~/.ssh/oracle_vm_key
-          if ! ssh -i ~/.ssh/oracle_vm_key -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$ORACLE_SSH_USER@$ORACLE_SSH_HOST" "echo ok" >/dev/null 2>&1; then
+          SSH_PORT="${ORACLE_SSH_PORT:-22}"
+          if ! ssh -i ~/.ssh/oracle_vm_key -p "$SSH_PORT" -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$ORACLE_SSH_USER@$ORACLE_SSH_HOST" "echo ok" >/dev/null 2>&1; then
             if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
               echo "Falha de conectividade SSH com a VM."
               exit 1
@@ -67,7 +76,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.precheck.outputs.can_run == 'true'
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Configurar chave SSH da VM
         if: steps.precheck.outputs.can_run == 'true'
@@ -87,6 +96,7 @@ jobs:
           DEFAULT_DRIFT_EVENT_ID: ${{ vars.DRIFT_EVENT_ID }}
           ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
           ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
+          ORACLE_SSH_PORT: ${{ secrets.ORACLE_SSH_PORT }}
           PROD_API_URL: ${{ secrets.PROD_API_URL }}
           VERCEL_BASE_URL: ${{ vars.VERCEL_BASE_URL }}
         run: |
@@ -95,6 +105,7 @@ jobs:
           if [ -z "$EVENT_ID" ]; then
             EVENT_ID="${DEFAULT_DRIFT_EVENT_ID:-43}"
           fi
+          SSH_PORT="${ORACLE_SSH_PORT:-22}"
           VM_TARGET="${ORACLE_SSH_USER}@${ORACLE_SSH_HOST}"
           PROD_BASE="${PROD_API_URL:-https://api-pingpongpaidegua.duckdns.org}"
           VERCEL_BASE="${VERCEL_BASE_URL:-https://pingpongpaidegua.vercel.app}"
@@ -111,6 +122,7 @@ jobs:
               --skipLocalWeb \
               --skipVmWeb \
               --vmSshTarget "$VM_TARGET" \
+              --vmSshPort "$SSH_PORT" \
               --vmSshKey "$HOME/.ssh/oracle_vm_key" \
               --vmSshNoHostKeyCheck
             rc=$?

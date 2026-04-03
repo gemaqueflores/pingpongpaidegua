@@ -8,6 +8,7 @@ type Args = {
   localWebBase: string;
   vmWebUrl: string;
   vmSshTarget: string | null;
+  vmSshPort: number;
   vmSshKey: string | null;
   vmRepoPath: string;
   skipVmWeb: boolean;
@@ -55,6 +56,7 @@ function parseArgs(argv: string[]): Args {
     localWebBase: "http://localhost:3000",
     vmWebUrl: "http://localhost:3000",
     vmSshTarget: null,
+    vmSshPort: 22,
     vmSshKey: null,
     vmRepoPath: "~/pingpongpaidegua",
     skipVmWeb: false,
@@ -100,6 +102,11 @@ function parseArgs(argv: string[]): Args {
     }
     if (token === "--vmSshTarget" && next) {
       args.vmSshTarget = next;
+      index += 1;
+      continue;
+    }
+    if (token === "--vmSshPort" && next) {
+      args.vmSshPort = Number(next);
       index += 1;
       continue;
     }
@@ -224,15 +231,13 @@ function parseVmGitStatus(raw: string): { head: string; changedFiles: string[] }
   return { head, changedFiles };
 }
 
-function runSsh(
-  target: string,
-  keyPath: string | null,
-  remoteCommand: string,
-  opts?: { noHostKeyCheck?: boolean },
-): string {
+function runSsh(target: string, keyPath: string | null, remoteCommand: string, opts?: { noHostKeyCheck?: boolean; port?: number }): string {
   const args: string[] = [];
   if (keyPath) {
     args.push("-i", keyPath);
+  }
+  if (opts?.port && Number.isFinite(opts.port) && opts.port > 0) {
+    args.push("-p", String(opts.port));
   }
   if (opts?.noHostKeyCheck) {
     args.push("-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null");
@@ -265,7 +270,7 @@ async function main(): Promise<void> {
       args.vmSshTarget,
       args.vmSshKey,
       `cd ${args.vmRepoPath} && git status --short && echo HEAD=$(git rev-parse HEAD)`,
-      { noHostKeyCheck: args.vmSshNoHostKeyCheck },
+      { noHostKeyCheck: args.vmSshNoHostKeyCheck, port: args.vmSshPort },
     );
     vmGit = parseVmGitStatus(vmStatusRaw);
     if (vmGit.head && vmGit.head !== originHead) {
@@ -303,7 +308,7 @@ async function main(): Promise<void> {
         args.vmSshTarget,
         args.vmSshKey,
         `curl -s ${args.vmWebUrl.replace(/\/$/, "")}/events/${args.eventId}`,
-        { noHostKeyCheck: args.vmSshNoHostKeyCheck },
+        { noHostKeyCheck: args.vmSshNoHostKeyCheck, port: args.vmSshPort },
       );
       vmFingerprint = parsePageFingerprint(vmHtml);
       if (

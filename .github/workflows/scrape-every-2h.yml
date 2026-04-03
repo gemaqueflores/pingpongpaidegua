@@ -1,5 +1,12 @@
 name: Scrape Events Every 2h
 
+permissions:
+  contents: read
+
+concurrency:
+  group: scrape-on-vm
+  cancel-in-progress: false
+
 on:
   schedule:
     - cron: "0 */2 * * *"
@@ -23,6 +30,7 @@ jobs:
           ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
           ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
           ORACLE_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
+          ORACLE_SSH_PORT: ${{ secrets.ORACLE_SSH_PORT }}
         run: |
           set -euo pipefail
           missing=()
@@ -44,7 +52,8 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$ORACLE_SSH_PRIVATE_KEY" > ~/.ssh/oracle_vm_key
           chmod 600 ~/.ssh/oracle_vm_key
-          if ! ssh -i ~/.ssh/oracle_vm_key -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$ORACLE_SSH_USER@$ORACLE_SSH_HOST" "echo ok" >/dev/null 2>&1; then
+          SSH_PORT="${ORACLE_SSH_PORT:-22}"
+          if ! ssh -i ~/.ssh/oracle_vm_key -p "$SSH_PORT" -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$ORACLE_SSH_USER@$ORACLE_SSH_HOST" "echo ok" >/dev/null 2>&1; then
             if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
               echo "Falha de conectividade SSH com a VM."
               exit 1
@@ -148,7 +157,7 @@ jobs:
               exit "$RUN_ONCE_EXIT"
             fi
 
-      - name: Diagnostico rapido de saude (VM)
+      - name: Pos-scrape e sanity check (VM)
         if: always() && steps.precheck.outputs.can_run == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -176,34 +185,6 @@ jobs:
             fi
             $COMPOSE_BIN ps || true
             curl -fsS http://localhost:4000/ || true
-
-      - name: Sanity check de autonomia (VM)
-        if: always() && steps.precheck.outputs.can_run == 'true'
-        continue-on-error: ${{ github.event_name == 'schedule' }}
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.ORACLE_SSH_HOST }}
-          username: ${{ secrets.ORACLE_SSH_USER }}
-          key: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
-          port: ${{ secrets.ORACLE_SSH_PORT || 22 }}
-          command_timeout: 10m
-          script_stop: false
-          script: |
-            set +e
-            APP_DIR="${{ secrets.ORACLE_APP_DIR }}"
-            if [ -z "$APP_DIR" ]; then
-              APP_DIR="$HOME/pingpongpaidegua"
-            fi
-            export COMPOSE_PROJECT_NAME="pingpongpaidegua"
-            cd "$APP_DIR"
-            if command -v docker-compose >/dev/null 2>&1; then
-              COMPOSE_BIN="docker-compose -p $COMPOSE_PROJECT_NAME"
-            elif docker compose version >/dev/null 2>&1; then
-              COMPOSE_BIN="docker compose -p $COMPOSE_PROJECT_NAME"
-            else
-              echo "Compose indisponivel para sanity check."
-              exit 0
-            fi
             $COMPOSE_BIN exec -T worker sh -lc "cd /workspace && npm run ops:autonomy-check -- --json"
             rc=$?
             if [ "$rc" -ne 0 ] && [ "${{ github.event_name }}" = "schedule" ]; then
