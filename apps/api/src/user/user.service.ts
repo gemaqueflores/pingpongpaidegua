@@ -194,6 +194,8 @@ type EfficiencyHistoryMedalist = {
   unitKey?: string | null;
 };
 
+type EfficiencyEventMedalist = EfficiencyHistoryMedalist;
+
 type EfficiencyEventLevel = "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN" | null;
 
 type EventCategoryMedalist = {
@@ -2335,6 +2337,7 @@ export class UserService {
           id: true,
           name: true,
           eventId: true,
+          cbtmCategoryId: true,
         },
       }),
     ]);
@@ -2349,9 +2352,20 @@ export class UserService {
       ).map((event) => [event.id, event]),
     );
     const categoryById = new Map(categories.map((category) => [category.id, category]));
+    const officialCategoryNamesByEvent = new Map<number, Set<string>>();
+    for (const category of categories) {
+      const cbtmCategoryId = String((category as { cbtmCategoryId?: string | null }).cbtmCategoryId ?? "").trim();
+      if (!cbtmCategoryId) {
+        continue;
+      }
+      const bucket = officialCategoryNamesByEvent.get(category.eventId) ?? new Set<string>();
+      bucket.add(category.name);
+      officialCategoryNamesByEvent.set(category.eventId, bucket);
+    }
 
     const rowsByClubId = new Map<number, ClubEfficiencyRow>();
     const athleteClubByAthleteId = new Map<number, number>();
+    const medalistsByClubEvent = new Map<number, Map<number, EfficiencyEventMedalist[]>>();
 
     for (const club of clubs) {
       rowsByClubId.set(club.id, {
@@ -2470,11 +2484,16 @@ export class UserService {
 
     for (const categoryId of categoryIds) {
       const category = categoryById.get(categoryId);
+      if (!category) {
+        continue;
+      }
       const categoryEvent = category ? eventsById.get(category.eventId) ?? null : null;
-      const eventWeight = this.resolveEfficiencyEventWeight(categoryEvent?.nivel ?? null, categoryEvent?.nome ?? null);
       const athletesInCategory = [...(categoryAthletesMap.get(categoryId)?.values() ?? [])];
       const fallbackAthletePool = [...scopedAthletesPool.values()];
       const fullCategoryMatches = fullCategoryMatchesMap.get(categoryId) ?? [];
+      if (fullCategoryMatches.length === 0 && athletesInCategory.length === 0) {
+        continue;
+      }
       const competitiveEntries = buildCompetitiveEntriesForCategory({
         categoryId,
         categoryName: categories.find((category) => category.id === categoryId)?.name ?? null,
@@ -2551,9 +2570,37 @@ export class UserService {
         if (!row) {
           continue;
         }
+        const clubEvents = medalistsByClubEvent.get(clubId) ?? new Map<number, EfficiencyEventMedalist[]>();
+        const eventMedalists = clubEvents.get(category.eventId) ?? [];
+        eventMedalists.push({
+          athleteId: athlete.athleteId,
+          athleteName: athlete.athleteName,
+          categoryName: category.name,
+          medalha: medal,
+          unitKey: medalist.unitKey,
+        });
+        clubEvents.set(category.eventId, eventMedalists);
+        medalistsByClubEvent.set(clubId, clubEvents);
+      }
+    }
 
-        row[medal] += 1;
-        row.pontuacao[medal] += this.getEfficiencyMedalWeight(medal, weights) * eventWeight;
+    for (const [clubId, row] of rowsByClubId.entries()) {
+      const eventsForClub = medalistsByClubEvent.get(clubId);
+      if (!eventsForClub) {
+        continue;
+      }
+      for (const [eventId, medalists] of eventsForClub.entries()) {
+        const event = eventsById.get(eventId);
+        const eventWeight = this.resolveEfficiencyEventWeight(event?.nivel ?? null, event?.nome ?? null);
+        const dedupedMedalists = this.dedupeEfficiencyMedalistsByEvent(
+          event?.nome ?? "",
+          officialCategoryNamesByEvent.get(eventId) ?? new Set<string>(),
+          medalists,
+        );
+        for (const medalist of dedupedMedalists) {
+          row[medalist.medalha] += 1;
+          row.pontuacao[medalist.medalha] += this.getEfficiencyMedalWeight(medalist.medalha, weights) * eventWeight;
+        }
       }
     }
 
@@ -3015,25 +3062,11 @@ export class UserService {
 
     const history = [...historyByEvent.values()]
       .map((row) => {
-        const officialCategoryNames = officialCategoryNamesByEvent.get(row.eventId) ?? new Set<string>();
-        const medalistsByKey = new Map<string, EfficiencyHistoryMedalist>();
-        for (const medalist of row.medalists) {
-          const dedupKey =
-            isDoublesEventName(row.eventName) || isDoublesCategoryName(medalist.categoryName)
-              ? `pair:${normalizeAthleteName(normalizeCompositePairName(medalist.athleteName))}:${medalist.medalha}`
-              : `athlete:${medalist.athleteId}:${normalizeText(medalist.categoryName)}:${medalist.medalha}`;
-          const existing = medalistsByKey.get(dedupKey);
-          if (!existing) {
-            medalistsByKey.set(dedupKey, medalist);
-            continue;
-          }
-          const existingOfficial = officialCategoryNames.has(existing.categoryName);
-          const currentOfficial = officialCategoryNames.has(medalist.categoryName);
-          if (currentOfficial && !existingOfficial) {
-            medalistsByKey.set(dedupKey, medalist);
-          }
-        }
-        const dedupedMedalists = [...medalistsByKey.values()];
+        const dedupedMedalists = this.dedupeEfficiencyMedalistsByEvent(
+          row.eventName,
+          officialCategoryNamesByEvent.get(row.eventId) ?? new Set<string>(),
+          row.medalists,
+        );
         const medals = createEmptyEfficiencyMedalCounter();
         for (const medalist of dedupedMedalists) {
           medals[medalist.medalha] += 1;
@@ -5787,6 +5820,31 @@ export class UserService {
     if (normalized.includes("ouro")) return CBTM_RULES_CONFIG.ratingEventWeights.COPA_BRASIL_OURO;
     if (normalized.includes("prata")) return CBTM_RULES_CONFIG.ratingEventWeights.COPA_BRASIL_PRATA;
     return CBTM_RULES_CONFIG.ratingEventWeights.COPA_BRASIL_PRATA;
+  }
+
+  private dedupeEfficiencyMedalistsByEvent<T extends EfficiencyEventMedalist>(
+    eventName: string,
+    officialCategoryNames: Set<string>,
+    medalists: T[],
+  ): T[] {
+    const medalistsByKey = new Map<string, T>();
+    for (const medalist of medalists) {
+      const dedupKey =
+        isDoublesEventName(eventName) || isDoublesCategoryName(medalist.categoryName)
+          ? `pair:${normalizeAthleteName(normalizeCompositePairName(medalist.athleteName))}:${medalist.medalha}`
+          : `athlete:${medalist.athleteId}:${normalizeText(medalist.categoryName)}:${medalist.medalha}`;
+      const existing = medalistsByKey.get(dedupKey);
+      if (!existing) {
+        medalistsByKey.set(dedupKey, medalist);
+        continue;
+      }
+      const existingOfficial = officialCategoryNames.has(existing.categoryName);
+      const currentOfficial = officialCategoryNames.has(medalist.categoryName);
+      if (currentOfficial && !existingOfficial) {
+        medalistsByKey.set(dedupKey, medalist);
+      }
+    }
+    return [...medalistsByKey.values()];
   }
 
   private buildEventAthleteKey(nameNormalized: string, clubNormalizedName: string | null): string {
