@@ -22,6 +22,7 @@ import { mergeMatchesAcrossSources } from "./match-merge";
 import { applyParenseEligibilityScopeToDataset, DatasetScopeStats } from "./parense-scope";
 import {
   computeEventRegistrationPairRemovals,
+  detectRegistrationCategoryCancellation,
   detectRegistrationCategoryMerge,
   shouldAllowDestructiveRegistrationSync,
   shouldSyncRegistrationSnapshot,
@@ -2287,13 +2288,27 @@ export class UpsertService {
           continue;
         }
 
+        const cancellationDetection = detectRegistrationCategoryCancellation({
+          missingCategoryId: categoryId,
+          currentPairs: currentPairs.map((pair) => ({
+            athleteId: pair.athleteId,
+            categoryId: pair.categoryId,
+            registrationStatus: pair.registrationStatus,
+          })),
+          observedPairs: input.observedRegistrationPairs.values(),
+          maxEntrants: config.registrationCancelledCategoryMaxEntrants,
+        });
+        const cancellationCandidate = cancellationDetection.cancelled;
+
         const previous = previousCategoryHashes.get(categoryKey);
         if (!previous || previous.hash !== emptyCategoryHash || previous.coverage !== 0) {
           extractionStats.categoriesBlockedByConfirmation.push(label);
           input.updated.registration_sync_skipped_confirmation =
             (input.updated.registration_sync_skipped_confirmation ?? 0) + currentPairs.length;
           input.warnings.push(
-            `Sincronizacao de inscricoes aguardando 2 runs consecutivos para categoria ausente '${categoryName}' no evento ${input.eventId} (remocoes pendentes=${currentPairs.length}).`,
+            cancellationCandidate
+              ? `Sincronizacao de inscricoes aguardando 2 runs consecutivos para confirmar cancelamento da categoria '${categoryName}' no evento ${input.eventId} (inscritos=${cancellationDetection.totalAthleteCount}, remocoes pendentes=${currentPairs.length}).`
+              : `Sincronizacao de inscricoes aguardando 2 runs consecutivos para categoria ausente '${categoryName}' no evento ${input.eventId} (remocoes pendentes=${currentPairs.length}).`,
           );
           continue;
         }
@@ -2303,6 +2318,11 @@ export class UpsertService {
           categoryName,
           removableKeys: new Set(currentPairs.map((pair) => `${pair.athleteId}|${pair.categoryId}`)),
         });
+        if (cancellationCandidate) {
+          input.warnings.push(
+            `Sincronizacao de inscricoes confirmou cancelamento da categoria '${categoryName}' no evento ${input.eventId} por insuficiencia de inscritos (inscritos=${cancellationDetection.totalAthleteCount}).`,
+          );
+        }
         continue;
       }
 

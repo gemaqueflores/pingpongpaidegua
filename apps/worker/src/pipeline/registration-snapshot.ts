@@ -92,6 +92,45 @@ export function detectRegistrationCategoryMerge(input: {
   };
 }
 
+export function detectRegistrationCategoryCancellation(input: {
+  missingCategoryId: number;
+  currentPairs: RegistrationCategoryPair[];
+  observedPairs: Iterable<RegistrationCategoryPair>;
+  maxEntrants: number;
+}): {
+  cancelled: boolean;
+  stillVisibleAthleteCount: number;
+  totalAthleteCount: number;
+} {
+  const totalAthleteCount = input.currentPairs.length;
+  if (totalAthleteCount === 0 || input.maxEntrants <= 0 || totalAthleteCount > input.maxEntrants) {
+    return {
+      cancelled: false,
+      stillVisibleAthleteCount: 0,
+      totalAthleteCount,
+    };
+  }
+
+  const sourceAthleteIds = new Set(input.currentPairs.map((pair) => pair.athleteId));
+  const stillVisibleAthletes = new Set<number>();
+
+  for (const pair of input.observedPairs) {
+    if (!sourceAthleteIds.has(pair.athleteId)) {
+      continue;
+    }
+    if (pair.categoryId === input.missingCategoryId) {
+      continue;
+    }
+    stillVisibleAthletes.add(pair.athleteId);
+  }
+
+  return {
+    cancelled: stillVisibleAthletes.size === 0,
+    stillVisibleAthleteCount: stillVisibleAthletes.size,
+    totalAthleteCount,
+  };
+}
+
 export function computeEventRegistrationPairRemovals(input: {
   currentPairs: RegistrationCategoryPair[];
   observedPairKeys: Set<string>;

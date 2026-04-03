@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   computeEventRegistrationPairRemovals,
   computeRegistrationCategoryRemovals,
+  detectRegistrationCategoryCancellation,
   detectRegistrationCategoryMerge,
   shouldAllowDestructiveRegistrationSync,
   shouldSyncRegistrationSnapshot,
@@ -124,6 +125,38 @@ test("detectRegistrationCategoryMerge nao confirma merge quando parte dos atleta
   assert.equal(result.migratedAthleteCount, 1);
   assert.equal(result.totalAthleteCount, 2);
   assert.deepEqual(result.targetCategoryIds, [20]);
+});
+
+test("detectRegistrationCategoryCancellation confirma cancelamento quando categoria ausente tem ate 2 inscritos sem migracao", () => {
+  const result = detectRegistrationCategoryCancellation({
+    missingCategoryId: 10,
+    currentPairs: [
+      { athleteId: 1, categoryId: 10, registrationStatus: "INSCRITO" },
+      { athleteId: 2, categoryId: 10, registrationStatus: "INSCRITO" },
+    ],
+    observedPairs: [{ athleteId: 99, categoryId: 20, registrationStatus: "INSCRITO" }],
+    maxEntrants: 2,
+  });
+
+  assert.equal(result.cancelled, true);
+  assert.equal(result.stillVisibleAthleteCount, 0);
+  assert.equal(result.totalAthleteCount, 2);
+});
+
+test("detectRegistrationCategoryCancellation nao confirma cancelamento quando categoria excede threshold", () => {
+  const result = detectRegistrationCategoryCancellation({
+    missingCategoryId: 10,
+    currentPairs: [
+      { athleteId: 1, categoryId: 10, registrationStatus: "INSCRITO" },
+      { athleteId: 2, categoryId: 10, registrationStatus: "INSCRITO" },
+      { athleteId: 3, categoryId: 10, registrationStatus: "INSCRITO" },
+    ],
+    observedPairs: [],
+    maxEntrants: 2,
+  });
+
+  assert.equal(result.cancelled, false);
+  assert.equal(result.totalAthleteCount, 3);
 });
 
 test("shouldAllowDestructiveRegistrationSync bloqueia sincronizacao destrutiva com baixa cobertura", () => {
