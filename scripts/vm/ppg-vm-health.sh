@@ -7,6 +7,7 @@ APP_DIR="${APP_DIR:-/home/ubuntu/pingpongpaidegua}"
 PROJECT_NAME="${COMPOSE_PROJECT_NAME:-pingpongpaidegua}"
 RUNTIME_DIR="${APP_DIR}/.runtime"
 LOCK_FILE="${RUNTIME_DIR}/ppg-vm-health.lock"
+ALERT_HELPER="/usr/local/bin/ppg-send-alert.sh"
 
 VM_DISK_WARN_PERCENT="${VM_DISK_WARN_PERCENT:-85}"
 VM_DISK_FAIL_PERCENT="${VM_DISK_FAIL_PERCENT:-92}"
@@ -145,6 +146,10 @@ if [[ "${#reasons[@]}" -eq 0 ]]; then
 fi
 
 echo "${timestamp} vm_health status=${status} reasons=${reasons[*]} metrics=disk:${disk_percent}% mem_available:${mem_available_mb}MB swap_used:${swap_used_mb}MB reclaimable_images:${reclaimable_images_mb}MB restarts:${restart_count} pg_connections:${pg_connections_total}"
+
+if [[ -x "$ALERT_HELPER" && "$status" != "pass" ]]; then
+  "$ALERT_HELPER" "vm-health-${status}" "$status" "vm_health status=${status} reasons=${reasons[*]} metrics=disk:${disk_percent}% mem_available:${mem_available_mb}MB swap_used:${swap_used_mb}MB reclaimable_images:${reclaimable_images_mb}MB restarts:${restart_count} pg_connections:${pg_connections_total}" || true
+fi
 
 case "$status" in
   pass) exit 0 ;;

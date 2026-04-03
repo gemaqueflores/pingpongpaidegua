@@ -246,22 +246,31 @@ Medidas operacionais importantes ja adotadas:
 - housekeeping leve de Docker
 - health check periodico da VM
 - watchdog funcional de eventos criticos
+- alertas opcionais por webhook para falhas operacionais
 - limite conservador de conexoes Prisma/Postgres
 - prewarm calibrado para a VM A1
 - self-heal com baixo impacto
 - workflow de scrape alinhado ao intervalo operacional de evento (`30 min`)
+- hardening basico de SSH com `fail2ban` e `ufw`
 
 Scripts relacionados:
 - `scripts/vm/ppg-vm-health.sh`
 - `scripts/vm/ppg-event-watch.sh`
+- `scripts/vm/ppg-send-alert.sh`
 - `scripts/vm/ppg-housekeeping.sh`
 - `scripts/vm/install-vm-ops.sh`
+- `scripts/vm/install-ssh-hardening.sh`
 
 Monitoramento funcional de evento:
 - roda na VM a cada `10 min`
 - observa eventos em `GRADES_PUBLICADAS_PRE_JOGO`, `EM_ANDAMENTO` e `POS_EVENTO` recente
 - audita inconsistencias entre resumo do evento e quadro de medalhistas
 - pode disparar `post-scrape-reprocess` com cooldown quando encontrar inconsistencias de publicacao
+
+Alertas operacionais:
+- `ppg-vm-health`, `ppg-event-watch` e `ppg-recover` suportam webhook opcional
+- habilitacao via `PPG_ALERT_WEBHOOK_URL`
+- cooldown configuravel via `PPG_ALERT_COOLDOWN_SECONDS`
 
 ## Fluxo de Trabalho Recomendado
 1. Auditar a implementacao atual.

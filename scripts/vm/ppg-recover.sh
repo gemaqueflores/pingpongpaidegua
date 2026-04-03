@@ -8,6 +8,7 @@ PROJECT_NAME="${COMPOSE_PROJECT_NAME:-pingpongpaidegua}"
 RUNTIME_DIR="${APP_DIR}/.runtime"
 LOCK_FILE="${RUNTIME_DIR}/ppg-recover.lock"
 STATE_FILE="${RUNTIME_DIR}/ppg-recover.state"
+ALERT_HELPER="/usr/local/bin/ppg-send-alert.sh"
 RECOVERY_COOLDOWN_SECONDS="${RECOVERY_COOLDOWN_SECONDS:-600}"
 RECOVERY_FAILURE_WINDOW_SECONDS="${RECOVERY_FAILURE_WINDOW_SECONDS:-3600}"
 RECOVERY_MAX_FAILURES="${RECOVERY_MAX_FAILURES:-6}"
@@ -92,6 +93,9 @@ if [[ "$needs_recover" -eq 1 ]]; then
   if [[ "$fail_count" -ge "$RECOVERY_MAX_FAILURES" ]]; then
     printf '%s %s %s\n' "$last_epoch" "$fail_window_start" "$fail_count" > "$STATE_FILE"
     echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) skip_recovery too_many_failures count=${fail_count} window_s=${RECOVERY_FAILURE_WINDOW_SECONDS} reasons=${reasons[*]}"
+    if [[ -x "$ALERT_HELPER" ]]; then
+      "$ALERT_HELPER" "recover-too-many-failures" "fail" "skip_recovery too_many_failures count=${fail_count} reasons=${reasons[*]}" || true
+    fi
     exit 0
   fi
 
@@ -122,9 +126,15 @@ if [[ "$needs_recover" -eq 1 ]]; then
   if [[ "$recover_ok" -eq 1 ]]; then
     printf '%s %s %s\n' "$now_epoch" "$now_epoch" "0" > "$STATE_FILE"
     echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) recovery_success"
+    if [[ -x "$ALERT_HELPER" ]]; then
+      "$ALERT_HELPER" "recover-success" "warn" "recovery_success reasons=${reasons[*]}" || true
+    fi
   else
     fail_count="$((fail_count + 1))"
     printf '%s %s %s\n' "$now_epoch" "$fail_window_start" "$fail_count" > "$STATE_FILE"
     echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) recovery_failed fail_count=${fail_count} reasons=${reasons[*]}"
+    if [[ -x "$ALERT_HELPER" ]]; then
+      "$ALERT_HELPER" "recover-failed" "fail" "recovery_failed fail_count=${fail_count} reasons=${reasons[*]}" || true
+    fi
   fi
 fi

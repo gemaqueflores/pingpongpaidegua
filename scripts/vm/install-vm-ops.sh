@@ -22,9 +22,15 @@ for script in ppg-vm-health.sh ppg-housekeeping.sh ppg-event-watch.sh; do
   fi
 done
 
+if [[ ! -f "$APP_DIR/scripts/vm/ppg-send-alert.sh" ]]; then
+  echo "Script obrigatorio nao encontrado: $APP_DIR/scripts/vm/ppg-send-alert.sh" >&2
+  exit 1
+fi
+
 sudo install -m 755 "$APP_DIR/scripts/vm/ppg-vm-health.sh" /usr/local/bin/ppg-vm-health.sh
 sudo install -m 755 "$APP_DIR/scripts/vm/ppg-housekeeping.sh" /usr/local/bin/ppg-housekeeping.sh
 sudo install -m 755 "$APP_DIR/scripts/vm/ppg-event-watch.sh" /usr/local/bin/ppg-event-watch.sh
+sudo install -m 755 "$APP_DIR/scripts/vm/ppg-send-alert.sh" /usr/local/bin/ppg-send-alert.sh
 mkdir -p "$RUNTIME_DIR"
 
 tmp_cron="$(mktemp)"

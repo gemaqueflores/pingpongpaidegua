@@ -7,6 +7,7 @@ APP_DIR="${APP_DIR:-/home/ubuntu/pingpongpaidegua}"
 PROJECT_NAME="${COMPOSE_PROJECT_NAME:-pingpongpaidegua}"
 RUNTIME_DIR="${APP_DIR}/.runtime"
 LOCK_FILE="${RUNTIME_DIR}/ppg-event-watch.lock"
+ALERT_HELPER="/usr/local/bin/ppg-send-alert.sh"
 
 EVENT_WATCH_API_BASE_URL="${EVENT_WATCH_API_BASE_URL:-http://api:4000}"
 EVENT_WATCH_MAX_EVENTS="${EVENT_WATCH_MAX_EVENTS:-6}"
@@ -56,4 +57,8 @@ rc=$?
 set -e
 
 echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) event_watch_done rc=${rc}"
+
+if [[ -x "$ALERT_HELPER" && "$rc" -ne 0 ]]; then
+  "$ALERT_HELPER" "event-watch-rc-${rc}" "warn" "event_watch_done rc=${rc}" || true
+fi
 exit "$rc"
