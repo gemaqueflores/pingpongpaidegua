@@ -3905,8 +3905,18 @@ export class UserService {
 
       const deduplicated = this.deduplicateMatches(matchSummaries);
       this.sortMatches(deduplicated.matches, normalizedOrderBy);
+      const categoriesWithConfirmedRegistration = athlete.categories.filter((item) =>
+        item.registrationStatus === "INSCRITO" || item.registrationStatus === "PRE_INSCRITO",
+      );
+      const categorySource =
+        categoriesWithConfirmedRegistration.length > 0
+          ? categoriesWithConfirmedRegistration
+          : athlete.categories;
+      const analyticalCategoryIds = new Set(categorySource.map((item) => item.category.id));
 
-      const analyticalMatches = deduplicated.matches.filter((match) => !match.isProjectedParticipant);
+      const analyticalMatches = deduplicated.matches.filter(
+        (match) => !match.isProjectedParticipant && analyticalCategoryIds.has(match.category.id),
+      );
 
       const performance = calculateAthletePointPerformance(
         analyticalMatches.map((match) => this.toMatchPerformanceInput(match)),
@@ -3997,13 +4007,6 @@ export class UserService {
         classification: classificationMap.get(item.categoryId) ?? null,
       }));
       const categoryNameById = new Map<number, string>();
-      const categoriesWithConfirmedRegistration = athlete.categories.filter((item) =>
-        item.registrationStatus === "INSCRITO" || item.registrationStatus === "PRE_INSCRITO",
-      );
-      const categorySource =
-        categoriesWithConfirmedRegistration.length > 0
-          ? categoriesWithConfirmedRegistration
-          : athlete.categories;
 
       for (const item of categorySource) {
         const category = item.category;
