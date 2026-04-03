@@ -6,15 +6,15 @@ services:
     command:
       - postgres
       - -c
-      - max_connections=50
+      - max_connections=80
       - -c
-      - shared_buffers=128MB
+      - shared_buffers=512MB
       - -c
       - checkpoint_timeout=15min
       - -c
       - checkpoint_completion_target=0.9
       - -c
-      - max_wal_size=2GB
+      - max_wal_size=4GB
       - -c
       - wal_compression=on
     environment:
@@ -57,7 +57,7 @@ services:
       - "60"
       - "10000"
       - --maxmemory
-      - "128mb"
+      - "256mb"
       - --maxmemory-policy
       - "noeviction"
     healthcheck:
@@ -110,10 +110,10 @@ services:
       SCRAPE_INTERVAL_POS_INSCRICOES_PRE_EVENTO_MS: 10800000
       SCRAPE_INTERVAL_GRADES_PUBLICADAS_PRE_JOGO_MS: 2700000
       SCRAPE_INTERVAL_EM_ANDAMENTO_MS: 1800000
-      NODE_OPTIONS: --max-old-space-size=384
-      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=6&pool_timeout=30&connect_timeout=10}
-      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=10&pool_timeout=30&connect_timeout=10}
-      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=6&pool_timeout=30&connect_timeout=10}
+      NODE_OPTIONS: --max-old-space-size=768
+      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=8&pool_timeout=30&connect_timeout=10}
+      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=12&pool_timeout=30&connect_timeout=10}
+      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=8&pool_timeout=30&connect_timeout=10}
       REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
@@ -144,9 +144,9 @@ services:
       dockerfile: docker/worker.Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=4&pool_timeout=30&connect_timeout=10}
-      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=2&pool_timeout=30&connect_timeout=10}
-      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=4&pool_timeout=30&connect_timeout=10}
+      DATABASE_URL_WRITE: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=6&pool_timeout=30&connect_timeout=10}
+      DATABASE_URL_READ: ${DATABASE_URL_READ:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=4&pool_timeout=30&connect_timeout=10}
+      DATABASE_URL: ${DATABASE_URL_WRITE:-postgresql://postgres:postgres@postgres:5432/cbtm?connection_limit=6&pool_timeout=30&connect_timeout=10}
       REDIS_URL: redis://redis:6379
       SCRAPER_MODE: live
       SCRAPER_EVENT_URL: https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID={EVENT_ID}
@@ -161,9 +161,9 @@ services:
       SCRAPE_RUN_RETENTION_DAYS: 45
       SCRAPER_HEADLESS: "true"
       READ_MODEL_PREWARM_API_BASE_URL: http://api:4000
-      READ_MODEL_PREWARM_ATHLETE_LIMIT: 60
-      READ_MODEL_PREWARM_CONCURRENCY: 2
-      READ_MODEL_PREWARM_TIMEOUT_MS: 8000
+      READ_MODEL_PREWARM_ATHLETE_LIMIT: 100
+      READ_MODEL_PREWARM_CONCURRENCY: 3
+      READ_MODEL_PREWARM_TIMEOUT_MS: 10000
       SCRAPE_INTERVAL_PRE_INSCRICOES_MS: 18000000
       SCRAPE_INTERVAL_INSCRICOES_ABERTAS_MS: 21600000
       SCRAPE_INTERVAL_POS_INSCRICOES_PRE_EVENTO_MS: 10800000
@@ -178,7 +178,7 @@ services:
       SCRAPE_PERSISTED_WARNINGS_MEDIUM_MAX: 20
       DB_RETRY_ATTEMPTS: 5
       DB_RETRY_DELAY_MS: 1000
-      NODE_OPTIONS: --max-old-space-size=768
+      NODE_OPTIONS: --max-old-space-size=1536
     ulimits:
       nofile:
         soft: 65535

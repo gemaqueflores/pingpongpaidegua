@@ -201,7 +201,24 @@ Valores de conexao locais padrao nos `.env.example`:
 - Worker write: `connection_limit=4`
 - Worker read: `connection_limit=2`
 
-Esses limites existem para respeitar a Oracle Cloud Always Free e nao devem crescer sem necessidade real.
+Perfil atual de producao na Oracle A1 (`2 OCPU / 12 GB`):
+- Postgres:
+  - `max_connections=80`
+  - `shared_buffers=512MB`
+  - `max_wal_size=4GB`
+- Redis:
+  - `maxmemory=256MB`
+- API:
+  - `NODE_OPTIONS=--max-old-space-size=768`
+  - write pool `8`
+  - read pool `12`
+- Worker:
+  - `NODE_OPTIONS=--max-old-space-size=1536`
+  - write pool `6`
+  - read pool `4`
+  - prewarm `100 atletas / concorrencia 3 / timeout 10s`
+
+Esses limites seguem conservadores para Always Free, mas deixam de estrangular a VM A1 como acontecia na `E2.1.Micro`.
 
 ## Build e Testes
 Comandos uteis:
