@@ -667,14 +667,15 @@ export class ScrapeProcessor {
           .map((category) => normalizeText(category.categoryName))
           .filter(Boolean),
       );
+      const authoritativeRegistrationAbsence =
+        processRegistrations &&
+        scrapePolicy.captureInscricoes &&
+        !preUpsertGuardrailReason &&
+        observedRegistrationCategoryIds.size > 0;
 
       const upsertResult = await this.upsertService.upsert(eventId, dataset, {
         processRegistrations,
-        authoritativeRegistrationAbsence:
-          processRegistrations &&
-          scrapePolicy.captureInscricoes &&
-          !preUpsertGuardrailReason &&
-          observedRegistrationCategoryIds.size > 0,
+        authoritativeRegistrationAbsence,
         observedRegistrationCategoryIds,
         observedRegistrationCategoryNames,
       });
@@ -840,6 +841,15 @@ export class ScrapeProcessor {
                     totalListedCount: item.totalListedCount ?? null,
                     officialMatchesCount: item.officialMatchesCount ?? null,
                   })),
+                  registrationSnapshotAuthority: {
+                    authoritativeRegistrationAbsence,
+                    processRegistrations,
+                    observedRegistrationAthletes,
+                    observedRegistrationCategoryCount: observedRegistrationCategoryIds.size,
+                    guardrailBlocked: Boolean(preUpsertGuardrailReason),
+                    guardrailReason: preUpsertGuardrailReason,
+                    dropRatio: registrationDropRatio,
+                  },
                   stage3CategoryHashes,
                   lastSuccessfulStage3At:
                     incrementalStage3Enabled && (status === "SUCCESS" || status === "PARTIAL")
