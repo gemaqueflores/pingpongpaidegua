@@ -229,6 +229,9 @@ test("athlete career de par prioriza categoria oficial quando existe duplicidade
   assert.equal(result.events[0]?.matches[0]?.category.name, "DUPLA MISTA-ABSOLUTO C");
   assert.equal(result.events[0]?.performanceByCategory.length, 1);
   assert.equal(result.events[0]?.performanceByCategory[0]?.categoryName, "DUPLA MISTA-ABSOLUTO C");
+  assert.equal(result.medalTable.ESTADUAL.ouro, 1);
+  assert.equal(result.medalTable.ESTADUAL.prata, 0);
+  assert.equal(result.medalTable.ESTADUAL.bronze, 0);
 });
 
 test("athlete career de par nao projeta confronto de dupla errada quando apenas um integrante coincide", async () => {
