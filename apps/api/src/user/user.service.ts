@@ -2673,7 +2673,7 @@ export class UserService {
       throw new NotFoundException("Clube nao encontrado");
     }
 
-    const [weights, athletesByEvent, registeredAthletesByEvent] = await Promise.all([
+    const [weights, athletesByEvent] = await Promise.all([
       this.getEfficiencyWeights(),
       this.prisma.athlete.findMany({
         where: {
@@ -2685,27 +2685,6 @@ export class UserService {
           nameDisplay: true,
           eventId: true,
         },
-      }),
-      this.prisma.athlete.findMany({
-        where: {
-          clubId,
-          createdFromWarning: false,
-          nameDisplay: {
-            not: {
-              contains: "#",
-            },
-          },
-          categories: {
-            some: {
-              registrationStatus: "INSCRITO",
-            },
-          },
-        },
-        select: {
-          eventId: true,
-          nameNormalized: true,
-        },
-        distinct: ["eventId", "nameNormalized"],
       }),
     ]);
 
@@ -2850,6 +2829,9 @@ export class UserService {
         })
       : [];
 
+    const athleteCountByEvent = new Map<number, number>();
+    const athleteNamesByEvent = new Map<number, Set<string>>();
+
     const clubAthletesInCategory = new Map<number, Map<number, CategoryAthleteRef>>();
     for (const row of athleteCategories) {
       const athletes = clubAthletesInCategory.get(row.categoryId) ?? new Map<number, CategoryAthleteRef>();
@@ -2860,6 +2842,16 @@ export class UserService {
         clubName: null,
       });
       clubAthletesInCategory.set(row.categoryId, athletes);
+      const eventId = categoryById.get(row.categoryId)?.eventId;
+      const normalizedAthleteName = normalizeAthleteName(row.athlete.nameDisplay);
+      if (eventId && normalizedAthleteName) {
+        const eventAthletes = athleteNamesByEvent.get(eventId) ?? new Set<string>();
+        eventAthletes.add(normalizedAthleteName);
+        athleteNamesByEvent.set(eventId, eventAthletes);
+      }
+    }
+    for (const [eventId, athleteNames] of athleteNamesByEvent.entries()) {
+      athleteCountByEvent.set(eventId, athleteNames.size);
     }
 
     const fullCategoryMatchesMap = new Map<number, CategoryAnalyticsMatch[]>();
@@ -2893,10 +2885,6 @@ export class UserService {
     const athletePrimaryIdByGroupKey = new Map<string, number>();
     const athleteEventSetByGroupKey = new Map<string, Set<number>>();
     const athleteGroupKeyById = new Map<number, string>();
-    const athleteCountByEvent = new Map<number, number>();
-    for (const row of registeredAthletesByEvent) {
-      athleteCountByEvent.set(row.eventId, (athleteCountByEvent.get(row.eventId) ?? 0) + 1);
-    }
     for (const row of athletesByEvent) {
       const normalized = normalizeAthleteName(row.nameDisplay);
       const groupKey = normalized ? `name:${normalized}` : `id:${row.id}`;

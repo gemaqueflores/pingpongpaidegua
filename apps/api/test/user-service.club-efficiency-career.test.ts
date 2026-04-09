@@ -403,13 +403,7 @@ test("club efficiency career usa contagem de atletas unicos com inscricao confir
       },
     },
     athlete: {
-      async findMany(args?: { select?: Record<string, unknown> }) {
-        if (args?.select && "nameNormalized" in args.select) {
-          return [
-            { eventId: 45, nameNormalized: "alice" },
-            { eventId: 45, nameNormalized: "dora" },
-          ];
-        }
+      async findMany() {
         return [
           { id: 100, nameDisplay: "ALICE", eventId: 45 },
           { id: 101, nameDisplay: "ALICE", eventId: 45 },
@@ -436,12 +430,41 @@ test("club efficiency career usa contagem de atletas unicos com inscricao confir
     },
     category: {
       async findMany() {
-        return [];
+        return [
+          {
+            id: 200,
+            eventId: 45,
+            name: "ABSOLUTO B (MAS)",
+            cbtmCategoryId: "200",
+          },
+        ];
       },
     },
     athleteCategory: {
       async findMany() {
-        return [];
+        return [
+          {
+            categoryId: 200,
+            athlete: {
+              id: 100,
+              nameDisplay: "ALICE",
+            },
+          },
+          {
+            categoryId: 200,
+            athlete: {
+              id: 101,
+              nameDisplay: "ALICE",
+            },
+          },
+          {
+            categoryId: 200,
+            athlete: {
+              id: 103,
+              nameDisplay: "DORA",
+            },
+          },
+        ];
       },
     },
     match: {
