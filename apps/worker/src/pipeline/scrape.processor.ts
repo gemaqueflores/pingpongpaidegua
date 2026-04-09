@@ -132,6 +132,13 @@ function isPostScrapeReprocessReason(reason?: string): boolean {
   return String(reason ?? "").trim().toLowerCase().startsWith("post-scrape-reprocess");
 }
 
+export function shouldProcessRegistrationsForRun(input: {
+  manualForceStage: ManualForceStage;
+  captureInscricoes: boolean;
+}): boolean {
+  return input.captureInscricoes && input.manualForceStage !== "stage-3-resultados";
+}
+
 function athleteNameContainsReducedTokens(shortNameNormalized: string, athleteNameDisplay: string): boolean {
   const shortTokens = normalizeText(String(shortNameNormalized ?? ""))
     .split(/\s+/)
@@ -627,11 +634,19 @@ export class ScrapeProcessor {
           (registration) => `${registration.athleteNormalizedName}|${registration.clubNormalizedName}`,
         ),
       ).size;
-      let processRegistrations = manualForceStage !== "stage-3-resultados";
+      let processRegistrations = shouldProcessRegistrationsForRun({
+        manualForceStage,
+        captureInscricoes: scrapePolicy.captureInscricoes,
+      });
       let preUpsertGuardrailReason: string | null = null;
       if (manualForceStage === "stage-2-inscricoes" && !shouldClearCompetitiveData) {
         capture.warnings.push(
           `STAGE2_PRESERVOU_CONFRONTOS: limpeza competitiva ignorada na situacao '${eventSituation}' para preservar grupos/resultados publicados.`,
+        );
+      }
+      if (!scrapePolicy.captureInscricoes && dataset.registrations.length > 0) {
+        capture.warnings.push(
+          `REGISTRATION_SNAPSHOT_IGNORED: ${dataset.registrations.length} inscricoes vieram incidentalmente em um run sem captureInscricoes; sincronizacao destrutiva de inscricoes foi mantida desligada.`,
         );
       }
       const registrationDropRatio =

@@ -5,6 +5,7 @@ import {
   computeEventSituation,
   shouldRunEventAutoScrape,
 } from "@cbtm/shared";
+import { shouldProcessRegistrationsForRun } from "../src/pipeline/scrape.processor";
 
 function dt(value: string): Date {
   return new Date(value);
@@ -209,4 +210,30 @@ test("shouldRunEventAutoScrape aplica intervalo recomendado", () => {
   const due = shouldRunEventAutoScrape(dt("2026-03-05T10:00:00.000Z"), policy, now);
   assert.equal(due.due, true);
   assert.equal(due.waitMs, 0);
+});
+
+test("shouldProcessRegistrationsForRun so permite sincronizacao destrutiva quando o run capturou inscricoes", () => {
+  assert.equal(
+    shouldProcessRegistrationsForRun({
+      manualForceStage: "full",
+      captureInscricoes: true,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldProcessRegistrationsForRun({
+      manualForceStage: "full",
+      captureInscricoes: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldProcessRegistrationsForRun({
+      manualForceStage: "stage-3-resultados",
+      captureInscricoes: true,
+    }),
+    false,
+  );
 });
