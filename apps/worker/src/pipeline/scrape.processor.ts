@@ -136,6 +136,12 @@ export function shouldProcessRegistrationsForRun(input: {
   manualForceStage: ManualForceStage;
   captureInscricoes: boolean;
 }): boolean {
+  // "Payload incidental" significa qualquer dado de INSCRICOES que apareca junto
+  // de um run cuja policy nao marcou captureInscricoes como fonte autoritativa.
+  // Nesses casos o payload pode ser parcial e nao pode dirigir sincronizacao
+  // destrutiva de categorias/atletas. A sincronizacao de inscricoes so pode
+  // acontecer quando o proprio run foi desenhado para capturar inscricoes e
+  // nao se trata de um stage 3 focado em grupos/resultados.
   return input.captureInscricoes && input.manualForceStage !== "stage-3-resultados";
 }
 

@@ -212,7 +212,7 @@ test("shouldRunEventAutoScrape aplica intervalo recomendado", () => {
   assert.equal(due.waitMs, 0);
 });
 
-test("shouldProcessRegistrationsForRun so permite sincronizacao destrutiva quando o run capturou inscricoes", () => {
+test("shouldProcessRegistrationsForRun mantem sincronizacao destrutiva habilitada no caminho autoritativo de inscricoes", () => {
   assert.equal(
     shouldProcessRegistrationsForRun({
       manualForceStage: "full",
@@ -221,6 +221,9 @@ test("shouldProcessRegistrationsForRun so permite sincronizacao destrutiva quand
     true,
   );
 
+});
+
+test("shouldProcessRegistrationsForRun bloqueia payload incidental de inscricoes quando captureInscricoes=false", () => {
   assert.equal(
     shouldProcessRegistrationsForRun({
       manualForceStage: "full",
@@ -228,7 +231,9 @@ test("shouldProcessRegistrationsForRun so permite sincronizacao destrutiva quand
     }),
     false,
   );
+});
 
+test("shouldProcessRegistrationsForRun bloqueia sincronizacao destrutiva em stage-3-resultados mesmo com inscricoes presentes", () => {
   assert.equal(
     shouldProcessRegistrationsForRun({
       manualForceStage: "stage-3-resultados",
