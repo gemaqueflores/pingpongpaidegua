@@ -275,6 +275,47 @@ type EventOfficialRules = {
   ratingMatchFormat: "RR_K1" | "K1";
 };
 
+type ScopedEventSummaryInput = {
+  id: number;
+  lastScrapeAt: Date | null;
+  dataInicio: Date | null;
+  inicioRealizacao: Date | null;
+  ratingMatchFormat: "RR_K1" | "K1" | null;
+};
+
+type ScopedEventSummaryMetrics = {
+  athleteCategoryAssociationsByEvent: Map<number, number>;
+  tecnicoClubAssociationsByEvent: Map<number, number>;
+  participantNamesByEvent: Map<number, Set<string>>;
+  groupsDefinedByEventMap: Map<number, boolean>;
+  publishedResultsByEventMap: Map<number, boolean>;
+  effectiveCategoryCountByEvent: Map<number, number>;
+  metricsByEventId: Map<number, { published: number; calculated: number; wo: number; played: number }>;
+  officialTotalsByEvent: Map<number, OfficialRegistrationTotals>;
+  lastScrapeByEventId: Map<number, Date>;
+};
+
+type ScopedEventSummaryAggregate = {
+  totalCategorias: number;
+  associacoesAtletaCategoria: number;
+  associacoesTecnicoClube: number;
+  inscricoesTotaisOficiais: number;
+  inscricoesTotaisConsolidadas: number;
+  participantesUnicos: number;
+  totalInscritos: number;
+  totalTecnicos: number;
+  groupsDefined: boolean;
+  totalPartidasPublicadas: number;
+  totalPartidasPrevistas: number;
+  totalPartidasCalculadas: number;
+  totalPartidasWo: number;
+  totalPartidasJogadas: number;
+  totalPartidas: number;
+  hasPublishedMatches: boolean;
+  hasPublishedResults: boolean;
+  mergedLastScrape: Date | null;
+};
+
 type ResolvedAthleteRouteContext = {
   routeAthleteId: number;
   rawAthleteId: number;
@@ -1073,6 +1114,278 @@ export class UserService {
     return totalsByEvent;
   }
 
+  private async loadScopedEventSummaryMetrics(
+    eventItems: ScopedEventSummaryInput[],
+  ): Promise<ScopedEventSummaryMetrics> {
+    const allEventIds = [...new Set(eventItems.map((item) => item.id))];
+    const [
+      registrationMetrics,
+      groupMatchesByEvent,
+      publishedResultsByEvent,
+      officialAuditByEvent,
+      categoriesForAudit,
+      athleteRegistrationsByCategory,
+    ] = await Promise.all([
+      this.loadEventRegistrationMetrics(allEventIds),
+      this.prisma.match.groupBy({
+        by: ["eventId"],
+        where: {
+          eventId: { in: allEventIds },
+          OR: [{ phase: "GRUPOS" }, { round: { contains: "grupo", mode: "insensitive" } }],
+          category: {
+            cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
+          },
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.match.groupBy({
+        by: ["eventId"],
+        where: {
+          eventId: { in: allEventIds },
+          phase: { in: ["GRUPOS", "RESULTADOS"] },
+          category: {
+            cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
+          },
+          OR: [{ winnerIndex: { not: null } }, { p1Sets: { not: null } }, { p2Sets: { not: null } }],
+        },
+        _count: { _all: true },
+      }),
+      this.loadLatestOfficialCategoryAuditByEvent(allEventIds),
+      this.prisma.category.findMany({
+        where: {
+          eventId: { in: allEventIds },
+          cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
+        },
+        select: {
+          id: true,
+          eventId: true,
+          name: true,
+          cbtmCategoryId: true,
+        },
+      }),
+      this.prisma.athleteCategory.groupBy({
+        by: ["categoryId"],
+        where: {
+          registrationStatus: "INSCRITO",
+          athlete: {
+            eventId: { in: allEventIds },
+            createdFromWarning: false,
+          },
+          category: {
+            eventId: { in: allEventIds },
+            cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
+          },
+        },
+        _count: {
+          _all: true,
+        },
+      }),
+    ]);
+
+    const athleteCountByCategory = new Map<number, number>();
+    for (const row of athleteRegistrationsByCategory) {
+      athleteCountByCategory.set(row.categoryId, row._count._all);
+    }
+
+    const eventRulesByEventId = new Map<number, EventOfficialRules>(
+      eventItems.map((item) => [
+        item.id,
+        {
+          startDate: item.dataInicio ?? item.inicioRealizacao ?? null,
+          ratingMatchFormat: item.ratingMatchFormat ?? "RR_K1",
+        },
+      ]),
+    );
+    const officialTotalsByEvent = this.computeOfficialRegistrationTotalsByEvent(
+      officialAuditByEvent,
+      eventRulesByEventId,
+    );
+
+    const groupsDefinedByEventMap = new Map<number, boolean>();
+    for (const row of groupMatchesByEvent) {
+      groupsDefinedByEventMap.set(row.eventId, row._count._all > 0);
+    }
+
+    const publishedResultsByEventMap = new Map<number, boolean>();
+    for (const row of publishedResultsByEvent) {
+      publishedResultsByEventMap.set(row.eventId, row._count._all > 0);
+    }
+
+    const officialRegisteredByCategoryId = new Map<number, number>();
+    for (const category of categoriesForAudit) {
+      const byEvent = officialAuditByEvent.get(category.eventId);
+      if (!byEvent) {
+        continue;
+      }
+      const cbtmCategoryId = String(category.cbtmCategoryId ?? "").trim();
+      const byId = cbtmCategoryId ? byEvent.get(cbtmCategoryId) : undefined;
+      const byName =
+        byId ??
+        [...byEvent.values()].find((entry) => normalizeText(entry.categoryName) === normalizeText(category.name));
+      const officialRegistered = Number(byName?.registeredCount ?? NaN);
+      if (Number.isFinite(officialRegistered) && officialRegistered >= 0) {
+        officialRegisteredByCategoryId.set(category.id, Math.trunc(officialRegistered));
+      }
+    }
+
+    const categoryIdsForAudit = categoriesForAudit.map((category) => category.id);
+    const publishedMatchesByCategory = await this.prisma.match.groupBy({
+      by: ["categoryId"],
+      where: {
+        eventId: { in: allEventIds },
+        categoryId: { in: categoryIdsForAudit },
+        phase: { in: ["GRUPOS", "RESULTADOS"] },
+      },
+      _count: { _all: true },
+    });
+
+    const publishedByCategoryId = new Map<number, number>();
+    for (const row of publishedMatchesByCategory) {
+      publishedByCategoryId.set(row.categoryId, row._count._all);
+    }
+
+    const effectiveCategoryCountByEvent = countEffectiveCategoriesByEvent({
+      categories: categoriesForAudit,
+      officialRegisteredByCategoryId,
+      athleteCountByCategory,
+      publishedByCategoryId,
+    });
+
+    const walkoversByCategoryId = await this.countWalkoversByCategoryIds(allEventIds, categoryIdsForAudit);
+    const metricsByEventId = new Map<number, { published: number; calculated: number; wo: number; played: number }>();
+    for (const category of categoriesForAudit) {
+      const rules = eventRulesByEventId.get(category.eventId) ?? {
+        startDate: null,
+        ratingMatchFormat: "RR_K1" as const,
+      };
+      const registeredBaseCount =
+        officialRegisteredByCategoryId.get(category.id) ?? (athleteCountByCategory.get(category.id) ?? 0);
+      const calculatedMatchesCount = computeOfficialCategoryMatchesCount(registeredBaseCount, {
+        categoryName: category.name,
+        eventStartDate: rules.startDate,
+        ratingMatchFormat: rules.ratingMatchFormat,
+      });
+      const categoryMetrics = computeCategoryMatchMetrics({
+        publishedMatchesCount: publishedByCategoryId.get(category.id) ?? 0,
+        calculatedMatchesCount,
+        walkoverMatchesCount: walkoversByCategoryId.get(category.id) ?? 0,
+      });
+      const current = metricsByEventId.get(category.eventId) ?? { published: 0, calculated: 0, wo: 0, played: 0 };
+      current.published += categoryMetrics.publishedMatchesCount;
+      current.calculated += categoryMetrics.calculatedMatchesCount;
+      current.wo += categoryMetrics.walkoverMatchesCount;
+      current.played += categoryMetrics.playedMatchesCount;
+      metricsByEventId.set(category.eventId, current);
+    }
+
+    const lastScrapeByEventId = new Map<number, Date>();
+    for (const item of eventItems) {
+      if (item.lastScrapeAt) {
+        lastScrapeByEventId.set(item.id, item.lastScrapeAt);
+      }
+    }
+
+    return {
+      athleteCategoryAssociationsByEvent: registrationMetrics.athleteCategoryAssociationsByEvent,
+      tecnicoClubAssociationsByEvent: registrationMetrics.tecnicoClubAssociationsByEvent,
+      participantNamesByEvent: registrationMetrics.participantNamesByEvent,
+      groupsDefinedByEventMap,
+      publishedResultsByEventMap,
+      effectiveCategoryCountByEvent,
+      metricsByEventId,
+      officialTotalsByEvent,
+      lastScrapeByEventId,
+    };
+  }
+
+  private aggregateScopedEventSummary(
+    allEventIds: number[],
+    metrics: ScopedEventSummaryMetrics,
+  ): ScopedEventSummaryAggregate {
+    const totalCategorias = allEventIds.reduce(
+      (sum, currentEventId) => sum + (metrics.effectiveCategoryCountByEvent.get(currentEventId) ?? 0),
+      0,
+    );
+    const associacoesAtletaCategoria = allEventIds.reduce(
+      (sum, currentEventId) => sum + (metrics.athleteCategoryAssociationsByEvent.get(currentEventId) ?? 0),
+      0,
+    );
+    const associacoesTecnicoClube = allEventIds.reduce(
+      (sum, currentEventId) => sum + (metrics.tecnicoClubAssociationsByEvent.get(currentEventId) ?? 0),
+      0,
+    );
+    const inscricoesTotaisOficiais = allEventIds.reduce(
+      (sum, currentEventId) => sum + (metrics.officialTotalsByEvent.get(currentEventId)?.totalRegistered ?? 0),
+      0,
+    );
+    const inscricoesTotaisConsolidadas =
+      inscricoesTotaisOficiais > 0 ? inscricoesTotaisOficiais : associacoesAtletaCategoria;
+    const participantes = new Set<string>();
+    for (const currentEventId of allEventIds) {
+      const names = metrics.participantNamesByEvent.get(currentEventId);
+      if (!names) {
+        continue;
+      }
+      for (const name of names) {
+        participantes.add(name);
+      }
+    }
+    const participantesUnicos = participantes.size;
+    const totalInscritos = participantesUnicos;
+    const totalTecnicos = associacoesTecnicoClube;
+    const groupsDefined = allEventIds.some(
+      (currentEventId) => metrics.groupsDefinedByEventMap.get(currentEventId) ?? false,
+    );
+    const totalPartidasPublicadas = allEventIds.reduce(
+      (sum, currentEventId) => sum + (metrics.metricsByEventId.get(currentEventId)?.published ?? 0),
+      0,
+    );
+    const totalPartidasPrevistas = allEventIds.reduce(
+      (sum, currentEventId) => sum + (metrics.metricsByEventId.get(currentEventId)?.calculated ?? 0),
+      0,
+    );
+    const totalPartidasCalculadas = totalPartidasPrevistas;
+    const totalPartidasWo = allEventIds.reduce(
+      (sum, currentEventId) => sum + (metrics.metricsByEventId.get(currentEventId)?.wo ?? 0),
+      0,
+    );
+    const totalPartidasJogadas = allEventIds.reduce(
+      (sum, currentEventId) => sum + (metrics.metricsByEventId.get(currentEventId)?.played ?? 0),
+      0,
+    );
+    const totalPartidas = totalPartidasCalculadas;
+    const hasPublishedMatches = totalPartidasPublicadas > 0;
+    const hasPublishedResults = allEventIds.some(
+      (currentEventId) => metrics.publishedResultsByEventMap.get(currentEventId) ?? false,
+    );
+    const mergedLastScrape =
+      allEventIds
+        .map((currentEventId) => metrics.lastScrapeByEventId.get(currentEventId) ?? null)
+        .filter((item): item is Date => Boolean(item))
+        .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+
+    return {
+      totalCategorias,
+      associacoesAtletaCategoria,
+      associacoesTecnicoClube,
+      inscricoesTotaisOficiais,
+      inscricoesTotaisConsolidadas,
+      participantesUnicos,
+      totalInscritos,
+      totalTecnicos,
+      groupsDefined,
+      totalPartidasPublicadas,
+      totalPartidasPrevistas,
+      totalPartidasCalculadas,
+      totalPartidasWo,
+      totalPartidasJogadas,
+      totalPartidas,
+      hasPublishedMatches,
+      hasPublishedResults,
+      mergedLastScrape,
+    };
+  }
+
   async listEvents() {
     const [events, merges] = await Promise.all([
       this.prisma.event.findMany({
@@ -1112,176 +1425,16 @@ export class UserService {
     }
 
     const allScopedEventIds = [...new Set([...scopeByEventId.values()].flatMap((scope) => scope.allEventIds))];
-
-    const [
-      registrationMetrics,
-      groupMatchesByEvent,
-      publishedResultsByEvent,
-      officialAuditByEvent,
-      categoriesForAudit,
-      athleteRegistrationsByCategory,
-    ] = await Promise.all([
-      this.loadEventRegistrationMetrics(allScopedEventIds),
-      this.prisma.match.groupBy({
-        by: ["eventId"],
-        where: {
-          eventId: { in: allScopedEventIds },
-          OR: [{ phase: "GRUPOS" }, { round: { contains: "grupo", mode: "insensitive" } }],
-          category: {
-            cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
-          },
-        },
-        _count: {
-          _all: true,
-        },
-      }),
-      this.prisma.match.groupBy({
-        by: ["eventId"],
-        where: {
-          eventId: { in: allScopedEventIds },
-          phase: { in: ["GRUPOS", "RESULTADOS"] },
-          category: {
-            cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
-          },
-          OR: [{ p1Sets: { gte: 2 } }, { p2Sets: { gte: 2 } }],
-        },
-        _count: {
-          _all: true,
-        },
-      }),
-      this.loadLatestOfficialCategoryAuditByEvent(allScopedEventIds),
-      this.prisma.category.findMany({
-        where: {
-          eventId: { in: allScopedEventIds },
-          cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
-        },
-        select: {
-          id: true,
-          eventId: true,
-          name: true,
-          cbtmCategoryId: true,
-        },
-      }),
-      this.prisma.athleteCategory.groupBy({
-        by: ["categoryId"],
-        where: {
-          registrationStatus: "INSCRITO",
-          athlete: {
-            eventId: { in: allScopedEventIds },
-            createdFromWarning: false,
-          },
-          category: {
-            eventId: { in: allScopedEventIds },
-            cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
-          },
-        },
-        _count: {
-          _all: true,
-        },
-      }),
-    ]);
-
-    const athleteCountByCategory = new Map<number, number>();
-    for (const row of athleteRegistrationsByCategory) {
-      athleteCountByCategory.set(row.categoryId, row._count._all);
-    }
-
-    const athleteCategoryAssociationsByEvent = registrationMetrics.athleteCategoryAssociationsByEvent;
-    const tecnicoClubAssociationsByEvent = registrationMetrics.tecnicoClubAssociationsByEvent;
-    const participantNamesByEvent = registrationMetrics.participantNamesByEvent;
-    const eventRulesByEventId = new Map<number, EventOfficialRules>(
-      events.map((item) => [
-        item.id,
-        {
-          startDate: item.dataInicio ?? item.inicioRealizacao ?? null,
-          ratingMatchFormat: item.ratingMatchFormat ?? "RR_K1",
-        },
-      ]),
-    );
-    const officialTotalsByEvent = this.computeOfficialRegistrationTotalsByEvent(
-      officialAuditByEvent,
-      eventRulesByEventId,
-    );
-
-    const groupsDefinedByEventMap = new Map<number, boolean>();
-    for (const row of groupMatchesByEvent) {
-      groupsDefinedByEventMap.set(row.eventId, row._count._all > 0);
-    }
-
-    const publishedResultsByEventMap = new Map<number, boolean>();
-    for (const row of publishedResultsByEvent) {
-      publishedResultsByEventMap.set(row.eventId, row._count._all > 0);
-    }
-
-    const officialRegisteredByCategoryId = new Map<number, number>();
-    for (const category of categoriesForAudit) {
-      const byEvent = officialAuditByEvent.get(category.eventId);
-      if (!byEvent) {
-        continue;
-      }
-      const cbtmCategoryId = String(category.cbtmCategoryId ?? "").trim();
-      const byId = cbtmCategoryId ? byEvent.get(cbtmCategoryId) : undefined;
-      const byName =
-        byId ??
-        [...byEvent.values()].find((entry) => normalizeText(entry.categoryName) === normalizeText(category.name));
-      const officialRegistered = Number(byName?.registeredCount ?? NaN);
-      if (Number.isFinite(officialRegistered) && officialRegistered >= 0) {
-        officialRegisteredByCategoryId.set(category.id, Math.trunc(officialRegistered));
-      }
-    }
-    const categoryIdsForAudit = categoriesForAudit.map((category) => category.id);
-    const publishedMatchesByCategory = await this.prisma.match.groupBy({
-      by: ["categoryId"],
-      where: {
-        eventId: { in: allScopedEventIds },
-        categoryId: { in: categoryIdsForAudit },
-        phase: { in: ["GRUPOS", "RESULTADOS"] },
-      },
-      _count: { _all: true },
-    });
-    const publishedByCategoryId = new Map<number, number>();
-    for (const row of publishedMatchesByCategory) {
-      publishedByCategoryId.set(row.categoryId, row._count._all);
-    }
-    const effectiveCategoryCountByEvent = countEffectiveCategoriesByEvent({
-      categories: categoriesForAudit,
-      officialRegisteredByCategoryId,
-      athleteCountByCategory,
-      publishedByCategoryId,
-    });
-    const walkoversByCategoryId = await this.countWalkoversByCategoryIds(allScopedEventIds, categoryIdsForAudit);
-    const metricsByEventId = new Map<number, { published: number; calculated: number; wo: number; played: number }>();
-    for (const category of categoriesForAudit) {
-      const rules = eventRulesByEventId.get(category.eventId) ?? {
-        startDate: null,
-        ratingMatchFormat: "RR_K1" as const,
-      };
-      const registeredBaseCount =
-        officialRegisteredByCategoryId.get(category.id) ?? (athleteCountByCategory.get(category.id) ?? 0);
-      const calculatedMatchesCount = computeOfficialCategoryMatchesCount(registeredBaseCount, {
-        categoryName: category.name,
-        eventStartDate: rules.startDate,
-        ratingMatchFormat: rules.ratingMatchFormat,
-      });
-      const categoryMetrics = computeCategoryMatchMetrics({
-        publishedMatchesCount: publishedByCategoryId.get(category.id) ?? 0,
-        calculatedMatchesCount,
-        walkoverMatchesCount: walkoversByCategoryId.get(category.id) ?? 0,
-      });
-      const current = metricsByEventId.get(category.eventId) ?? { published: 0, calculated: 0, wo: 0, played: 0 };
-      current.published += categoryMetrics.publishedMatchesCount;
-      current.calculated += categoryMetrics.calculatedMatchesCount;
-      current.wo += categoryMetrics.walkoverMatchesCount;
-      current.played += categoryMetrics.playedMatchesCount;
-      metricsByEventId.set(category.eventId, current);
-    }
-
-    const lastScrapeByEventId = new Map<number, Date>();
-    for (const event of events) {
-      if (event.lastScrapeAt) {
-        lastScrapeByEventId.set(event.id, event.lastScrapeAt);
-      }
-    }
+    const scopedEventItems = events
+      .filter((item) => allScopedEventIds.includes(item.id))
+      .map((item) => ({
+        id: item.id,
+        lastScrapeAt: item.lastScrapeAt,
+        dataInicio: item.dataInicio,
+        inicioRealizacao: item.inicioRealizacao,
+        ratingMatchFormat: item.ratingMatchFormat,
+      }));
+    const sharedMetrics = await this.loadScopedEventSummaryMetrics(scopedEventItems);
 
     return displayEvents.map((event) => {
       const scope = scopeByEventId.get(event.id) ?? {
@@ -1289,67 +1442,11 @@ export class UserService {
         allEventIds: [event.id],
         childSuffixByEventId: new Map<number, string>(),
       };
-
-      const totalCategorias = scope.allEventIds.reduce(
-        (sum, currentEventId) => sum + (effectiveCategoryCountByEvent.get(currentEventId) ?? 0),
-        0,
-      );
-      const associacoesAtletaCategoria = scope.allEventIds.reduce(
-        (sum, currentEventId) => sum + (athleteCategoryAssociationsByEvent.get(currentEventId) ?? 0),
-        0,
-      );
-      const associacoesTecnicoClube = scope.allEventIds.reduce(
-        (sum, currentEventId) => sum + (tecnicoClubAssociationsByEvent.get(currentEventId) ?? 0),
-        0,
-      );
-      const inscricoesTotaisOficiais = scope.allEventIds.reduce(
-        (sum, currentEventId) => sum + (officialTotalsByEvent.get(currentEventId)?.totalRegistered ?? 0),
-        0,
-      );
-      const inscricoesTotaisConsolidadas =
-        inscricoesTotaisOficiais > 0 ? inscricoesTotaisOficiais : associacoesAtletaCategoria;
-      const participantes = new Set<string>();
-      for (const currentEventId of scope.allEventIds) {
-        const names = participantNamesByEvent.get(currentEventId);
-        if (!names) {
-          continue;
-        }
-        for (const name of names) {
-          participantes.add(name);
-        }
-      }
-      const participantesUnicos = participantes.size;
-      const totalInscritos = participantesUnicos;
-      const totalTecnicos = associacoesTecnicoClube;
-      const groupsDefined = scope.allEventIds.some((currentEventId) => groupsDefinedByEventMap.get(currentEventId) ?? false);
-      const totalPartidasPublicadas = scope.allEventIds.reduce(
-        (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.published ?? 0),
-        0,
-      );
-      const totalPartidasPrevistas = scope.allEventIds.reduce(
-        (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.calculated ?? 0),
-        0,
-      );
-      const totalPartidasCalculadas = totalPartidasPrevistas;
-      const totalPartidasWo = scope.allEventIds.reduce(
-        (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.wo ?? 0),
-        0,
-      );
-      const totalPartidasJogadas = scope.allEventIds.reduce(
-        (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.played ?? 0),
-        0,
-      );
-      const totalPartidas = totalPartidasCalculadas;
-      const hasPublishedMatches = totalPartidasPublicadas > 0;
-      const hasPublishedResults = scope.allEventIds.some((currentEventId) => publishedResultsByEventMap.get(currentEventId) ?? false);
-      const mergedLastScrape = scope.allEventIds
-        .map((currentEventId) => lastScrapeByEventId.get(currentEventId) ?? null)
-        .filter((item): item is Date => Boolean(item))
-        .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+      const aggregate = this.aggregateScopedEventSummary(scope.allEventIds, sharedMetrics);
 
       return {
         ...event,
-        lastScrapeAt: mergedLastScrape,
+        lastScrapeAt: aggregate.mergedLastScrape,
         situacaoComputada: computeEventSituation({
           inicioInscricoes: event.inicioInscricoes,
           fimInscricoes: event.fimInscricoes,
@@ -1357,23 +1454,23 @@ export class UserService {
           fimRealizacao: event.fimRealizacao,
           dataInicio: event.dataInicio,
           dataFim: event.dataFim,
-          hasPublishedMatches,
-          hasPublishedResults,
+          hasPublishedMatches: aggregate.hasPublishedMatches,
+          hasPublishedResults: aggregate.hasPublishedResults,
         }),
-        totalCategorias,
-        totalInscritos,
-        totalPartidasPublicadas,
-        totalPartidasPrevistas,
-        totalPartidas,
-        totalPartidasCalculadas,
-        totalPartidasWo,
-        totalPartidasJogadas,
-        totalTecnicos,
-        inscricoesTotaisOficiais: inscricoesTotaisConsolidadas,
-        associacoesAtletaCategoria,
-        associacoesTecnicoClube,
-        participantesUnicos,
-        groupsDefined,
+        totalCategorias: aggregate.totalCategorias,
+        totalInscritos: aggregate.totalInscritos,
+        totalPartidasPublicadas: aggregate.totalPartidasPublicadas,
+        totalPartidasPrevistas: aggregate.totalPartidasPrevistas,
+        totalPartidas: aggregate.totalPartidas,
+        totalPartidasCalculadas: aggregate.totalPartidasCalculadas,
+        totalPartidasWo: aggregate.totalPartidasWo,
+        totalPartidasJogadas: aggregate.totalPartidasJogadas,
+        totalTecnicos: aggregate.totalTecnicos,
+        inscricoesTotaisOficiais: aggregate.inscricoesTotaisConsolidadas,
+        associacoesAtletaCategoria: aggregate.associacoesAtletaCategoria,
+        associacoesTecnicoClube: aggregate.associacoesTecnicoClube,
+        participantesUnicos: aggregate.participantesUnicos,
+        groupsDefined: aggregate.groupsDefined,
       };
     }).map((event) => {
       const userStatus = resolveUserEventStatus({
@@ -1398,7 +1495,7 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
-    const cacheKey = this.buildReadModelKey("event-summary-v11", scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey("event-summary-v12", scope.canonicalEventId);
     return this.resolveEventReadModelCache({
       event,
       cacheKey,
@@ -1407,246 +1504,23 @@ export class UserService {
       latestReliableRunId,
       compute: async () => {
         const allEventIds = scope.allEventIds;
-        const [
-          registrationMetrics,
-          groupMatchesByEvent,
-          publishedResultsByEvent,
-          scopedLastScrape,
-          officialAuditByEvent,
-          categoriesForAudit,
-          athleteRegistrationsByCategory,
-        ] = await Promise.all([
-      this.loadEventRegistrationMetrics(allEventIds),
-      this.prisma.match.groupBy({
-        by: ["eventId"],
-        where: {
-          eventId: { in: allEventIds },
-          OR: [{ phase: "GRUPOS" }, { round: { contains: "grupo", mode: "insensitive" } }],
-          category: {
-            cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
+        const scopedLastScrape = await this.prisma.event.findMany({
+          where: { id: { in: allEventIds } },
+          select: {
+            id: true,
+            lastScrapeAt: true,
+            dataInicio: true,
+            inicioRealizacao: true,
+            ratingMatchFormat: true,
           },
-        },
-        _count: { _all: true },
-      }),
-      this.prisma.match.groupBy({
-        by: ["eventId"],
-        where: {
-          eventId: { in: allEventIds },
-          phase: { in: ["GRUPOS", "RESULTADOS"] },
-          category: {
-            cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
-          },
-          OR: [{ winnerIndex: { not: null } }, { p1Sets: { not: null } }, { p2Sets: { not: null } }],
-        },
-        _count: { _all: true },
-      }),
-      this.prisma.event.findMany({
-        where: { id: { in: allEventIds } },
-        select: {
-          id: true,
-          lastScrapeAt: true,
-          dataInicio: true,
-          inicioRealizacao: true,
-          ratingMatchFormat: true,
-        },
-      }),
-      this.loadLatestOfficialCategoryAuditByEvent(allEventIds),
-      this.prisma.category.findMany({
-        where: {
-          eventId: { in: allEventIds },
-          cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
-        },
-        select: {
-          id: true,
-          eventId: true,
-          name: true,
-          cbtmCategoryId: true,
-        },
-      }),
-      this.prisma.athleteCategory.groupBy({
-        by: ["categoryId"],
-        where: {
-          registrationStatus: "INSCRITO",
-          athlete: {
-            eventId: { in: allEventIds },
-            createdFromWarning: false,
-          },
-          category: {
-            eventId: { in: allEventIds },
-            cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS, not: null },
-          },
-        },
-        _count: {
-          _all: true,
-        },
-      }),
-        ]);
-
-        const athleteCountByCategory = new Map<number, number>();
-        for (const row of athleteRegistrationsByCategory) {
-          athleteCountByCategory.set(row.categoryId, row._count._all);
-        }
-
-        const athleteCategoryAssociationsByEvent = registrationMetrics.athleteCategoryAssociationsByEvent;
-        const tecnicoClubAssociationsByEvent = registrationMetrics.tecnicoClubAssociationsByEvent;
-        const participantNamesByEvent = registrationMetrics.participantNamesByEvent;
-        const eventRulesByEventId = new Map<number, EventOfficialRules>(
-          scopedLastScrape.map((item) => [
-            item.id,
-            {
-              startDate: item.dataInicio ?? item.inicioRealizacao ?? null,
-              ratingMatchFormat: item.ratingMatchFormat ?? "RR_K1",
-            },
-          ]),
-        );
-        const officialTotalsByEvent = this.computeOfficialRegistrationTotalsByEvent(
-          officialAuditByEvent,
-          eventRulesByEventId,
-        );
-
-        const groupsDefinedByEventMap = new Map<number, boolean>();
-        for (const row of groupMatchesByEvent) {
-          groupsDefinedByEventMap.set(row.eventId, row._count._all > 0);
-        }
-
-        const publishedResultsByEventMap = new Map<number, boolean>();
-        for (const row of publishedResultsByEvent) {
-          publishedResultsByEventMap.set(row.eventId, row._count._all > 0);
-        }
-
-        const lastScrapeByEventId = new Map<number, Date>();
-        for (const row of scopedLastScrape) {
-          if (row.lastScrapeAt) {
-            lastScrapeByEventId.set(row.id, row.lastScrapeAt);
-          }
-        }
-
-        const associacoesAtletaCategoria = allEventIds.reduce(
-          (sum, currentEventId) => sum + (athleteCategoryAssociationsByEvent.get(currentEventId) ?? 0),
-          0,
-        );
-        const associacoesTecnicoClube = allEventIds.reduce(
-          (sum, currentEventId) => sum + (tecnicoClubAssociationsByEvent.get(currentEventId) ?? 0),
-          0,
-        );
-        const inscricoesTotaisOficiais = allEventIds.reduce(
-          (sum, currentEventId) => sum + (officialTotalsByEvent.get(currentEventId)?.totalRegistered ?? 0),
-          0,
-        );
-        const inscricoesTotaisConsolidadas =
-          inscricoesTotaisOficiais > 0 ? inscricoesTotaisOficiais : associacoesAtletaCategoria;
-        const participantes = new Set<string>();
-        for (const currentEventId of allEventIds) {
-          const names = participantNamesByEvent.get(currentEventId);
-          if (!names) {
-            continue;
-          }
-          for (const name of names) {
-            participantes.add(name);
-          }
-        }
-        const participantesUnicos = participantes.size;
-        const totalInscritos = participantesUnicos;
-        const totalTecnicos = associacoesTecnicoClube;
-        const groupsDefined = allEventIds.some((currentEventId) => groupsDefinedByEventMap.get(currentEventId) ?? false);
-        const officialRegisteredByCategoryId = new Map<number, number>();
-        for (const category of categoriesForAudit) {
-          const byEvent = officialAuditByEvent.get(category.eventId);
-          if (!byEvent) {
-            continue;
-          }
-          const cbtmCategoryId = String(category.cbtmCategoryId ?? "").trim();
-          const byId = cbtmCategoryId ? byEvent.get(cbtmCategoryId) : undefined;
-          const byName =
-            byId ??
-            [...byEvent.values()].find((entry) => normalizeText(entry.categoryName) === normalizeText(category.name));
-          const officialRegistered = Number(byName?.registeredCount ?? NaN);
-          if (Number.isFinite(officialRegistered) && officialRegistered >= 0) {
-            officialRegisteredByCategoryId.set(category.id, Math.trunc(officialRegistered));
-          }
-        }
-        const categoryIdsForAudit = categoriesForAudit.map((category) => category.id);
-        const publishedMatchesByCategory = await this.prisma.match.groupBy({
-          by: ["categoryId"],
-          where: {
-            eventId: { in: allEventIds },
-            categoryId: { in: categoryIdsForAudit },
-            phase: { in: ["GRUPOS", "RESULTADOS"] },
-          },
-          _count: { _all: true },
         });
-        const publishedByCategoryId = new Map<number, number>();
-        for (const row of publishedMatchesByCategory) {
-          publishedByCategoryId.set(row.categoryId, row._count._all);
-        }
-        const effectiveCategoryCountByEvent = countEffectiveCategoriesByEvent({
-          categories: categoriesForAudit,
-          officialRegisteredByCategoryId,
-          athleteCountByCategory,
-          publishedByCategoryId,
-        });
-        const totalCategorias = allEventIds.reduce(
-          (sum, currentEventId) => sum + (effectiveCategoryCountByEvent.get(currentEventId) ?? 0),
-          0,
-        );
-        const walkoversByCategoryId = await this.countWalkoversByCategoryIds(allEventIds, categoryIdsForAudit);
-        const metricsByEventId = new Map<number, { published: number; calculated: number; wo: number; played: number }>();
-        for (const category of categoriesForAudit) {
-          const rules = eventRulesByEventId.get(category.eventId) ?? {
-            startDate: null,
-            ratingMatchFormat: "RR_K1" as const,
-          };
-          const registeredBaseCount =
-            officialRegisteredByCategoryId.get(category.id) ?? (athleteCountByCategory.get(category.id) ?? 0);
-          const calculatedMatchesCount = computeOfficialCategoryMatchesCount(registeredBaseCount, {
-            categoryName: category.name,
-            eventStartDate: rules.startDate,
-            ratingMatchFormat: rules.ratingMatchFormat,
-          });
-          const categoryMetrics = computeCategoryMatchMetrics({
-            publishedMatchesCount: publishedByCategoryId.get(category.id) ?? 0,
-            calculatedMatchesCount,
-            walkoverMatchesCount: walkoversByCategoryId.get(category.id) ?? 0,
-          });
-          const current = metricsByEventId.get(category.eventId) ?? { published: 0, calculated: 0, wo: 0, played: 0 };
-          current.published += categoryMetrics.publishedMatchesCount;
-          current.calculated += categoryMetrics.calculatedMatchesCount;
-          current.wo += categoryMetrics.walkoverMatchesCount;
-          current.played += categoryMetrics.playedMatchesCount;
-          metricsByEventId.set(category.eventId, current);
-        }
-
-        const totalPartidasPublicadas = allEventIds.reduce(
-          (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.published ?? 0),
-          0,
-        );
-        const totalPartidasPrevistas = allEventIds.reduce(
-          (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.calculated ?? 0),
-          0,
-        );
-        const totalPartidasWo = allEventIds.reduce(
-          (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.wo ?? 0),
-          0,
-        );
-        const totalPartidasJogadas = allEventIds.reduce(
-          (sum, currentEventId) => sum + (metricsByEventId.get(currentEventId)?.played ?? 0),
-          0,
-        );
-        const totalPartidasCalculadas = totalPartidasPrevistas;
-        const totalPartidas = totalPartidasCalculadas;
-        const hasPublishedMatches = totalPartidasPublicadas > 0;
-        const hasPublishedResults = allEventIds.some((currentEventId) => publishedResultsByEventMap.get(currentEventId) ?? false);
-
-        const mergedLastScrape =
-          allEventIds
-            .map((currentEventId) => lastScrapeByEventId.get(currentEventId) ?? null)
-            .filter((item): item is Date => Boolean(item))
-            .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+        const sharedMetrics = await this.loadScopedEventSummaryMetrics(scopedLastScrape);
+        const aggregate = this.aggregateScopedEventSummary(allEventIds, sharedMetrics);
 
         const situacaoComputada = computeEventSituation({
           ...event,
-          hasPublishedMatches,
-          hasPublishedResults,
+          hasPublishedMatches: aggregate.hasPublishedMatches,
+          hasPublishedResults: aggregate.hasPublishedResults,
         });
 
         return {
@@ -1661,29 +1535,29 @@ export class UserService {
           dataInicio: event.dataInicio,
           dataFim: event.dataFim,
           concluido: event.concluido,
-          lastScrapeAt: mergedLastScrape,
+          lastScrapeAt: aggregate.mergedLastScrape,
           situacaoComputada,
-          totalCategorias,
-          totalInscritos,
-          totalPartidasPublicadas,
-          totalPartidasPrevistas,
-          totalPartidas,
-          totalPartidasCalculadas,
-          totalPartidasWo,
-          totalPartidasJogadas,
-          totalTecnicos,
-          inscricoesTotaisOficiais: inscricoesTotaisConsolidadas,
-          associacoesAtletaCategoria,
-          associacoesTecnicoClube,
-          participantesUnicos,
-          groupsDefined,
+          totalCategorias: aggregate.totalCategorias,
+          totalInscritos: aggregate.totalInscritos,
+          totalPartidasPublicadas: aggregate.totalPartidasPublicadas,
+          totalPartidasPrevistas: aggregate.totalPartidasPrevistas,
+          totalPartidas: aggregate.totalPartidas,
+          totalPartidasCalculadas: aggregate.totalPartidasCalculadas,
+          totalPartidasWo: aggregate.totalPartidasWo,
+          totalPartidasJogadas: aggregate.totalPartidasJogadas,
+          totalTecnicos: aggregate.totalTecnicos,
+          inscricoesTotaisOficiais: aggregate.inscricoesTotaisConsolidadas,
+          associacoesAtletaCategoria: aggregate.associacoesAtletaCategoria,
+          associacoesTecnicoClube: aggregate.associacoesTecnicoClube,
+          participantesUnicos: aggregate.participantesUnicos,
+          groupsDefined: aggregate.groupsDefined,
           userStatus: resolveUserEventStatus({
             concluido: event.concluido,
             eventSituation: situacaoComputada,
           }),
           groupSimulationEligible: canUseGroupSimulation({
             concluido: event.concluido,
-            groupsDefined,
+            groupsDefined: aggregate.groupsDefined,
             eventSituation: situacaoComputada,
           }),
         };

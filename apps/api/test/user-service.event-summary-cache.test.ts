@@ -86,7 +86,10 @@ function createServiceHarness() {
   };
 
   const service = new UserService(prismaRead as never, prismaWrite as never) as UserService & {
+    listEvents(): Promise<Array<Record<string, unknown>>>;
     resolveEventScope(eventId: number): Promise<{ canonicalEventId: number; allEventIds: number[] }>;
+    resolveEventScopeByCanonical(eventId: number): Promise<{ canonicalEventId: number; allEventIds: number[] }>;
+    loadEventMerges(): Promise<Array<{ canonicalEventId: number; secondaryEventId: number; secondarySuffix: string | null }>>;
     ensureEvent(eventId: number): Promise<Record<string, unknown>>;
     getLatestReliableScrapeRunIdForScope(eventIds: number[]): Promise<number>;
     loadEventRegistrationMetrics(eventIds: number[]): Promise<{
@@ -102,6 +105,11 @@ function createServiceHarness() {
     canonicalEventId: eventId,
     allEventIds: [eventId],
   });
+  service.resolveEventScopeByCanonical = async (eventId: number) => ({
+    canonicalEventId: eventId,
+    allEventIds: [eventId],
+  });
+  service.loadEventMerges = async () => [];
   service.ensureEvent = async (eventId: number) => ({
     id: eventId,
     cbtmEventId: 5368,
@@ -166,4 +174,23 @@ test("event summary persiste read model e reutiliza cache valido no mesmo scrape
   const second = await harness.service.getEventSummary(1);
   assert.deepEqual(second, first);
   assert.equal(harness.getCategoryFindManyCalls(), categoryCallsAfterFirst);
+});
+
+test("event list e event summary usam a mesma agregacao para o mesmo evento", async () => {
+  const harness = createServiceHarness();
+
+  const [listEntry] = await harness.service.listEvents();
+  const summary = await harness.service.getEventSummary(1);
+
+  assert.ok(listEntry);
+  assert.equal(listEntry.totalCategorias, summary.totalCategorias);
+  assert.equal(listEntry.totalInscritos, summary.totalInscritos);
+  assert.equal(listEntry.totalPartidasPrevistas, summary.totalPartidasPrevistas);
+  assert.equal(listEntry.totalPartidasPublicadas, summary.totalPartidasPublicadas);
+  assert.equal(listEntry.totalPartidasWo, summary.totalPartidasWo);
+  assert.equal(listEntry.totalPartidasJogadas, summary.totalPartidasJogadas);
+  assert.equal(listEntry.inscricoesTotaisOficiais, summary.inscricoesTotaisOficiais);
+  assert.equal(listEntry.associacoesAtletaCategoria, summary.associacoesAtletaCategoria);
+  assert.equal(listEntry.associacoesTecnicoClube, summary.associacoesTecnicoClube);
+  assert.equal(listEntry.participantesUnicos, summary.participantesUnicos);
 });
