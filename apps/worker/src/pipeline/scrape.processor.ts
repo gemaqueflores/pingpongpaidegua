@@ -95,6 +95,23 @@ interface ScrapeConformanceAudit {
 
 type CategoryKindForAudit = "RATING" | "RANKING";
 
+interface RegistrationSyncDecisionInput {
+  manualForceStage: ManualForceStage;
+  captureInscricoes: boolean;
+  currentAthletesBefore: number;
+  observedRegistrationAthletes: number;
+  observedRegistrationCategoryCount: number;
+  incidentalRegistrationCount: number;
+}
+
+interface RegistrationSyncDecision {
+  processRegistrations: boolean;
+  authoritativeRegistrationAbsence: boolean;
+  dropRatio: number | null;
+  guardrailReason: string | null;
+  warnings: string[];
+}
+
 function resolveManualForceStage(reason?: string): ManualForceStage {
   const normalized = String(reason ?? "").trim().toLowerCase();
   if (!normalized.startsWith("scrape-now-force")) {
@@ -143,6 +160,54 @@ export function shouldProcessRegistrationsForRun(input: {
   // acontecer quando o proprio run foi desenhado para capturar inscricoes e
   // nao se trata de um stage 3 focado em grupos/resultados.
   return input.captureInscricoes && input.manualForceStage !== "stage-3-resultados";
+}
+
+export function decideRegistrationSyncForRun(
+  input: RegistrationSyncDecisionInput,
+): RegistrationSyncDecision {
+  let processRegistrations = shouldProcessRegistrationsForRun({
+    manualForceStage: input.manualForceStage,
+    captureInscricoes: input.captureInscricoes,
+  });
+  const warnings: string[] = [];
+
+  if (!input.captureInscricoes && input.incidentalRegistrationCount > 0) {
+    warnings.push(
+      `REGISTRATION_SNAPSHOT_IGNORED: ${input.incidentalRegistrationCount} inscricoes vieram incidentalmente em um run sem captureInscricoes; sincronizacao destrutiva de inscricoes foi mantida desligada.`,
+    );
+  }
+
+  const dropRatio =
+    input.currentAthletesBefore > 0
+      ? input.observedRegistrationAthletes / input.currentAthletesBefore
+      : null;
+  let guardrailReason: string | null = null;
+
+  if (processRegistrations && input.captureInscricoes) {
+    const hasStrongCurrentBase = input.currentAthletesBefore >= 100;
+    const looksPartialSnapshot =
+      input.observedRegistrationAthletes === 0 || (dropRatio !== null && dropRatio < 0.55);
+    if (hasStrongCurrentBase && looksPartialSnapshot) {
+      processRegistrations = false;
+      guardrailReason =
+        "guardrail-registration-drop: inscricoes observadas muito abaixo da base atual";
+      warnings.push(
+        `GUARDRAIL_REGISTRATION_DROP: sincronizacao destrutiva de inscricoes desativada neste run (${guardrailReason}, observados=${input.observedRegistrationAthletes}, base_atual=${input.currentAthletesBefore}).`,
+      );
+    }
+  }
+
+  return {
+    processRegistrations,
+    authoritativeRegistrationAbsence:
+      processRegistrations &&
+      input.captureInscricoes &&
+      !guardrailReason &&
+      input.observedRegistrationCategoryCount > 0,
+    dropRatio,
+    guardrailReason,
+    warnings,
+  };
 }
 
 function athleteNameContainsReducedTokens(shortNameNormalized: string, athleteNameDisplay: string): boolean {
@@ -640,42 +705,11 @@ export class ScrapeProcessor {
           (registration) => `${registration.athleteNormalizedName}|${registration.clubNormalizedName}`,
         ),
       ).size;
-      let processRegistrations = shouldProcessRegistrationsForRun({
-        manualForceStage,
-        captureInscricoes: scrapePolicy.captureInscricoes,
-      });
-      let preUpsertGuardrailReason: string | null = null;
       if (manualForceStage === "stage-2-inscricoes" && !shouldClearCompetitiveData) {
         capture.warnings.push(
           `STAGE2_PRESERVOU_CONFRONTOS: limpeza competitiva ignorada na situacao '${eventSituation}' para preservar grupos/resultados publicados.`,
         );
       }
-      if (!scrapePolicy.captureInscricoes && dataset.registrations.length > 0) {
-        capture.warnings.push(
-          `REGISTRATION_SNAPSHOT_IGNORED: ${dataset.registrations.length} inscricoes vieram incidentalmente em um run sem captureInscricoes; sincronizacao destrutiva de inscricoes foi mantida desligada.`,
-        );
-      }
-      const registrationDropRatio =
-        currentTotalsBeforeUpsert.athletes > 0
-          ? observedRegistrationAthletes / currentTotalsBeforeUpsert.athletes
-          : null;
-      if (processRegistrations && scrapePolicy.captureInscricoes) {
-        const hasStrongCurrentBase = currentTotalsBeforeUpsert.athletes >= 100;
-        const looksPartialSnapshot =
-          observedRegistrationAthletes === 0 ||
-          (registrationDropRatio !== null && registrationDropRatio < 0.55);
-        if (hasStrongCurrentBase && looksPartialSnapshot) {
-          processRegistrations = false;
-          preUpsertGuardrailReason =
-            "guardrail-registration-drop: inscricoes observadas muito abaixo da base atual";
-        }
-      }
-      if (preUpsertGuardrailReason) {
-        capture.warnings.push(
-          `GUARDRAIL_REGISTRATION_DROP: sincronizacao destrutiva de inscricoes desativada neste run (${preUpsertGuardrailReason}, observados=${observedRegistrationAthletes}, base_atual=${currentTotalsBeforeUpsert.athletes}).`,
-        );
-      }
-
       const observedRegistrationCategoryIds = new Set(
         capture.categoriesDiscovered
           .filter((category) => category.valid)
@@ -688,11 +722,20 @@ export class ScrapeProcessor {
           .map((category) => normalizeText(category.categoryName))
           .filter(Boolean),
       );
+      const registrationSyncDecision = decideRegistrationSyncForRun({
+        manualForceStage,
+        captureInscricoes: scrapePolicy.captureInscricoes,
+        currentAthletesBefore: currentTotalsBeforeUpsert.athletes,
+        observedRegistrationAthletes,
+        observedRegistrationCategoryCount: observedRegistrationCategoryIds.size,
+        incidentalRegistrationCount: dataset.registrations.length,
+      });
+      const processRegistrations = registrationSyncDecision.processRegistrations;
       const authoritativeRegistrationAbsence =
-        processRegistrations &&
-        scrapePolicy.captureInscricoes &&
-        !preUpsertGuardrailReason &&
-        observedRegistrationCategoryIds.size > 0;
+        registrationSyncDecision.authoritativeRegistrationAbsence;
+      const registrationDropRatio = registrationSyncDecision.dropRatio;
+      const preUpsertGuardrailReason = registrationSyncDecision.guardrailReason;
+      capture.warnings.push(...registrationSyncDecision.warnings);
 
       const upsertResult = await this.upsertService.upsert(eventId, dataset, {
         processRegistrations,

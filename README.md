@@ -263,6 +263,19 @@ Scripts relacionados:
 - `scripts/vm/install-vm-ops.sh`
 - `scripts/vm/install-ssh-hardening.sh`
 
+Checklist minimo de migracao de VM:
+1. restaurar banco e validar contagens basicas de eventos/atletas/partidas
+2. subir stack com `docker compose` e validar `api`, `worker`, `postgres` e `redis`
+3. reinstalar scripts operacionais com `scripts/vm/install-vm-ops.sh`
+4. confirmar no `crontab -l` a presenca de:
+   - `ppg-recover`
+   - `ppg-vm-health`
+   - `ppg-housekeeping`
+   - `ppg-event-watch`
+5. validar `scripts/validate-update.ts --target=prod`
+6. validar `ops:autonomy-check` dentro do container do `worker`
+7. so depois desligar a VM antiga
+
 Monitoramento funcional de evento:
 - roda na VM a cada `10 min`
 - observa eventos em `GRADES_PUBLICADAS_PRE_JOGO`, `EM_ANDAMENTO` e `POS_EVENTO` recente

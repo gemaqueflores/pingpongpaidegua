@@ -5,7 +5,10 @@ import {
   computeEventSituation,
   shouldRunEventAutoScrape,
 } from "@cbtm/shared";
-import { shouldProcessRegistrationsForRun } from "../src/pipeline/scrape.processor";
+import {
+  decideRegistrationSyncForRun,
+  shouldProcessRegistrationsForRun,
+} from "../src/pipeline/scrape.processor";
 
 function dt(value: string): Date {
   return new Date(value);
@@ -241,4 +244,39 @@ test("shouldProcessRegistrationsForRun bloqueia sincronizacao destrutiva em stag
     }),
     false,
   );
+});
+
+test("decideRegistrationSyncForRun deriva processRegistrations e authoritativeRegistrationAbsence do mesmo contexto autoritativo", () => {
+  const decision = decideRegistrationSyncForRun({
+    manualForceStage: "full",
+    captureInscricoes: true,
+    currentAthletesBefore: 89,
+    observedRegistrationAthletes: 76,
+    observedRegistrationCategoryCount: 12,
+    incidentalRegistrationCount: 76,
+  });
+
+  assert.equal(decision.processRegistrations, true);
+  assert.equal(decision.authoritativeRegistrationAbsence, true);
+  assert.equal(decision.guardrailReason, null);
+  assert.deepEqual(decision.warnings, []);
+});
+
+test("decideRegistrationSyncForRun bloqueia sincronizacao destrutiva quando o snapshot parece parcial sobre base forte", () => {
+  const decision = decideRegistrationSyncForRun({
+    manualForceStage: "full",
+    captureInscricoes: true,
+    currentAthletesBefore: 120,
+    observedRegistrationAthletes: 5,
+    observedRegistrationCategoryCount: 13,
+    incidentalRegistrationCount: 5,
+  });
+
+  assert.equal(decision.processRegistrations, false);
+  assert.equal(decision.authoritativeRegistrationAbsence, false);
+  assert.equal(
+    decision.guardrailReason,
+    "guardrail-registration-drop: inscricoes observadas muito abaixo da base atual",
+  );
+  assert.match(decision.warnings[0] ?? "", /GUARDRAIL_REGISTRATION_DROP/);
 });
