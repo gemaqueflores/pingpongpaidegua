@@ -263,8 +263,12 @@ async function evaluateEvent(
       : null;
   const lastScrapeAt = toDate(event.lastScrapeAt);
   const staleScrapeMs = lastScrapeAt ? Math.max(0, now.getTime() - lastScrapeAt.getTime()) : null;
+  const shouldAuditPublishedMatches =
+    event.situacaoComputada === "GRADES_PUBLICADAS_PRE_JOGO" ||
+    event.situacaoComputada === "EM_ANDAMENTO" ||
+    event.situacaoComputada === "POS_EVENTO";
 
-  if (event.totalPartidasJogadas !== event.totalPartidas - event.totalPartidasWo) {
+  if (shouldAuditPublishedMatches && event.totalPartidasJogadas !== event.totalPartidas - event.totalPartidasWo) {
     reasons.push("summary_played_inconsistent");
   }
   if (
@@ -274,13 +278,13 @@ async function evaluateEvent(
   ) {
     reasons.push("registration_summary_mismatch");
   }
-  if (playedMatchesSum !== calculatedMatchesSum - walkoversSum) {
+  if (shouldAuditPublishedMatches && playedMatchesSum !== calculatedMatchesSum - walkoversSum) {
     reasons.push("category_played_inconsistent");
   }
-  if (event.totalPartidasJogadas !== playedMatchesSum) {
+  if (shouldAuditPublishedMatches && event.totalPartidasJogadas !== playedMatchesSum) {
     reasons.push("summary_vs_categories_played_mismatch");
   }
-  if (categoriesDiagnosticsNotOk > 0) {
+  if (shouldAuditPublishedMatches && categoriesDiagnosticsNotOk > 0) {
     reasons.push(`medalists_diagnostics_not_ok=${categoriesDiagnosticsNotOk}`);
   }
   if (latestRun?.status === "ERROR") {
