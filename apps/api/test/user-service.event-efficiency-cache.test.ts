@@ -131,7 +131,7 @@ test("event efficiency persiste read model e reutiliza cache valido no mesmo scr
 test("event efficiency usa cache stale quando recomputacao falha", async () => {
   const harness = createEfficiencyServiceHarness();
   harness.setCachedRecord({
-    key: "event-efficiency-v3|event:1",
+    key: "event-efficiency-v4|event:1",
     sourceScrapeRunId: 77,
     payload: {
       eventId: 1,

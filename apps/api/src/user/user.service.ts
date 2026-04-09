@@ -1897,7 +1897,7 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
-    const cacheKey = this.buildReadModelKey("event-efficiency-v3", scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey("event-efficiency-v4", scope.canonicalEventId);
     return this.resolveEventReadModelCache({
       event,
       cacheKey,
