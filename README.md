@@ -278,9 +278,11 @@ Checklist minimo de migracao de VM:
 
 Monitoramento funcional de evento:
 - roda na VM a cada `10 min`
-- observa eventos em `GRADES_PUBLICADAS_PRE_JOGO`, `EM_ANDAMENTO` e `POS_EVENTO` recente
+- observa eventos em `POS_INSCRICOES_PRE_EVENTO`, `GRADES_PUBLICADAS_PRE_JOGO`, `EM_ANDAMENTO` e `POS_EVENTO` recente
 - audita inconsistencias entre resumo do evento e quadro de medalhistas
-- pode disparar `post-scrape-reprocess` com cooldown quando encontrar inconsistencias de publicacao
+- pode disparar:
+  - `scrape-now-force:stage-2` com cooldown quando detectar mismatch autoritativo de inscricoes no pre-evento
+  - `post-scrape-reprocess` com cooldown quando encontrar inconsistencias de publicacao
 
 Alertas operacionais:
 - `ppg-vm-health`, `ppg-event-watch` e `ppg-recover` suportam alertas por `Discord`, `Telegram` e `WhatsApp`

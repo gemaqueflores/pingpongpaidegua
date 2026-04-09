@@ -30,6 +30,10 @@ type EventSummary = {
   dataInicio: string | null;
   dataFim: string | null;
   lastScrapeAt: string | null;
+  inscricoesTotaisOficiais: number;
+  associacoesAtletaCategoria: number;
+  participantesUnicos: number;
+  totalCategorias: number;
   totalPartidas: number;
   totalPartidasWo: number;
   totalPartidasJogadas: number;
@@ -52,8 +56,15 @@ type EventWatchResult = {
   situation: EventSituation;
   status: "pass" | "warn" | "fail";
   reasons: string[];
-  autoAction: "none" | "post-reprocess-enqueued" | "post-reprocess-skipped";
+  autoAction:
+    | "none"
+    | "post-reprocess-enqueued"
+    | "post-reprocess-skipped"
+    | "stage-2-enqueued"
+    | "stage-2-skipped";
   metrics: {
+    inscricoesTotaisOficiais: number;
+    associacoesAtletaCategoria: number;
     totalPartidas: number;
     totalPartidasWo: number;
     totalPartidasJogadas: number;
@@ -164,7 +175,11 @@ function toDate(value: string | null | undefined): Date | null {
 }
 
 function shouldWatchEvent(event: EventSummary, now: Date, postEventHours: number): boolean {
-  if (event.situacaoComputada === "GRADES_PUBLICADAS_PRE_JOGO" || event.situacaoComputada === "EM_ANDAMENTO") {
+  if (
+    event.situacaoComputada === "POS_INSCRICOES_PRE_EVENTO" ||
+    event.situacaoComputada === "GRADES_PUBLICADAS_PRE_JOGO" ||
+    event.situacaoComputada === "EM_ANDAMENTO"
+  ) {
     return true;
   }
   if (event.situacaoComputada === "POS_EVENTO") {
@@ -177,6 +192,20 @@ function shouldWatchEvent(event: EventSummary, now: Date, postEventHours: number
 
 async function enqueuePostReprocess(queue: Queue, eventInternalId: number): Promise<void> {
   const reason = "post-scrape-reprocess";
+  const safeReason = reason.replace(/[^a-zA-Z0-9_-]/g, "-");
+  await queue.add(
+    "scrape-event",
+    { eventId: eventInternalId, reason },
+    {
+      jobId: `watch-${eventInternalId}-${safeReason}-${Date.now()}`,
+      removeOnComplete: true,
+      removeOnFail: 100,
+    },
+  );
+}
+
+async function enqueueStage2(queue: Queue, eventInternalId: number): Promise<void> {
+  const reason = "scrape-now-force:stage-2";
   const safeReason = reason.replace(/[^a-zA-Z0-9_-]/g, "-");
   await queue.add(
     "scrape-event",
@@ -238,6 +267,13 @@ async function evaluateEvent(
   if (event.totalPartidasJogadas !== event.totalPartidas - event.totalPartidasWo) {
     reasons.push("summary_played_inconsistent");
   }
+  if (
+    event.situacaoComputada === "POS_INSCRICOES_PRE_EVENTO" &&
+    event.inscricoesTotaisOficiais > 0 &&
+    event.associacoesAtletaCategoria !== event.inscricoesTotaisOficiais
+  ) {
+    reasons.push("registration_summary_mismatch");
+  }
   if (playedMatchesSum !== calculatedMatchesSum - walkoversSum) {
     reasons.push("category_played_inconsistent");
   }
@@ -255,7 +291,15 @@ async function evaluateEvent(
   }
 
   let status: EventWatchResult["status"] = "pass";
-  if (reasons.some((reason) => reason.includes("inconsistent") || reason === "latest_run_error" || reason.startsWith("stale_scrape="))) {
+  if (
+    reasons.some(
+      (reason) =>
+        reason.includes("inconsistent") ||
+        reason === "registration_summary_mismatch" ||
+        reason === "latest_run_error" ||
+        reason.startsWith("stale_scrape="),
+    )
+  ) {
     status = "fail";
   } else if (reasons.length > 0) {
     status = "warn";
@@ -271,8 +315,23 @@ async function evaluateEvent(
       reasons.includes("category_played_inconsistent") ||
       reasons.includes("summary_vs_categories_played_mismatch") ||
       reasons.some((reason) => reason.startsWith("medalists_diagnostics_not_ok=")));
+  const shouldAutoStage2Repair =
+    autoPostReprocess &&
+    event.situacaoComputada === "POS_INSCRICOES_PRE_EVENTO" &&
+    reasons.includes("registration_summary_mismatch");
 
-  if (shouldAutoReprocess) {
+  if (shouldAutoStage2Repair) {
+    if (scrapeLockedAt || (recentRunMs !== null && recentRunMs < postReprocessCooldownMs)) {
+      autoAction = "stage-2-skipped";
+    } else {
+      if (queue) {
+        await enqueueStage2(queue, event.id);
+        autoAction = "stage-2-enqueued";
+      } else {
+        autoAction = "stage-2-skipped";
+      }
+    }
+  } else if (shouldAutoReprocess) {
     if (scrapeLockedAt || (recentRunMs !== null && recentRunMs < postReprocessCooldownMs)) {
       autoAction = "post-reprocess-skipped";
     } else {
@@ -294,6 +353,8 @@ async function evaluateEvent(
     reasons,
     autoAction,
     metrics: {
+      inscricoesTotaisOficiais: event.inscricoesTotaisOficiais,
+      associacoesAtletaCategoria: event.associacoesAtletaCategoria,
       totalPartidas: event.totalPartidas,
       totalPartidasWo: event.totalPartidasWo,
       totalPartidasJogadas: event.totalPartidasJogadas,
