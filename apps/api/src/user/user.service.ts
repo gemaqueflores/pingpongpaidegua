@@ -2305,7 +2305,7 @@ export class UserService {
             OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
           };
 
-    const [weights, clubs, categories] = await Promise.all([
+    const [weights, clubs, registeredAthletesByClub, categories] = await Promise.all([
       this.getEfficiencyWeights(),
       this.prisma.club.findMany({
         where: {
@@ -2330,6 +2330,26 @@ export class UserService {
             },
           },
         },
+      }),
+      this.prisma.athlete.findMany({
+        where: {
+          ...athleteFilter,
+          nameDisplay: {
+            not: {
+              contains: "#",
+            },
+          },
+          categories: {
+            some: {
+              registrationStatus: "INSCRITO",
+            },
+          },
+        },
+        select: {
+          clubId: true,
+          nameNormalized: true,
+        },
+        distinct: ["clubId", "nameNormalized"],
       }),
       this.prisma.category.findMany({
         where: categoryFilter,
@@ -2366,12 +2386,20 @@ export class UserService {
     const rowsByClubId = new Map<number, ClubEfficiencyRow>();
     const athleteClubByAthleteId = new Map<number, number>();
     const medalistsByClubEvent = new Map<number, Map<number, EfficiencyEventMedalist[]>>();
+    const registeredAthleteCountByClub = new Map<number, number>();
+
+    for (const athlete of registeredAthletesByClub) {
+      registeredAthleteCountByClub.set(
+        athlete.clubId,
+        (registeredAthleteCountByClub.get(athlete.clubId) ?? 0) + 1,
+      );
+    }
 
     for (const club of clubs) {
       rowsByClubId.set(club.id, {
         clubId: club.id,
         clubName: club.name,
-        athleteCount: club.athletes.length,
+        athleteCount: registeredAthleteCountByClub.get(club.id) ?? 0,
         ouro: 0,
         prata: 0,
         bronze: 0,
@@ -2645,7 +2673,7 @@ export class UserService {
       throw new NotFoundException("Clube nao encontrado");
     }
 
-    const [weights, athletesByEvent] = await Promise.all([
+    const [weights, athletesByEvent, registeredAthletesByEvent] = await Promise.all([
       this.getEfficiencyWeights(),
       this.prisma.athlete.findMany({
         where: {
@@ -2657,6 +2685,27 @@ export class UserService {
           nameDisplay: true,
           eventId: true,
         },
+      }),
+      this.prisma.athlete.findMany({
+        where: {
+          clubId,
+          createdFromWarning: false,
+          nameDisplay: {
+            not: {
+              contains: "#",
+            },
+          },
+          categories: {
+            some: {
+              registrationStatus: "INSCRITO",
+            },
+          },
+        },
+        select: {
+          eventId: true,
+          nameNormalized: true,
+        },
+        distinct: ["eventId", "nameNormalized"],
       }),
     ]);
 
@@ -2845,6 +2894,9 @@ export class UserService {
     const athleteEventSetByGroupKey = new Map<string, Set<number>>();
     const athleteGroupKeyById = new Map<number, string>();
     const athleteCountByEvent = new Map<number, number>();
+    for (const row of registeredAthletesByEvent) {
+      athleteCountByEvent.set(row.eventId, (athleteCountByEvent.get(row.eventId) ?? 0) + 1);
+    }
     for (const row of athletesByEvent) {
       const normalized = normalizeAthleteName(row.nameDisplay);
       const groupKey = normalized ? `name:${normalized}` : `id:${row.id}`;
@@ -2860,7 +2912,6 @@ export class UserService {
       const set = athleteEventSetByGroupKey.get(groupKey) ?? new Set<number>();
       set.add(row.eventId);
       athleteEventSetByGroupKey.set(groupKey, set);
-      athleteCountByEvent.set(row.eventId, (athleteCountByEvent.get(row.eventId) ?? 0) + 1);
     }
 
     const medalsByType = new Map<EfficiencyCompetitionType, EfficiencyMedalCounter>([

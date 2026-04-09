@@ -394,3 +394,66 @@ test("club efficiency career preserva nome canonico da dupla ao recomputar athle
   assert.equal(result.athletesContribution[0]?.athleteName, "ANDREZA MOTA - LUDMILLA LIMA");
   assert.equal(result.athletesContribution[0]?.ouro, 1);
 });
+
+test("club efficiency career usa contagem de atletas unicos com inscricao confirmada no resumo do evento", async () => {
+  const prisma = {
+    club: {
+      async findUnique() {
+        return { id: 1, name: "CLUBE A" };
+      },
+    },
+    athlete: {
+      async findMany(args?: { select?: Record<string, unknown> }) {
+        if (args?.select && "nameNormalized" in args.select) {
+          return [
+            { eventId: 45, nameNormalized: "alice" },
+            { eventId: 45, nameNormalized: "dora" },
+          ];
+        }
+        return [
+          { id: 100, nameDisplay: "ALICE", eventId: 45 },
+          { id: 101, nameDisplay: "ALICE", eventId: 45 },
+          { id: 102, nameDisplay: "BIA # CARLA", eventId: 45 },
+          { id: 103, nameDisplay: "DORA", eventId: 45 },
+        ];
+      },
+    },
+    event: {
+      async findMany() {
+        return [
+          {
+            id: 45,
+            nome: "2TMB26 - DUPLAS",
+            nivel: "ESTADUAL",
+            concluido: true,
+            inicioRealizacao: new Date("2026-03-28T00:00:00.000Z"),
+            fimRealizacao: new Date("2026-03-29T00:00:00.000Z"),
+            dataInicio: new Date("2026-03-28T00:00:00.000Z"),
+            dataFim: new Date("2026-03-29T00:00:00.000Z"),
+          },
+        ];
+      },
+    },
+    category: {
+      async findMany() {
+        return [];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [];
+      },
+    },
+    match: {
+      async findMany() {
+        return [];
+      },
+    },
+  };
+
+  const service = new UserService(prisma as never, prisma as never) as UserService;
+  const result = await service.getClubEfficiencyCareer(1);
+
+  assert.equal(result.summary.ultimoEventoId, 45);
+  assert.equal(result.summary.nAtletasUltimoEvento, 2);
+});

@@ -84,6 +84,11 @@ test("event efficiency ignora categoria completamente vazia", async () => {
         ];
       },
     },
+    athlete: {
+      async findMany() {
+        return [];
+      },
+    },
     category: {
       async findMany() {
         return [{ id: 12, name: "ABSOLUTO C (MAS)", eventId: 46, cbtmCategoryId: "59" }];
@@ -133,4 +138,75 @@ test("event efficiency ignora categoria completamente vazia", async () => {
   assert.equal(para?.bronze, 0);
   assert.equal(para?.totalQuantidade, 0);
   assert.equal(para?.totalPontuacao, 0);
+});
+
+test("event efficiency usa athleteCount por atletas unicos com inscricao confirmada", async () => {
+  const prisma = {
+    club: {
+      async findMany() {
+        return [
+          {
+            id: 132,
+            name: "PARÁ CLUBE - PA",
+            athletes: [
+              { id: 10, nameDisplay: "ALICE", clubId: 132 },
+              { id: 11, nameDisplay: "ALICE", clubId: 132 },
+              { id: 12, nameDisplay: "BIA # CARLA", clubId: 132 },
+              { id: 13, nameDisplay: "DORA", clubId: 132 },
+            ],
+          },
+        ];
+      },
+    },
+    athlete: {
+      async findMany() {
+        return [
+          { clubId: 132, nameNormalized: "alice" },
+          { clubId: 132, nameNormalized: "dora" },
+        ];
+      },
+    },
+    category: {
+      async findMany() {
+        return [];
+      },
+    },
+    event: {
+      async findMany() {
+        return [];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [];
+      },
+    },
+    match: {
+      async findMany() {
+        return [];
+      },
+    },
+  };
+
+  const service = new UserService(prisma as never, prisma as never) as UserService & {
+    getStateCircuitEligibleClubIds(): Promise<Set<number>>;
+    getEfficiencyWeights(): Promise<{ pesoOuro: number; pesoPrata: number; pesoBronze: number }>;
+    computeEfficiencyRanking(input: { eventIds?: number[] }): Promise<{
+      ranking: Array<{
+        clubId: number;
+        athleteCount: number;
+        totalQuantidade: number;
+      }>;
+    }>;
+  };
+
+  service.getStateCircuitEligibleClubIds = async () => new Set([132]);
+  service.getEfficiencyWeights = async () => ({ pesoOuro: 130, pesoPrata: 80, pesoBronze: 50 });
+
+  const result = await service.computeEfficiencyRanking({ eventIds: [46] });
+  const para = result.ranking.find((row) => row.clubId === 132);
+
+  assert.ok(para);
+  assert.equal(para?.athleteCount, 2);
+  assert.equal(para?.totalQuantidade, 0);
 });
