@@ -81,23 +81,6 @@ export function selectAthletesByRegistrationScope(
     };
   }
 
-  if (scope === "confirmed") {
-    const unknown = rows.filter((row) => row.registrationStatus === null);
-    if (unknown.length > 0) {
-      warnings.push(
-        `Nenhum inscrito confirmado encontrado; usando ${unknown.length} atleta(s) com status desconhecido (legado).`,
-      );
-      return {
-        athletes: unknown.map((row) => ({
-          ...row.athlete,
-          rankingPoints: row.rankingPoints ?? row.athlete.rankingPoints,
-          ratingPoints: row.ratingPoints ?? row.athlete.ratingPoints,
-        })),
-        warnings,
-      };
-    }
-  }
-
   return {
     athletes: [],
     warnings,

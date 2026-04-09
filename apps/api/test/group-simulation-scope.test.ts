@@ -65,14 +65,11 @@ test("scope confirmed_and_pre inclui inscritos e pre-inscritos", () => {
   );
 });
 
-test("scope confirmed usa fallback legado quando so ha status desconhecido", () => {
+test("scope confirmed nao usa atletas com status desconhecido", () => {
   const selected = selectAthletesByRegistrationScope([row(10, null), row(11, null)], "confirmed");
 
-  assert.deepEqual(
-    selected.athletes.map((athlete) => athlete.id),
-    [10, 11],
-  );
-  assert.ok(selected.warnings.length > 0);
+  assert.deepEqual(selected.athletes, []);
+  assert.deepEqual(selected.warnings, []);
 });
 
 test("categoria precisa de no minimo 3 atletas para simulacao", () => {
