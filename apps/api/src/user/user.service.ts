@@ -281,6 +281,13 @@ type ResolvedAthleteRouteContext = {
 };
 
 function toReducedName(name: string): string {
+  if (isCompositePairName(name)) {
+    const reducedParts = splitPairNameParts(name).map((part) => toReducedName(part)).filter(Boolean);
+    if (reducedParts.length >= 2) {
+      return reducedParts.join(" # ");
+    }
+  }
+
   const tokens = name
     .trim()
     .split(/\s+/g)

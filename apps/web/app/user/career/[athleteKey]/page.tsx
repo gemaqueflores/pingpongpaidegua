@@ -142,7 +142,16 @@ function formatAthleteFederation(input: {
 }
 
 function toReducedName(name: string | null | undefined): string {
-  const tokens = String(name ?? "")
+  const raw = String(name ?? "").trim();
+  const pairParts = raw
+    .split(/\s+#\s+|#|\s+-\s+/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (pairParts.length >= 2) {
+    return pairParts.map((part) => toReducedName(part)).join(" # ");
+  }
+
+  const tokens = raw
     .trim()
     .split(/\s+/g)
     .filter(Boolean);

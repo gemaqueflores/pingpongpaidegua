@@ -139,3 +139,27 @@ test("listClubAthletes exige registrationStatus INSCRITO no lookup do clube e do
     "INSCRITO",
   );
 });
+
+test("listAthleteDirectory preserva nome reduzido de duplas sem colapsar os dois integrantes", async () => {
+  const prisma = {
+    athlete: {
+      async findMany() {
+        return [
+          {
+            id: 10,
+            eventId: 46,
+            nameDisplay: "EDSON SILVA # LUDMILLA LIMA",
+            nameNormalized: "edson silva # ludmilla lima",
+          },
+        ];
+      },
+    },
+  };
+
+  const service = createService(prisma);
+  const result = await service.listAthleteDirectory("edson");
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0]?.nameDisplay, "EDSON SILVA # LUDMILLA LIMA");
+  assert.equal(result[0]?.nameReduced, "EDSON SILVA # LUDMILLA LIMA");
+});
