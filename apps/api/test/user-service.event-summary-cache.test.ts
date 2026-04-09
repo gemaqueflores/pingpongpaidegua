@@ -194,3 +194,51 @@ test("event list e event summary usam a mesma agregacao para o mesmo evento", as
   assert.equal(listEntry.associacoesTecnicoClube, summary.associacoesTecnicoClube);
   assert.equal(listEntry.participantesUnicos, summary.participantesUnicos);
 });
+
+test("official category audit seleciona o ultimo run com auditoria por evento sem depender do tamanho do lote", async () => {
+  const service = new UserService(
+    {
+      scrapeRun: {
+        async findMany() {
+          const runs: Array<{ eventId: number; extractionStats: unknown }> = [];
+          for (let index = 60; index >= 1; index -= 1) {
+            runs.push({
+              eventId: 1,
+              extractionStats: {
+                capture: {
+                  categoriesDiscoveredAudit:
+                    index === 1
+                      ? [{ categoryId: "111", categoryName: "ABSOLUTO E (MAS)", valid: true, registeredCount: 4 }]
+                      : [],
+                },
+              },
+            });
+          }
+          for (let index = 60; index >= 1; index -= 1) {
+            runs.push({
+              eventId: 2,
+              extractionStats: {
+                capture: {
+                  categoriesDiscoveredAudit:
+                    index === 1
+                      ? [{ categoryId: "222", categoryName: "ABSOLUTO F (MAS)", valid: true, registeredCount: 6 }]
+                      : [],
+                },
+              },
+            });
+          }
+          return runs;
+        },
+      },
+    } as never,
+    {} as never,
+  ) as UserService & {
+    loadLatestOfficialCategoryAuditByEvent(
+      eventIds: number[],
+    ): Promise<Map<number, Map<string, { categoryId: string; registeredCount: number | null }>>>;
+  };
+
+  const selected = await service.loadLatestOfficialCategoryAuditByEvent([1, 2]);
+  assert.equal(selected.get(1)?.get("111")?.registeredCount, 4);
+  assert.equal(selected.get(2)?.get("222")?.registeredCount, 6);
+});

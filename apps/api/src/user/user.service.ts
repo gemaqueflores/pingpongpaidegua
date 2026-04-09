@@ -1012,13 +1012,13 @@ export class UserService {
     const runs = await this.prisma.scrapeRun.findMany({
       where: {
         eventId: { in: eventIds },
+        status: { in: ["SUCCESS", "PARTIAL"] },
       },
-      orderBy: [{ startedAt: "desc" }],
+      orderBy: [{ eventId: "asc" }, { startedAt: "desc" }, { id: "desc" }],
       select: {
         eventId: true,
         extractionStats: true,
       },
-      take: Math.max(eventIds.length * 8, 40),
     });
 
     const selected = new Map<number, Map<string, OfficialCategoryAuditRow>>();
