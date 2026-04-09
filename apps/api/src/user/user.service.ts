@@ -4331,6 +4331,14 @@ export class UserService {
     });
     const athleteCategoryIds = [...new Set(athleteCategoryLinks.map((link) => link.categoryId))];
     const athleteNameKeys = this.buildAthleteNameKeys(canonicalName, normalizeAthleteName(canonicalName));
+    const pairMemberKeys =
+      pairCareer && isCompositePairName(canonicalName)
+        ? new Set(
+            splitPairNameParts(canonicalName)
+              .map((part) => normalizeAthleteName(part))
+              .filter((part): part is string => Boolean(part)),
+          )
+        : undefined;
     const matches = await this.prisma.match.findMany({
       where: pairCareer
         ? {
@@ -4391,7 +4399,7 @@ export class UserService {
       }
 
       const primaryAthleteId = pairCareer ? athleteIds[0] : [...matchedAthleteIds].sort((a, b) => a - b)[0];
-      const summary = this.buildAthleteSummaryMatch(match, primaryAthleteId, athleteNameKeys);
+      const summary = this.buildAthleteSummaryMatch(match, primaryAthleteId, athleteNameKeys, pairMemberKeys);
       if (!summary) {
         continue;
       }
@@ -4581,6 +4589,7 @@ export class UserService {
     match: MatchWithRelations,
     athleteId: number,
     athleteNameKeys?: Set<string>,
+    pairMemberKeys?: Set<string>,
   ): AthleteSummaryMatch | null {
     const participants = match.participants.map((participant) => participant.athlete);
     const ordered = this.resolveOrderedPlayers(match.scorePlayers, participants);
@@ -4590,7 +4599,7 @@ export class UserService {
     let athleteIndex: 0 | 1 | null = directAthleteIndex;
 
     if (athleteIndex === null && athleteNameKeys && athleteNameKeys.size > 0) {
-      athleteIndex = this.resolveProjectedAthleteIndexFromPair(ordered.players, athleteNameKeys);
+      athleteIndex = this.resolveProjectedAthleteIndexFromPair(ordered.players, athleteNameKeys, pairMemberKeys);
     }
 
     if (athleteIndex === null && !participants.some((participant) => participant.id === athleteId)) {
@@ -4709,6 +4718,7 @@ export class UserService {
   private resolveProjectedAthleteIndexFromPair(
     players: [AthleteSummaryPlayer | null, AthleteSummaryPlayer | null],
     athleteNameKeys: Set<string>,
+    pairMemberKeys?: Set<string>,
   ): 0 | 1 | null {
     const containsCanonicalPair = (playerName: string | null | undefined): boolean => {
       const normalizedPair = normalizeAthleteName(normalizeCompositePairName(playerName));
@@ -4719,6 +4729,12 @@ export class UserService {
       const parts = splitPairNameParts(playerName);
       if (parts.length < 2) {
         return false;
+      }
+      const normalizedParts = parts
+        .map((part) => normalizeAthleteName(part))
+        .filter((part): part is string => Boolean(part));
+      if (pairMemberKeys && pairMemberKeys.size > 0) {
+        return [...pairMemberKeys].every((member) => normalizedParts.includes(member));
       }
       for (const part of parts) {
         const normalized = normalizeAthleteName(part);
