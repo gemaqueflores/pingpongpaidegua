@@ -45,6 +45,14 @@ interface UpsertOptions {
   observedRegistrationCategoryNames?: Set<string>;
 }
 
+export function shouldPruneStage3StaleMatches(input: {
+  pruneEnabled: boolean;
+  processRegistrations: boolean;
+  eventConcluded: boolean;
+}): boolean {
+  return input.pruneEnabled && !input.processRegistrations && input.eventConcluded;
+}
+
 interface CachedClub {
   id: number;
   name: string;
@@ -1413,11 +1421,12 @@ export class UpsertService {
       }
     }
 
-    const shouldPruneStage3StaleMatches =
-      config.stage3PruneStaleMatches &&
-      !processRegistrations &&
-      (Boolean(event?.concluido) || eventSituation === "POS_EVENTO");
-    if (shouldPruneStage3StaleMatches) {
+    const shouldPruneStage3StaleMatchesNow = shouldPruneStage3StaleMatches({
+      pruneEnabled: config.stage3PruneStaleMatches,
+      processRegistrations,
+      eventConcluded: Boolean(event?.concluido),
+    });
+    if (shouldPruneStage3StaleMatchesNow) {
       const keepMatchKeys = new Set(dedupedMatchesFinal.matches.map((item) => item.matchKey));
       const touchedCategoryIds = new Set<number>();
       for (const item of dedupedMatchesFinal.matches) {
@@ -1483,9 +1492,11 @@ export class UpsertService {
           );
         }
       }
-    } else if (!processRegistrations && (Boolean(event?.concluido) || eventSituation === "POS_EVENTO")) {
+    } else if (!processRegistrations && eventSituation === "POS_EVENTO") {
       warnings.push(
-        "Saneamento stage-3 de jogos obsoletos desativado (STAGE3_PRUNE_STALE_MATCHES=false).",
+        Boolean(event?.concluido)
+          ? "Saneamento stage-3 de jogos obsoletos desativado (STAGE3_PRUNE_STALE_MATCHES=false)."
+          : "Saneamento stage-3 de jogos obsoletos adiado: evento ainda nao foi concluido no banco.",
       );
     }
 

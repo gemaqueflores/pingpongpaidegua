@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import type { ParsedMatch } from "@cbtm/shared";
-import { UpsertService } from "../src/pipeline/upsert.service";
+import { UpsertService, shouldPruneStage3StaleMatches } from "../src/pipeline/upsert.service";
 import { prisma } from "../src/prisma";
 
 function buildMatch(input: Partial<ParsedMatch> & Pick<ParsedMatch, "matchKey" | "categoryId">): ParsedMatch {
@@ -29,6 +29,35 @@ function buildMatch(input: Partial<ParsedMatch> & Pick<ParsedMatch, "matchKey" |
     matchKey: input.matchKey,
   };
 }
+
+test("shouldPruneStage3StaleMatches exige evento concluido no banco", () => {
+  assert.equal(
+    shouldPruneStage3StaleMatches({
+      pruneEnabled: true,
+      processRegistrations: false,
+      eventConcluded: true,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldPruneStage3StaleMatches({
+      pruneEnabled: true,
+      processRegistrations: false,
+      eventConcluded: false,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldPruneStage3StaleMatches({
+      pruneEnabled: true,
+      processRegistrations: true,
+      eventConcluded: true,
+    }),
+    false,
+  );
+});
 
 test("deduplicacao cross-category preserva o jogo da categoria cujo pool combina com os atletas", () => {
   const service = new UpsertService() as unknown as {
