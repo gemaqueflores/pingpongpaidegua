@@ -52,6 +52,28 @@ test("listAthletes exige registrationStatus INSCRITO", async () => {
   );
 });
 
+test("listAthletes busca por nome normalizado sem depender de acentos", async () => {
+  let whereArg: Record<string, unknown> | null = null;
+  const prisma = {
+    athlete: {
+      async findMany(args: { where: Record<string, unknown> }) {
+        whereArg = args.where;
+        return [];
+      },
+    },
+  };
+
+  const service = createService(prisma);
+  await service.listAthletes(44, "cassio");
+
+  const andClauses = (whereArg?.AND as Array<Record<string, unknown>>) ?? [];
+  const searchClause = andClauses.find((item) => "nameNormalized" in item) as
+    | { nameNormalized?: { contains?: string } }
+    | undefined;
+
+  assert.equal(searchClause?.nameNormalized?.contains, "cassio");
+});
+
 test("listClubs exige registrationStatus INSCRITO no filtro principal e na contagem por clube", async () => {
   const clubWhereArgs: Array<Record<string, unknown>> = [];
   const athleteWhereArgs: Array<Record<string, unknown>> = [];
@@ -84,6 +106,23 @@ test("listClubs exige registrationStatus INSCRITO no filtro principal e na conta
       null)),
     "INSCRITO",
   );
+});
+
+test("listClubs busca por nome normalizado sem depender de acentos", async () => {
+  const clubWhereArgs: Array<Record<string, unknown>> = [];
+  const prisma = {
+    club: {
+      async findMany(args: { where: Record<string, unknown> }) {
+        clubWhereArgs.push(args.where);
+        return [];
+      },
+    },
+  };
+
+  const service = createService(prisma);
+  await service.listClubs(44, "associacao", null);
+
+  assert.equal((clubWhereArgs[0]?.normalizedName as { contains?: string })?.contains, "associacao");
 });
 
 test("listClubAthletes exige registrationStatus INSCRITO no lookup do clube e dos atletas", async () => {
@@ -162,4 +201,21 @@ test("listAthleteDirectory preserva nome reduzido de duplas sem colapsar os dois
   assert.equal(result.length, 1);
   assert.equal(result[0]?.nameDisplay, "EDSON SILVA # LUDMILLA LIMA");
   assert.equal(result[0]?.nameReduced, "EDSON SILVA # LUDMILLA LIMA");
+});
+
+test("listAthleteDirectory busca por nome normalizado sem depender de acentos", async () => {
+  let whereArg: Record<string, unknown> | null = null;
+  const prisma = {
+    athlete: {
+      async findMany(args: { where: Record<string, unknown> }) {
+        whereArg = args.where;
+        return [];
+      },
+    },
+  };
+
+  const service = createService(prisma);
+  await service.listAthleteDirectory("adonis");
+
+  assert.equal((whereArg?.nameNormalized as { contains?: string })?.contains, "adonis");
 });

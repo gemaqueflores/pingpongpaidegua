@@ -1695,6 +1695,7 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     await this.ensureEvent(scope.canonicalEventId);
     const pagination = resolvePaginationWindow(pageRaw, pageSizeRaw);
+    const normalizedSearch = normalizeAthleteName(search);
     const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
     if (eligibleClubIds.size === 0) {
       return [];
@@ -1719,8 +1720,8 @@ export class UserService {
             },
           },
           {
-            nameDisplay: {
-              contains: search || undefined,
+            nameNormalized: {
+              contains: normalizedSearch || undefined,
               mode: "insensitive",
             },
           },
@@ -1781,6 +1782,7 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     await this.ensureEvent(scope.canonicalEventId);
     const pagination = resolvePaginationWindow(pageRaw, pageSizeRaw);
+    const normalizedSearch = normalizeAthleteName(search);
     const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
     if (eligibleClubIds.size === 0) {
       return [];
@@ -1792,8 +1794,8 @@ export class UserService {
     const clubs = await this.prisma.club.findMany({
       where: {
         id: { in: [...eligibleClubIds] },
-        name: {
-          contains: search || undefined,
+        normalizedName: {
+          contains: normalizedSearch || undefined,
           mode: "insensitive",
         },
         athletes: {
@@ -4177,8 +4179,8 @@ export class UserService {
       where: {
         createdFromWarning: false,
         clubId: { in: [...eligibleClubIds] },
-        nameDisplay: {
-          contains: trimmedSearch || undefined,
+        nameNormalized: {
+          contains: normalizedSearch || undefined,
           mode: "insensitive",
         },
       },
@@ -4186,6 +4188,7 @@ export class UserService {
         id: true,
         eventId: true,
         nameDisplay: true,
+        nameNormalized: true,
       },
       orderBy: [{ nameDisplay: "asc" }],
     });
