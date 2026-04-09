@@ -241,20 +241,38 @@ export function computeEventSituation(
   now: Date = new Date(),
 ): EventSituation {
   const timeline = resolveEventTimeline(input);
-  if (!isChronologyValid(timeline)) {
-    return "DRAFT";
-  }
-
   const { inicioInscricoes, fimInscricoes, inicioRealizacao, fimRealizacao } = timeline;
   const nowMs = now.getTime();
-  if (!inicioInscricoes || !fimInscricoes || !inicioRealizacao || !fimRealizacao) {
+
+  if (!inicioRealizacao || !fimRealizacao || inicioRealizacao.getTime() > fimRealizacao.getTime()) {
     return "DRAFT";
   }
 
-  if (nowMs < inicioInscricoes.getTime()) {
+  const hasValidRegistrationWindow =
+    Boolean(inicioInscricoes) &&
+    Boolean(fimInscricoes) &&
+    Boolean(isChronologyValid(timeline));
+
+  if (!hasValidRegistrationWindow) {
+    if (nowMs < inicioRealizacao.getTime()) {
+      if (Boolean(input.hasPublishedMatches) && !Boolean(input.hasPublishedResults)) {
+        return "GRADES_PUBLICADAS_PRE_JOGO";
+      }
+      return "DRAFT";
+    }
+    if (nowMs <= fimRealizacao.getTime()) {
+      return "EM_ANDAMENTO";
+    }
+    return "POS_EVENTO";
+  }
+
+  const registrationStart = inicioInscricoes as Date;
+  const registrationEnd = fimInscricoes as Date;
+
+  if (nowMs < registrationStart.getTime()) {
     return "PRE_INSCRICOES";
   }
-  if (nowMs <= fimInscricoes.getTime()) {
+  if (nowMs <= registrationEnd.getTime()) {
     return "INSCRICOES_ABERTAS";
   }
   if (nowMs < inicioRealizacao.getTime()) {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildEventScrapePolicy,
   computeEventCacheMaxAgeMs,
+  computeEventSituation,
   computeEventRecoveryStaleThresholdMs,
   resolveScrapeLockStaleMsFromEnv,
 } from "../src/event-situation";
@@ -85,5 +86,51 @@ describe("event cache policy", () => {
       7 * 60 * 1000 + 30 * 1000,
     );
     expect(resolveScrapeLockStaleMsFromEnv({ SCRAPE_LOCK_STALE_MS: "1" })).toBe(60 * 1000);
+  });
+
+  it("classifica evento concluido como POS_EVENTO mesmo sem datas de inscricao", () => {
+    const situation = computeEventSituation(
+      {
+        inicioInscricoes: null,
+        fimInscricoes: null,
+        inicioRealizacao: dt("2025-09-05T00:00:00.000Z"),
+        fimRealizacao: dt("2025-09-07T23:59:59.999Z"),
+      },
+      dt("2026-04-09T12:00:00.000Z"),
+    );
+
+    expect(situation).toBe("POS_EVENTO");
+  });
+
+  it("mantem DRAFT antes do evento quando faltam datas de inscricao e nao ha grades publicadas", () => {
+    const situation = computeEventSituation(
+      {
+        inicioInscricoes: null,
+        fimInscricoes: null,
+        inicioRealizacao: dt("2026-04-20T00:00:00.000Z"),
+        fimRealizacao: dt("2026-04-21T00:00:00.000Z"),
+        hasPublishedMatches: false,
+        hasPublishedResults: false,
+      },
+      dt("2026-04-10T12:00:00.000Z"),
+    );
+
+    expect(situation).toBe("DRAFT");
+  });
+
+  it("mantem GRADES_PUBLICADAS_PRE_JOGO antes do evento quando grades ja existem mesmo sem datas de inscricao", () => {
+    const situation = computeEventSituation(
+      {
+        inicioInscricoes: null,
+        fimInscricoes: null,
+        inicioRealizacao: dt("2026-04-20T00:00:00.000Z"),
+        fimRealizacao: dt("2026-04-21T00:00:00.000Z"),
+        hasPublishedMatches: true,
+        hasPublishedResults: false,
+      },
+      dt("2026-04-19T20:00:00.000Z"),
+    );
+
+    expect(situation).toBe("GRADES_PUBLICADAS_PRE_JOGO");
   });
 });
