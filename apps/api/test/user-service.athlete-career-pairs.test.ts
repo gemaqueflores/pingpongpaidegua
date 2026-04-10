@@ -326,3 +326,88 @@ test("athlete career de par nao projeta confronto de dupla errada quando apenas 
   assert.equal(result.events.length, 0);
   assert.equal(result.totals.matches, 0);
 });
+
+test("athlete career de par reconhece confronto quando um integrante aparece com alias legado no scorePlayers", async () => {
+  const pairAthlete = {
+    id: 100,
+    eventId: 45,
+    nameDisplay: "ALMYR # SAMUEL ALMEIDA",
+    nameNormalized: "almyr # samuel almeida",
+    stateCode: null,
+    stateName: null,
+    region: null,
+    aliases: [],
+  };
+
+  const rawMatches = [
+    {
+      id: 920,
+      eventId: 45,
+      categoryId: 200,
+      cbtmMatchId: null,
+      phase: "RESULTADOS",
+      round: "Grupo 01",
+      tableNumber: "2",
+      matchDatetime: new Date("2026-03-28T09:00:00.000Z"),
+      scoreRaw: "0-3",
+      setsJson: null,
+      scoreFinal: { setsA: 0, setsB: 3 },
+      scoreSets: [
+        { set: 1, a: 8, b: 11 },
+        { set: 2, a: 7, b: 11 },
+        { set: 3, a: 5, b: 11 },
+      ],
+      sourceFlags: null,
+      p1Sets: null,
+      p2Sets: null,
+      winnerIndex: 1,
+      scorePlayers: [
+        { name: "SAMUEL ALMEIDA - ALMYR FAVACHO", athleteId: null },
+        { name: "OPONENTE A - OPONENTE B", athleteId: null },
+      ],
+      sourceUrl: "https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5476",
+      fetchedAt: new Date("2026-03-28T09:05:00.000Z"),
+      matchKey: "pair-match-alias",
+      event: {
+        id: 45,
+        cbtmEventId: 5476,
+        nome: "2TMB26 - DUPLAS",
+        nivel: "ESTADUAL",
+        dataInicio: new Date("2026-03-28T00:00:00.000Z"),
+        dataFim: new Date("2026-03-29T00:00:00.000Z"),
+        concluido: true,
+      },
+      category: {
+        id: 200,
+        name: "ABSOLUTO G (MAS)",
+        cbtmCategoryId: "310",
+      },
+      participants: [],
+    },
+  ];
+
+  const prisma = {
+    athlete: {
+      async findMany() {
+        return [pairAthlete];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [{ categoryId: 200 }];
+      },
+    },
+    match: {
+      async findMany() {
+        return rawMatches;
+      },
+    },
+  };
+
+  const service = new UserService(prisma as never, prisma as never);
+  const result = await service.getAthleteCareer("almyr samuel almeida");
+
+  assert.equal(result.events.length, 1);
+  assert.equal(result.events[0]?.matches.length, 1);
+  assert.equal(result.events[0]?.matches[0]?.athlete?.name, "SAMUEL ALMEIDA - ALMYR FAVACHO");
+});

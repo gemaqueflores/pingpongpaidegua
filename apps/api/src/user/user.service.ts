@@ -4283,7 +4283,13 @@ export class UserService {
       }
 
       const primaryAthleteId = pairCareer ? athleteIds[0] : [...matchedAthleteIds].sort((a, b) => a - b)[0];
-      const summary = this.buildAthleteSummaryMatch(match, primaryAthleteId, athleteNameKeys, pairMemberKeys);
+      const summary = this.buildAthleteSummaryMatch(
+        match,
+        primaryAthleteId,
+        athleteNameKeys,
+        pairMemberKeys,
+        pairCareer ? canonicalName : undefined,
+      );
       if (!summary) {
         continue;
       }
@@ -4474,6 +4480,7 @@ export class UserService {
     athleteId: number,
     athleteNameKeys?: Set<string>,
     pairMemberKeys?: Set<string>,
+    canonicalPairName?: string,
   ): AthleteSummaryMatch | null {
     const participants = match.participants.map((participant) => participant.athlete);
     const ordered = this.resolveOrderedPlayers(match.scorePlayers, participants);
@@ -4483,7 +4490,12 @@ export class UserService {
     let athleteIndex: 0 | 1 | null = directAthleteIndex;
 
     if (athleteIndex === null && athleteNameKeys && athleteNameKeys.size > 0) {
-      athleteIndex = this.resolveProjectedAthleteIndexFromPair(ordered.players, athleteNameKeys, pairMemberKeys);
+      athleteIndex = this.resolveProjectedAthleteIndexFromPair(
+        ordered.players,
+        athleteNameKeys,
+        pairMemberKeys,
+        canonicalPairName,
+      );
     }
 
     if (athleteIndex === null && !participants.some((participant) => participant.id === athleteId)) {
@@ -4603,8 +4615,12 @@ export class UserService {
     players: [AthleteSummaryPlayer | null, AthleteSummaryPlayer | null],
     athleteNameKeys: Set<string>,
     pairMemberKeys?: Set<string>,
+    canonicalPairName?: string,
   ): 0 | 1 | null {
     const containsCanonicalPair = (playerName: string | null | undefined): boolean => {
+      if (canonicalPairName && areCompetitiveEntryNamesEquivalent(canonicalPairName, playerName)) {
+        return true;
+      }
       const normalizedPair = normalizeAthleteName(normalizeCompositePairName(playerName));
       return Boolean(normalizedPair && athleteNameKeys.has(normalizedPair));
     };
