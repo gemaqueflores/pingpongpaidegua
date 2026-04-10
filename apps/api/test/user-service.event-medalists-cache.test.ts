@@ -574,3 +574,160 @@ test("event medalists inclui dupla projetada por scorePlayers quando vinculo de 
     ],
   );
 });
+
+test("event medalists aplica sufixo do child event no evento agregado", async () => {
+  const prismaRead = {
+    readModelCache: {
+      async findUnique() {
+        return null;
+      },
+    },
+    category: {
+      async findMany() {
+        return [
+          {
+            id: 2001,
+            eventId: 45,
+            name: "ABSOLUTO C",
+            cbtmCategoryId: "110",
+          },
+        ];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [
+          {
+            categoryId: 2001,
+            athlete: {
+              id: 10,
+              nameDisplay: "ATLETA A # ATLETA B",
+              club: { id: 139, name: "BEL.TT/CAMINHO DO BEM-PA" },
+            },
+          },
+          {
+            categoryId: 2001,
+            athlete: {
+              id: 20,
+              nameDisplay: "ATLETA C # ATLETA D",
+              club: { id: 132, name: "PARÁ CLUBE - PA" },
+            },
+          },
+        ];
+      },
+    },
+    match: {
+      async findMany() {
+        return [
+          {
+            id: 1,
+            eventId: 45,
+            categoryId: 2001,
+            phase: "RESULTADOS",
+            round: "Final",
+            tableNumber: "1",
+            matchDatetime: new Date("2026-03-29T12:00:00.000Z"),
+            scoreRaw: "3-0",
+            p1Sets: 3,
+            p2Sets: 0,
+            winnerIndex: 0,
+            gameId: "j1",
+            sourceUrl: null,
+            scoreFinal: null,
+            scoreSets: null,
+            setsJson: null,
+            category: {
+              id: 2001,
+              name: "ABSOLUTO C",
+              cbtmCategoryId: "110",
+            },
+            participants: [
+              {
+                athlete: {
+                  id: 10,
+                  nameDisplay: "ATLETA A # ATLETA B",
+                  club: { id: 139, name: "BEL.TT/CAMINHO DO BEM-PA" },
+                },
+              },
+              {
+                athlete: {
+                  id: 20,
+                  nameDisplay: "ATLETA C # ATLETA D",
+                  club: { id: 132, name: "PARÁ CLUBE - PA" },
+                },
+              },
+            ],
+          },
+        ];
+      },
+    },
+    event: {
+      async findMany() {
+        return [
+          {
+            id: 45,
+            dataInicio: new Date("2026-03-28T00:00:00.000Z"),
+            inicioRealizacao: new Date("2026-03-28T00:00:00.000Z"),
+            ratingMatchFormat: "RR_K1",
+          },
+        ];
+      },
+    },
+    scrapeRun: {
+      async findMany() {
+        return [];
+      },
+    },
+  };
+
+  const prismaWrite = {
+    readModelCache: {
+      async upsert(input: {
+        where: { key: string };
+        create: { key: string; sourceScrapeRunId: number | null; payload: unknown };
+        update: { sourceScrapeRunId: number | null; payload: unknown };
+      }) {
+        return {
+          key: input.where.key,
+          sourceScrapeRunId: input.update.sourceScrapeRunId,
+          payload: input.update.payload,
+          updatedAt: new Date(),
+        };
+      },
+    },
+  };
+
+  const service = new UserService(prismaRead as never, prismaWrite as never) as UserService & {
+    resolveEventScope(eventId: number): Promise<{
+      canonicalEventId: number;
+      allEventIds: number[];
+      childSuffixByEventId: Map<number, string>;
+    }>;
+    ensureEvent(eventId: number): Promise<Record<string, unknown>>;
+    getLatestReliableScrapeRunIdForScope(eventIds: number[]): Promise<number>;
+  };
+
+  service.resolveEventScope = async (eventId: number) => ({
+    canonicalEventId: eventId,
+    allEventIds: [44, 45],
+    childSuffixByEventId: new Map([[45, " - DUPLAS"]]),
+  });
+  service.ensureEvent = async (eventId: number) => ({
+    id: eventId,
+    cbtmEventId: 5468,
+    nome: "2TMB26 (IND/DPL/DPLMISTA)",
+    nivel: "ESTADUAL",
+    inicioInscricoes: new Date("2026-02-25T00:00:00.000Z"),
+    fimInscricoes: new Date("2026-03-20T00:00:00.000Z"),
+    inicioRealizacao: new Date("2026-03-28T00:00:00.000Z"),
+    fimRealizacao: new Date("2026-03-29T00:00:00.000Z"),
+    dataInicio: new Date("2026-03-28T00:00:00.000Z"),
+    dataFim: new Date("2026-03-29T00:00:00.000Z"),
+    concluido: true,
+  });
+  service.getLatestReliableScrapeRunIdForScope = async () => 101;
+
+  const response = await service.listEventCategoryMedalists(44);
+
+  assert.equal(response.categories[0]?.categoryName, "ABSOLUTO C - DUPLAS");
+});

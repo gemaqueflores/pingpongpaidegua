@@ -30,6 +30,12 @@ npm run test:regression:critical
 - seleção determinística da auditoria oficial por evento
 - proteção contra divergência dependente do tamanho do lote consultado
 
+### `apps/api/test/user-service.event-medalists-cache.test.ts`
+
+- medalhistas em evento agregado com child events
+- resolução de clube em duplas com placeholder reconciliado
+- aplicação correta de sufixo do child event no nome da categoria
+
 ### `apps/api/test/user-service.athlete-career-pairs.test.ts`
 
 - carreira de pares com confrontos de dupla
@@ -42,6 +48,14 @@ npm run test:regression:critical
 
 - simulador usa apenas `INSCRITO` no escopo `confirmed`
 - `PRE_INSCRITO` e `null` não entram como confirmados
+
+### `apps/api/test/user-service.registration-queries.test.ts`
+
+- consultas públicas exigem inscrição confirmada
+- busca pública acento-insensível
+- diretório de pares exige lastro competitivo publicado
+- contagem e listagem agregadas em evento multi-ID
+- aplicação de sufixo de child event em categorias agregadas
 
 ### `apps/worker/test/event-situation.test.ts`
 

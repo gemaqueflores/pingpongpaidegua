@@ -4,7 +4,11 @@ import { UserService } from "../src/user/user.service";
 
 function createService(prisma: Record<string, unknown>) {
   const service = new UserService(prisma as never, prisma as never) as UserService & {
-    resolveEventScope(eventId: number): Promise<{ canonicalEventId: number; allEventIds: number[] }>;
+    resolveEventScope(eventId: number): Promise<{
+      canonicalEventId: number;
+      allEventIds: number[];
+      childSuffixByEventId: Map<number, string>;
+    }>;
     ensureEvent(eventId: number): Promise<Record<string, unknown>>;
     getStateCircuitEligibleClubIds(): Promise<Set<number>>;
     ensureStableAthleteRouteIds(
@@ -22,6 +26,7 @@ function createService(prisma: Record<string, unknown>) {
   service.resolveEventScope = async (eventId: number) => ({
     canonicalEventId: eventId,
     allEventIds: [eventId],
+    childSuffixByEventId: new Map<number, string>(),
   });
   service.ensureEvent = async (eventId: number) => ({ id: eventId });
   service.getStateCircuitEligibleClubIds = async () => new Set([1, 2, 3]);
@@ -108,6 +113,28 @@ test("listClubs exige registrationStatus INSCRITO no filtro principal e na conta
   );
 });
 
+test("listClubs conta atleta agregado apenas uma vez por clube e nome normalizado", async () => {
+  let athleteFindManyArgs: { distinct?: string[] } | null = null;
+  const prisma = {
+    club: {
+      async findMany() {
+        return [{ id: 1, name: "CLUBE A" }];
+      },
+    },
+    athlete: {
+      async findMany(args: { distinct?: string[] }) {
+        athleteFindManyArgs = args;
+        return [{ clubId: 1, nameNormalized: "atleta a" }];
+      },
+    },
+  };
+
+  const service = createService(prisma);
+  await service.listClubs(44, "", null);
+
+  assert.deepEqual(athleteFindManyArgs?.distinct, ["clubId", "nameNormalized"]);
+});
+
 test("listClubs busca por nome normalizado sem depender de acentos", async () => {
   const clubWhereArgs: Array<Record<string, unknown>> = [];
   const prisma = {
@@ -176,6 +203,112 @@ test("listClubAthletes exige registrationStatus INSCRITO no lookup do clube e do
     (((athleteWhereArg?.categories as { some?: { registrationStatus?: string } })?.some?.registrationStatus ??
       null)),
     "INSCRITO",
+  );
+});
+
+test("listClubAthletes agrega categorias de child events com sufixo no evento canonico", async () => {
+  const prisma = {
+    club: {
+      async findFirst() {
+        return { id: 1, name: "CLUBE A", normalizedName: "clube-a" };
+      },
+    },
+    athlete: {
+      async findMany() {
+        return [
+          {
+            id: 10,
+            eventId: 44,
+            nameDisplay: "ATLETA A",
+            nameNormalized: "atleta a",
+            stateCode: "PA",
+            region: "NORTE",
+            categories: [
+              {
+                registrationStatus: "INSCRITO",
+                category: {
+                  id: 100,
+                  eventId: 44,
+                  name: "ABSOLUTO A",
+                },
+              },
+            ],
+          },
+          {
+            id: 20,
+            eventId: 45,
+            nameDisplay: "ATLETA A",
+            nameNormalized: "atleta a",
+            stateCode: "PA",
+            region: "NORTE",
+            categories: [
+              {
+                registrationStatus: "INSCRITO",
+                category: {
+                  id: 200,
+                  eventId: 45,
+                  name: "ABSOLUTO A",
+                },
+              },
+            ],
+          },
+        ];
+      },
+    },
+  };
+
+  const service = createService(prisma);
+  service.resolveEventScope = async (eventId: number) => ({
+    canonicalEventId: eventId,
+    allEventIds: [44, 45],
+    childSuffixByEventId: new Map([[45, " - DUPLAS"]]),
+  });
+
+  const result = await service.listClubAthletes(44, 1, null);
+
+  assert.equal(result.athletes.length, 1);
+  assert.deepEqual(result.athletes[0]?.categoryNames, ["ABSOLUTO A", "ABSOLUTO A - DUPLAS"]);
+});
+
+test("listCategories aplica sufixo de child event no evento agregado", async () => {
+  const prisma = {
+    category: {
+      async findMany() {
+        return [
+          {
+            id: 100,
+            eventId: 44,
+            name: "ABSOLUTO A",
+            normalizedName: "absoluto a",
+            cbtmCategoryId: 1,
+          },
+          {
+            id: 200,
+            eventId: 45,
+            name: "ABSOLUTO A",
+            normalizedName: "absoluto a",
+            cbtmCategoryId: 2,
+          },
+        ];
+      },
+    },
+  };
+
+  const service = createService(prisma);
+  service.resolveEventScope = async (eventId: number) => ({
+    canonicalEventId: eventId,
+    allEventIds: [44, 45],
+    childSuffixByEventId: new Map([[45, " - DUPLAS"]]),
+  });
+
+  const result = await service.listCategories(44);
+
+  assert.deepEqual(
+    result.map((item) => ({ id: item.id, name: item.name })),
+    [
+      { id: 100, name: "ABSOLUTO A" },
+      { id: 200, name: "ABSOLUTO A - DUPLAS" },
+    ],
   );
 });
 

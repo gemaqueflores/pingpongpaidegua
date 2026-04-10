@@ -1797,17 +1797,6 @@ export class UserService {
         };
       },
     });
-    const eventRulesByEventId = new Map(
-      (
-        await this.prisma.event.findMany({
-          where: { id: { in: scope.allEventIds } },
-          select: {
-            id: true,
-            ratingMatchFormat: true,
-          },
-        })
-      ).map((item) => [item.id, item] as const),
-    );
   }
 
   async listEventCategoryMedalists(eventId: number): Promise<{
