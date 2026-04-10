@@ -56,6 +56,11 @@ npm run test:regression:critical
 - simulador usa apenas `INSCRITO` no escopo `confirmed`
 - `PRE_INSCRITO` e `null` não entram como confirmados
 
+### `apps/api/test/user-service.group-simulation-history.test.ts`
+
+- histórico da simulação exclui todos os `eventIds` do agregado atual
+- preferência histórica de grupos não aprende com child events do próprio torneio
+
 ### `apps/api/test/user-service.registration-queries.test.ts`
 
 - consultas públicas exigem inscrição confirmada

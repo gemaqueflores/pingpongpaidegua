@@ -3325,7 +3325,7 @@ export class UserService {
     }
 
     const historicalPreferences = await this.inferHistoricalGroupPreferences({
-      eventId: scope.canonicalEventId,
+      excludedEventIds: scope.allEventIds,
       categories,
       athleteCountByCategory,
     });
@@ -5535,7 +5535,7 @@ export class UserService {
   }
 
   private async inferHistoricalGroupPreferences(input: {
-    eventId: number;
+    excludedEventIds: number[];
     categories: Array<{ id: number; normalizedName: string }>;
     athleteCountByCategory: Map<number, number>;
   }): Promise<Map<number, { preferredGroupCount: number | null; sampleSize: number }>> {
@@ -5545,10 +5545,11 @@ export class UserService {
     }
 
     const normalizedNames = [...new Set(input.categories.map((category) => category.normalizedName))];
+    const excludedEventIds = [...new Set(input.excludedEventIds)];
 
     const historicalCategories = await this.prisma.category.findMany({
       where: {
-        eventId: { not: input.eventId },
+        eventId: { notIn: excludedEventIds },
         normalizedName: { in: normalizedNames },
       },
       select: {
