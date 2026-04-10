@@ -210,3 +210,71 @@ test("event efficiency usa athleteCount por atletas unicos com inscricao confirm
   assert.equal(para?.athleteCount, 2);
   assert.equal(para?.totalQuantidade, 0);
 });
+
+test("event efficiency em escopo agregado deduplica atleta individual repetido entre eventIds", async () => {
+  const prisma = {
+    club: {
+      async findMany() {
+        return [
+          {
+            id: 132,
+            name: "PARÁ CLUBE - PA",
+            athletes: [
+              { id: 10, nameDisplay: "ALICE", clubId: 132 },
+              { id: 11, nameDisplay: "ALICE", clubId: 132 },
+              { id: 12, nameDisplay: "BIA", clubId: 132 },
+            ],
+          },
+        ];
+      },
+    },
+    athlete: {
+      async findMany() {
+        return [
+          { clubId: 132, nameNormalized: "alice" },
+          { clubId: 132, nameNormalized: "bia" },
+        ];
+      },
+    },
+    category: {
+      async findMany() {
+        return [];
+      },
+    },
+    event: {
+      async findMany() {
+        return [];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [];
+      },
+    },
+    match: {
+      async findMany() {
+        return [];
+      },
+    },
+  };
+
+  const service = new UserService(prisma as never, prisma as never) as UserService & {
+    getStateCircuitEligibleClubIds(): Promise<Set<number>>;
+    getEfficiencyWeights(): Promise<{ pesoOuro: number; pesoPrata: number; pesoBronze: number }>;
+    computeEfficiencyRanking(input: { eventIds?: number[] }): Promise<{
+      ranking: Array<{
+        clubId: number;
+        athleteCount: number;
+      }>;
+    }>;
+  };
+
+  service.getStateCircuitEligibleClubIds = async () => new Set([132]);
+  service.getEfficiencyWeights = async () => ({ pesoOuro: 130, pesoPrata: 80, pesoBronze: 50 });
+
+  const result = await service.computeEfficiencyRanking({ eventIds: [44, 45] });
+  const para = result.ranking.find((row) => row.clubId === 132);
+
+  assert.ok(para);
+  assert.equal(para?.athleteCount, 2);
+});

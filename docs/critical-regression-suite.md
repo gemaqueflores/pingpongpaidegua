@@ -36,6 +36,13 @@ npm run test:regression:critical
 - resolução de clube em duplas com placeholder reconciliado
 - aplicação correta de sufixo do child event no nome da categoria
 
+### `apps/api/test/user-service.event-efficiency-ranking.test.ts`
+
+- deduplicação de medalhistas de dupla no mesmo evento
+- categorias vazias não entram na eficiência
+- `athleteCount` usa atletas únicos com inscrição confirmada
+- `athleteCount` permanece estável em escopo agregado multi-ID
+
 ### `apps/api/test/user-service.athlete-career-pairs.test.ts`
 
 - carreira de pares com confrontos de dupla
