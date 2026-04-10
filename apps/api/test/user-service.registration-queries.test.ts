@@ -193,6 +193,27 @@ test("listAthleteDirectory preserva nome reduzido de duplas sem colapsar os dois
         ];
       },
     },
+    athleteCategory: {
+      async findMany() {
+        return [{ athleteId: 10, categoryId: 1538 }];
+      },
+    },
+    match: {
+      async findMany() {
+        return [
+          {
+            id: 100,
+            eventId: 46,
+            categoryId: 1538,
+            scorePlayers: [
+              { name: "EDSON SILVA - LUDMILLA LIMA" },
+              { name: "OPONENTE A # OPONENTE B" },
+            ],
+            participants: [],
+          },
+        ];
+      },
+    },
   };
 
   const service = createService(prisma);
@@ -218,4 +239,80 @@ test("listAthleteDirectory busca por nome normalizado sem depender de acentos", 
   await service.listAthleteDirectory("adonis");
 
   assert.equal((whereArg?.nameNormalized as { contains?: string })?.contains, "adonis");
+});
+
+test("listAthleteDirectory oculta par sem lastro competitivo publicado", async () => {
+  const prisma = {
+    athlete: {
+      async findMany() {
+        return [
+          {
+            id: 10,
+            eventId: 46,
+            nameDisplay: "DEBORA FLORES # REBECA FLORES",
+            nameNormalized: "debora flores # rebeca flores",
+          },
+        ];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [{ athleteId: 10, categoryId: 1530 }];
+      },
+    },
+    match: {
+      async findMany() {
+        return [];
+      },
+    },
+  };
+
+  const service = createService(prisma);
+  const result = await service.listAthleteDirectory("debora");
+
+  assert.deepEqual(result, []);
+});
+
+test("listAthleteDirectory mantem par com resultado publicado como lastro competitivo", async () => {
+  const prisma = {
+    athlete: {
+      async findMany() {
+        return [
+          {
+            id: 10,
+            eventId: 46,
+            nameDisplay: "ADONIS # ISABELA OLIVEIRA",
+            nameNormalized: "adonis # isabela oliveira",
+          },
+        ];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [{ athleteId: 10, categoryId: 1538 }];
+      },
+    },
+    match: {
+      async findMany() {
+        return [
+          {
+            id: 100,
+            eventId: 46,
+            categoryId: 1538,
+            scorePlayers: [
+              { name: "ADONIS AZEVEDO - ISABELA OLIVEIRA" },
+              { name: "LUCAS MENEZES # YUKARI SATO" },
+            ],
+            participants: [],
+          },
+        ];
+      },
+    },
+  };
+
+  const service = createService(prisma);
+  const result = await service.listAthleteDirectory("adonis");
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0]?.nameDisplay, "ADONIS # ISABELA OLIVEIRA");
 });

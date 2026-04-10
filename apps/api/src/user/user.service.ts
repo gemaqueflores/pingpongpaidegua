@@ -4067,6 +4067,83 @@ export class UserService {
       orderBy: [{ nameDisplay: "asc" }],
     });
 
+    const pairAthleteIds = athletes
+      .filter((athlete) => isCompositePairName(athlete.nameDisplay))
+      .map((athlete) => athlete.id);
+    const pairCategoryLinks =
+      pairAthleteIds.length > 0
+        ? await this.prisma.athleteCategory.findMany({
+            where: {
+              athleteId: {
+                in: pairAthleteIds,
+              },
+            },
+            select: {
+              athleteId: true,
+              categoryId: true,
+            },
+          })
+        : [];
+    const categoryIdsByPairAthleteId = new Map<number, Set<number>>();
+    for (const link of pairCategoryLinks) {
+      const bucket = categoryIdsByPairAthleteId.get(link.athleteId) ?? new Set<number>();
+      bucket.add(link.categoryId);
+      categoryIdsByPairAthleteId.set(link.athleteId, bucket);
+    }
+
+    const pairEvents = athletes.filter((athlete) => isCompositePairName(athlete.nameDisplay));
+    const pairEvidenceMatches =
+      pairEvents.length > 0
+        ? await this.prisma.match.findMany({
+            where: {
+              OR: [
+                { winnerIndex: { not: null } },
+                { p1Sets: { not: null } },
+                { p2Sets: { not: null } },
+              ],
+              eventId: {
+                in: [...new Set(pairEvents.map((athlete) => athlete.eventId))],
+              },
+              categoryId: {
+                in: [...new Set(pairCategoryLinks.map((link) => link.categoryId))],
+              },
+            },
+            select: {
+              id: true,
+              eventId: true,
+              categoryId: true,
+              scorePlayers: true,
+              participants: {
+                select: {
+                  athleteId: true,
+                },
+              },
+            },
+          })
+        : [];
+    const pairEvidenceByAthleteId = new Set<number>();
+    for (const athlete of pairEvents) {
+      const categoryIds = categoryIdsByPairAthleteId.get(athlete.id);
+      if (!categoryIds || categoryIds.size === 0) {
+        continue;
+      }
+      const hasEvidence = pairEvidenceMatches.some((match) => {
+        if (match.eventId !== athlete.eventId || !categoryIds.has(match.categoryId)) {
+          return false;
+        }
+        if (match.participants.some((participant) => participant.athleteId === athlete.id)) {
+          return true;
+        }
+        const scorePlayers = Array.isArray(match.scorePlayers)
+          ? (match.scorePlayers as Array<{ name?: string | null }>)
+          : [];
+        return scorePlayers.some((player) => areCompetitiveEntryNamesEquivalent(player?.name, athlete.nameDisplay));
+      });
+      if (hasEvidence) {
+        pairEvidenceByAthleteId.add(athlete.id);
+      }
+    }
+
     const grouped = new Map<
       string,
       {
@@ -4078,6 +4155,9 @@ export class UserService {
     >();
 
     for (const athlete of athletes) {
+      if (isCompositePairName(athlete.nameDisplay) && !pairEvidenceByAthleteId.has(athlete.id)) {
+        continue;
+      }
       const athleteKey = normalizeAthleteName(athlete.nameDisplay);
       if (!athleteKey) {
         continue;
