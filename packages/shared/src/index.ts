@@ -799,6 +799,41 @@ function splitDoublesPairParts(input: string | null | undefined): string[] {
     .filter(Boolean);
 }
 
+function normalizePairMemberKey(input: string | null | undefined): string {
+  return normalizeAthleteName(input);
+}
+
+function arePairMemberNamesEquivalent(left: string | null | undefined, right: string | null | undefined): boolean {
+  const leftKey = normalizePairMemberKey(left);
+  const rightKey = normalizePairMemberKey(right);
+  if (!leftKey || !rightKey) {
+    return false;
+  }
+  return leftKey === rightKey || leftKey.includes(rightKey) || rightKey.includes(leftKey);
+}
+
+function areCompetitiveEntryNamesEquivalent(left: string | null | undefined, right: string | null | undefined): boolean {
+  const leftParts = splitDoublesPairParts(left);
+  const rightParts = splitDoublesPairParts(right);
+
+  if (leftParts.length >= 2 || rightParts.length >= 2) {
+    if (leftParts.length < 2 || rightParts.length < 2) {
+      return false;
+    }
+    const remaining = [...rightParts];
+    for (const leftPart of leftParts) {
+      const matchIndex = remaining.findIndex((rightPart) => arePairMemberNamesEquivalent(leftPart, rightPart));
+      if (matchIndex === -1) {
+        return false;
+      }
+      remaining.splice(matchIndex, 1);
+    }
+    return remaining.length === 0;
+  }
+
+  return arePairMemberNamesEquivalent(left, right);
+}
+
 export function normalizeDoublesPairName(input: string | null | undefined): string {
   const value = compactWhitespace(input);
   const parts = splitDoublesPairParts(value);
@@ -855,6 +890,7 @@ export function resolveAthleteIndexInMatch(
 
   const athletePairNameNormalized = normalizeAthleteName(normalizeDoublesPairName(athlete.athleteName ?? null));
   const athleteNameNormalized = normalizeAthleteName(athlete.athleteNameNormalized ?? athlete.athleteName ?? null);
+  const athleteName = athlete.athleteName ?? athlete.athleteNameNormalized ?? null;
 
   for (let index = 0; index < 2; index += 1) {
     const player = players[index];
@@ -869,6 +905,7 @@ export function resolveAthleteIndexInMatch(
     const playerPairNameNormalized = normalizeAthleteName(normalizeDoublesPairName(player.name ?? null));
     const playerNameNormalized = normalizeAthleteName(player.name ?? null);
     if (
+      areCompetitiveEntryNamesEquivalent(athleteName, player.name ?? null) ||
       (athletePairNameNormalized && playerPairNameNormalized === athletePairNameNormalized) ||
       (athleteNameNormalized && playerNameNormalized === athleteNameNormalized)
     ) {

@@ -243,6 +243,37 @@ function normalizeStandingNameKey(name: string | null | undefined): string {
   return normalizeAthleteName(name ?? "");
 }
 
+function areStandingMemberNamesEquivalent(left: string | null | undefined, right: string | null | undefined): boolean {
+  const leftKey = normalizeAthleteName(left ?? "");
+  const rightKey = normalizeAthleteName(right ?? "");
+  if (!leftKey || !rightKey) {
+    return false;
+  }
+  return leftKey === rightKey || leftKey.includes(rightKey) || rightKey.includes(leftKey);
+}
+
+function areStandingEntryNamesEquivalent(left: string | null | undefined, right: string | null | undefined): boolean {
+  const leftParts = splitCompositeEntryParts(left);
+  const rightParts = splitCompositeEntryParts(right);
+
+  if (leftParts.length >= 2 || rightParts.length >= 2) {
+    if (leftParts.length < 2 || rightParts.length < 2) {
+      return false;
+    }
+    const remaining = [...rightParts];
+    for (const leftPart of leftParts) {
+      const matchIndex = remaining.findIndex((rightPart) => areStandingMemberNamesEquivalent(leftPart, rightPart));
+      if (matchIndex === -1) {
+        return false;
+      }
+      remaining.splice(matchIndex, 1);
+    }
+    return remaining.length === 0;
+  }
+
+  return areStandingMemberNamesEquivalent(left, right);
+}
+
 function athleteMatchesStandingKey(key: string, athlete: AthletePerformanceInput): boolean {
   if (key.startsWith("id:")) {
     const athleteId = Number(key.slice(3));
@@ -256,8 +287,19 @@ function athleteMatchesStandingKey(key: string, athlete: AthletePerformanceInput
   }
 
   if (key.startsWith("name:")) {
-    const normalizedName = normalizeStandingNameKey(athlete.athleteName ?? athlete.athleteNameNormalized ?? "");
-    return key === `name:${normalizedName}`;
+    const athleteName = athlete.athleteName ?? athlete.athleteNameNormalized ?? "";
+    const normalizedName = normalizeStandingNameKey(athleteName);
+    if (key === `name:${normalizedName}`) {
+      return true;
+    }
+
+    const candidateName = key
+      .slice(5)
+      .split("#")
+      .map((part) => compactWhitespace(part))
+      .filter(Boolean)
+      .join(" # ");
+    return areStandingEntryNamesEquivalent(athleteName, candidateName);
   }
 
   return false;
@@ -597,7 +639,7 @@ function computeGroupSingleClassification(input: {
       return athleteIds.has(Number(key.slice(3)));
     }
     if (key.startsWith("name:")) {
-      return key === `name:${normalizedName}`;
+      return key === `name:${normalizedName}` || athleteMatchesStandingKey(key, input.athlete);
     }
     return false;
   });

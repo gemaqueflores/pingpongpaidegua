@@ -149,4 +149,29 @@ describe("winner consistency (Davi vs Domini fixture)", () => {
     expect(resolveAthleteIndexInMatch(match, { athleteName: "TASSIA OLIVEIRA # LEONARDO PINTO" })).toBe(0);
     expect(resolveAthleteIndexInMatch(match, { athleteName: "DANILO MENEZES # RACHEL COSTA" })).toBe(1);
   });
+
+  it("resolve indice da dupla quando um integrante aparece com alias legado", () => {
+    const match = {
+      players: [
+        { athleteId: null, name: "ADONIS AZEVEDO - ISABELA OLIVEIRA" },
+        { athleteId: null, name: "LUCAS MENEZES # YUKARI SATO" },
+      ],
+      sets: [
+        { p1: 11, p2: 9 },
+        { p1: 11, p2: 6 },
+        { p1: 13, p2: 15 },
+        { p1: 11, p2: 13 },
+        { p1: 12, p2: 10 },
+      ],
+      winnerIndex: 0 as const,
+    };
+
+    expect(resolveAthleteIndexInMatch(match, { athleteName: "ADONIS # ISABELA OLIVEIRA" })).toBe(0);
+    expect(calculateAthletePointPerformance([match], { athleteName: "ADONIS # ISABELA OLIVEIRA" })).toMatchObject({
+      pointsWon: 58,
+      pointsPlayed: 111,
+      matchesConsidered: 1,
+      setsUsed: 5,
+    });
+  });
 });

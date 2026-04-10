@@ -411,3 +411,139 @@ test("athlete career de par reconhece confronto quando um integrante aparece com
   assert.equal(result.events[0]?.matches.length, 1);
   assert.equal(result.events[0]?.matches[0]?.athlete?.name, "SAMUEL ALMEIDA - ALMYR FAVACHO");
 });
+
+test("athlete career de par calcula pontos, classificacao e medalha com alias legado no grupo unico", async () => {
+  const pairAthlete = {
+    id: 200,
+    eventId: 46,
+    nameDisplay: "ADONIS # ISABELA OLIVEIRA",
+    nameNormalized: "adonis # isabela oliveira",
+    stateCode: null,
+    stateName: null,
+    region: null,
+    aliases: [],
+  };
+
+  const makeRawMatch = (input: {
+    id: number;
+    scorePlayers: Array<{ name: string; athleteId: number | null }>;
+    scoreSets: Array<{ set: number; a: number; b: number }>;
+    winnerIndex: 0 | 1;
+    matchKey: string;
+  }) => ({
+    id: input.id,
+    eventId: 46,
+    categoryId: 1538,
+    cbtmMatchId: null,
+    phase: "RESULTADOS",
+    round: "Única 01",
+    tableNumber: "1",
+    matchDatetime: new Date("2026-03-28T10:00:00.000Z"),
+    scoreRaw: `${input.winnerIndex === 0 ? "3-0" : "0-3"}`,
+    setsJson: null,
+    scoreFinal: input.winnerIndex === 0 ? { setsA: 3, setsB: 0 } : { setsA: 0, setsB: 3 },
+    scoreSets: input.scoreSets,
+    sourceFlags: null,
+    p1Sets: null,
+    p2Sets: null,
+    winnerIndex: input.winnerIndex,
+    scorePlayers: input.scorePlayers,
+    sourceUrl: "https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID=5477",
+    fetchedAt: new Date("2026-03-28T10:05:00.000Z"),
+    matchKey: input.matchKey,
+    event: {
+      id: 46,
+      cbtmEventId: 5477,
+      nome: "2TMB26 - DUPLAS MISTAS",
+      nivel: "ESTADUAL",
+      dataInicio: new Date("2026-03-28T00:00:00.000Z"),
+      dataFim: new Date("2026-03-29T00:00:00.000Z"),
+      concluido: true,
+    },
+    category: {
+      id: 1538,
+      name: "SUB-13 DUPLA MISTA",
+      cbtmCategoryId: "284",
+    },
+    participants: [],
+  });
+
+  const rawMatches = [
+    makeRawMatch({
+      id: 1001,
+      scorePlayers: [
+        { name: "LUCAS MENEZES # YUKARI SATO", athleteId: null },
+        { name: "ADONIS AZEVEDO - ISABELA OLIVEIRA", athleteId: null },
+      ],
+      scoreSets: [
+        { set: 1, a: 11, b: 9 },
+        { set: 2, a: 11, b: 7 },
+        { set: 3, a: 11, b: 8 },
+      ],
+      winnerIndex: 0,
+      matchKey: "pair-adonis-loss",
+    }),
+    makeRawMatch({
+      id: 1002,
+      scorePlayers: [
+        { name: "LUCAS MENEZES # YUKARI SATO", athleteId: null },
+        { name: "GABRIEL RIBEIRO # SOFIA MENDONCA", athleteId: null },
+      ],
+      scoreSets: [
+        { set: 1, a: 11, b: 4 },
+        { set: 2, a: 11, b: 5 },
+        { set: 3, a: 11, b: 6 },
+      ],
+      winnerIndex: 0,
+      matchKey: "pair-lucas-win",
+    }),
+    makeRawMatch({
+      id: 1003,
+      scorePlayers: [
+        { name: "ADONIS AZEVEDO - ISABELA OLIVEIRA", athleteId: null },
+        { name: "GABRIEL RIBEIRO # SOFIA MENDONCA", athleteId: null },
+      ],
+      scoreSets: [
+        { set: 1, a: 11, b: 8 },
+        { set: 2, a: 11, b: 9 },
+        { set: 3, a: 11, b: 7 },
+      ],
+      winnerIndex: 0,
+      matchKey: "pair-adonis-win",
+    }),
+  ];
+
+  const prisma = {
+    athlete: {
+      async findMany() {
+        return [pairAthlete];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [{ categoryId: 1538 }];
+      },
+    },
+    match: {
+      async findMany(query?: { where?: { scorePlayers?: unknown } }) {
+        if (query?.where?.scorePlayers) {
+          return rawMatches.filter((match) =>
+            match.scorePlayers.some((player) => /ADONIS|ISABELA/i.test(player.name)),
+          );
+        }
+        return rawMatches;
+      },
+    },
+  };
+
+  const service = new UserService(prisma as never, prisma as never);
+  const result = await service.getAthleteCareer("adonis isabela oliveira");
+
+  assert.equal(result.events.length, 1);
+  assert.equal(result.events[0]?.matches.length, 2);
+  assert.equal(result.events[0]?.performance.matchesConsidered, 2);
+  assert.equal(result.events[0]?.performance.pointsWon, 57);
+  assert.equal(result.events[0]?.performance.pointsPlayed, 114);
+  assert.equal(result.events[0]?.performanceByCategory[0]?.classification?.position, 2);
+  assert.equal(result.medalTable.ESTADUAL.prata, 1);
+});
