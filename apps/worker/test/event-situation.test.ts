@@ -14,7 +14,7 @@ function dt(value: string): Date {
   return new Date(value);
 }
 
-test("computeEventSituation retorna DRAFT quando datas minimas faltam", () => {
+test("computeEventSituation retorna POS_EVENTO quando evento ja acabou mesmo sem datas completas de inscricao", () => {
   const situation = computeEventSituation({
     inicioInscricoes: dt("2026-03-01T00:00:00.000Z"),
     fimInscricoes: null,
@@ -22,7 +22,7 @@ test("computeEventSituation retorna DRAFT quando datas minimas faltam", () => {
     fimRealizacao: dt("2026-04-05T00:00:00.000Z"),
   });
 
-  assert.equal(situation, "DRAFT");
+  assert.equal(situation, "POS_EVENTO");
 });
 
 test("computeEventSituation cobre janela pre, inscricoes, pre-evento, andamento e pos-evento", () => {
