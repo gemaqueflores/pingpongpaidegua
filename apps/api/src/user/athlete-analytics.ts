@@ -274,7 +274,11 @@ function areStandingEntryNamesEquivalent(left: string | null | undefined, right:
   return areStandingMemberNamesEquivalent(left, right);
 }
 
-function athleteMatchesStandingKey(key: string, athlete: AthletePerformanceInput): boolean {
+function athleteMatchesStandingKey(
+  key: string,
+  athlete: AthletePerformanceInput,
+  candidateName?: string | null,
+): boolean {
   if (key.startsWith("id:")) {
     const athleteId = Number(key.slice(3));
     if (!Number.isFinite(athleteId)) {
@@ -283,7 +287,10 @@ function athleteMatchesStandingKey(key: string, athlete: AthletePerformanceInput
     if (typeof athlete.athleteId === "number" && athlete.athleteId === athleteId) {
       return true;
     }
-    return (athlete.athleteIds ?? []).some((id) => id === athleteId);
+    if ((athlete.athleteIds ?? []).some((id) => id === athleteId)) {
+      return true;
+    }
+    return candidateName ? areStandingEntryNamesEquivalent(athlete.athleteName ?? athlete.athleteNameNormalized ?? "", candidateName) : false;
   }
 
   if (key.startsWith("name:")) {
@@ -616,6 +623,11 @@ function computeGroupSingleClassification(input: {
   }
 
   const allKeys = [...new Set(parsedMatches.flatMap((match) => [match.p1Key, match.p2Key]))];
+  const displayNameByKey = new Map<string, string>();
+  parsedMatches.forEach((match, index) => {
+    displayNameByKey.set(match.p1Key, input.matches[index]?.players[0]?.name ?? "");
+    displayNameByKey.set(match.p2Key, input.matches[index]?.players[1]?.name ?? "");
+  });
 
   const ordered = rankTiedGroupRecursively({
     keys: allKeys,
@@ -636,10 +648,10 @@ function computeGroupSingleClassification(input: {
 
   const athleteIndex = ordered.orderedKeys.findIndex((key) => {
     if (key.startsWith("id:")) {
-      return athleteIds.has(Number(key.slice(3)));
+      return athleteMatchesStandingKey(key, input.athlete, displayNameByKey.get(key) ?? null);
     }
     if (key.startsWith("name:")) {
-      return key === `name:${normalizedName}` || athleteMatchesStandingKey(key, input.athlete);
+      return key === `name:${normalizedName}` || athleteMatchesStandingKey(key, input.athlete, displayNameByKey.get(key) ?? null);
     }
     return false;
   });
@@ -839,6 +851,11 @@ export function computeCategoryClassificationSummaries(
         return !walkoverLosersInGroups.has(parsed.p1Key) && !walkoverLosersInGroups.has(parsed.p2Key);
       });
       const effectiveParsedMatches = effectiveCategoryMatches.map(toParsedMatch);
+      const displayNameByKey = new Map<string, string>();
+      categoryMatches.forEach((match) => {
+        displayNameByKey.set(toStandingKey(match.players[0], 0), match.players[0]?.name ?? "");
+        displayNameByKey.set(toStandingKey(match.players[1], 1), match.players[1]?.name ?? "");
+      });
 
       const hasAnyMatch = effectiveParsedMatches.length > 0;
       const hasPendingMatches = effectiveParsedMatches.some((match) => match.winnerKey === null);
@@ -850,7 +867,10 @@ export function computeCategoryClassificationSummaries(
           participantKeys.add(parsed.p2Key);
         }
         const eligibleKeys = [...participantKeys].filter((key) => !walkoverLosersInGroups.has(key));
-        if (eligibleKeys.length === 1 && athleteMatchesStandingKey(eligibleKeys[0], athlete)) {
+        if (
+          eligibleKeys.length === 1 &&
+          athleteMatchesStandingKey(eligibleKeys[0], athlete, displayNameByKey.get(eligibleKeys[0]) ?? null)
+        ) {
           return {
             categoryId,
             categoryName: first.categoryName,
