@@ -13,6 +13,8 @@ O projeto cobre o ciclo completo de um evento:
 - `README.md`: visao funcional, arquitetura e operacao do repositorio.
 - `AGENTS.md`: contexto permanente do projeto para agentes e assistentes.
 - `PROMPTS.md`: catalogo de prompts operacionais reutilizaveis.
+- `docs/critical-regression-suite.md`: cerca critica de regressao para superficies sensiveis do produto.
+- `docs/project-maturity-2026-04.md`: fechamento documental do estado atual do projeto.
 
 ## Stack
 - API: NestJS + Prisma + PostgreSQL
@@ -240,6 +242,19 @@ Testes importantes ja existentes cobrem, entre outros:
 - sincronizacao de inscricoes
 - integridade do worker antes do upsert
 
+Suite critica de regressao:
+
+```bash
+npm run test:regression:critical
+```
+
+Essa suite trava as classes de bug mais caras que ja ocorreram no projeto, com foco especial em:
+- eventos agregados e child events
+- carreira de pares
+- medalhistas e eficiencia
+- simulacao de grupos
+- sincronizacao destrutiva de inscricoes
+
 ## Operacao em VM
 A producao atual usa uma VM Oracle Cloud Always Free com Docker Compose.
 Medidas operacionais importantes ja adotadas:
@@ -345,3 +360,15 @@ Fixtures usadas para parser e testes offline:
 - O projeto privilegia evidencia e rastreabilidade sobre heuristica solta.
 - Divergencias com federacao ou site oficial devem ser explicadas com base em captura persistida, regra validada ou configuracao explicita.
 - Quando houver diferenca entre visao analitica do site e trofeu oficial, a diferenca deve ser documentada, nao mascarada.
+
+## Estado Atual
+Leitura honesta do estado atual do projeto:
+- infraestrutura e operacao autonoma: maduras
+- ingestao e reconciliacao de dados: confiaveis
+- eventos agregados e child events: cobertos por regressao critica
+- camadas derivadas principais (`career`, `medalists`, `efficiency`, `group simulation`): consolidadas
+
+Backlog tecnico residual mantido de forma explicita:
+- revisoes futuras de qualidade devem priorizar novos casos reais antes de expandir heuristicas
+- toda nova mudanca sensivel em eventos agregados deve manter ou ampliar a `test:regression:critical`
+- notificacoes externas existem como base tecnica, mas permanecem opcionais ate definicao operacional

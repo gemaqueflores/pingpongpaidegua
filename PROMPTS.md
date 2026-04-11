@@ -140,3 +140,18 @@ Instrucoes:
 - validar unidade competitiva em duplas e duplas mistas
 - explicar divergencias com evidencia publicada, captura persistida ou regra validada
 - nao ajustar dado em producao sem prova objetiva de que a origem oficial esta errada
+
+## Prompt G: Fechamento Documental
+
+Audite o estado atual do projeto e atualize apenas a documentacao necessaria na raiz.
+
+Objetivo:
+- registrar o estado maduro atual do projeto
+- explicitar o backlog tecnico residual de forma curta
+- alinhar `README.md`, `AGENTS.md`, `PROMPTS.md` e documentos de apoio quando necessario
+
+Regras:
+- nao reescrever a documentacao inteira sem necessidade
+- preferir mudanca pequena, objetiva e verificavel
+- documentar apenas o que ja foi validado no codigo, na producao ou nos testes
+- se houver nova cerca de regressao, registrar o comando e a finalidade

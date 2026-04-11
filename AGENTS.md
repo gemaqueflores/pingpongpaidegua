@@ -109,6 +109,7 @@
 - Build Web: `npm run build --workspace apps-web`
 - Testes API: `npm run test --workspace apps-api`
 - Testes Worker: `npm run test --workspace apps-worker`
+- Cerca critica: `npm run test:regression:critical`
 - Subir stack local: `docker compose up --build -d`
 
 ## 11. Limites de infraestrutura
