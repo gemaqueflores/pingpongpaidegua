@@ -6322,21 +6322,60 @@ export class UserService {
     return entries;
   }
 
-  private async resolveEventScope(eventId: number): Promise<EventScope> {
-    const merges = await this.loadEventMerges();
-    const secondaryToPrimary = new Map<number, number>();
+  private buildEventMergeScopeIndex(merges: EventMergeEntry[]): {
+    canonicalByEventId: Map<number, number>;
+    childrenByCanonicalEventId: Map<number, EventMergeEntry[]>;
+  } {
+    const parentBySecondaryEventId = new Map<number, number>();
     for (const merge of merges) {
-      secondaryToPrimary.set(merge.secondaryEventId, merge.primaryEventId);
+      parentBySecondaryEventId.set(merge.secondaryEventId, merge.primaryEventId);
     }
 
-    const canonicalEventId = secondaryToPrimary.get(eventId) ?? eventId;
-    const childEntries = merges.filter((merge) => merge.primaryEventId === canonicalEventId);
+    const rootCache = new Map<number, number>();
+    const findRoot = (eventId: number): number => {
+      const cached = rootCache.get(eventId);
+      if (cached) {
+        return cached;
+      }
+
+      const visited = new Set<number>();
+      let current = eventId;
+      while (parentBySecondaryEventId.has(current) && !visited.has(current)) {
+        visited.add(current);
+        current = parentBySecondaryEventId.get(current) ?? current;
+      }
+
+      const root = visited.has(current) ? Math.min(...visited, current) : current;
+      rootCache.set(eventId, root);
+      return root;
+    };
+
+    const canonicalByEventId = new Map<number, number>();
+    const childrenByCanonicalEventId = new Map<number, EventMergeEntry[]>();
+
+    for (const merge of merges) {
+      const canonicalEventId = findRoot(merge.primaryEventId);
+      canonicalByEventId.set(merge.secondaryEventId, canonicalEventId);
+
+      const children = childrenByCanonicalEventId.get(canonicalEventId) ?? [];
+      children.push(merge);
+      childrenByCanonicalEventId.set(canonicalEventId, children);
+    }
+
+    return { canonicalByEventId, childrenByCanonicalEventId };
+  }
+
+  private async resolveEventScope(eventId: number): Promise<EventScope> {
+    const merges = await this.loadEventMerges();
+    const { canonicalByEventId, childrenByCanonicalEventId } = this.buildEventMergeScopeIndex(merges);
+    const canonicalEventId = canonicalByEventId.get(eventId) ?? eventId;
+    const childEntries = childrenByCanonicalEventId.get(canonicalEventId) ?? [];
     const childSuffixByEventId = new Map<number, string>();
     for (const entry of childEntries) {
       childSuffixByEventId.set(entry.secondaryEventId, entry.categorySuffix || " -X");
     }
 
-    const allEventIds = [canonicalEventId, ...childEntries.map((entry) => entry.secondaryEventId)];
+    const allEventIds = [...new Set([canonicalEventId, ...childEntries.map((entry) => entry.secondaryEventId)])];
     return {
       canonicalEventId,
       allEventIds,
@@ -6346,15 +6385,19 @@ export class UserService {
 
   private async resolveEventScopeByCanonical(canonicalEventId: number): Promise<EventScope> {
     const merges = await this.loadEventMerges();
-    const childEntries = merges.filter((merge) => merge.primaryEventId === canonicalEventId);
+    const { canonicalByEventId, childrenByCanonicalEventId } = this.buildEventMergeScopeIndex(merges);
+    const resolvedCanonicalEventId = canonicalByEventId.get(canonicalEventId) ?? canonicalEventId;
+    const childEntries = childrenByCanonicalEventId.get(resolvedCanonicalEventId) ?? [];
     const childSuffixByEventId = new Map<number, string>();
     for (const entry of childEntries) {
       childSuffixByEventId.set(entry.secondaryEventId, entry.categorySuffix || " -X");
     }
 
     return {
-      canonicalEventId,
-      allEventIds: [canonicalEventId, ...childEntries.map((entry) => entry.secondaryEventId)],
+      canonicalEventId: resolvedCanonicalEventId,
+      allEventIds: [
+        ...new Set([resolvedCanonicalEventId, ...childEntries.map((entry) => entry.secondaryEventId)]),
+      ],
       childSuffixByEventId,
     };
   }
