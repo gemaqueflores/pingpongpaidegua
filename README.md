@@ -1,6 +1,6 @@
 # appcbtmeventos (PingPong Paid'egua)
 
-Monorepo para captura, normalizacao, persistencia, auditoria e consulta publica de eventos CBTM.
+Monorepo para captura, normalizacao, persistencia, auditoria e consulta publica de eventos CBTM, com foco em acompanhamento em tempo real e scout tecnico historico.
 
 O projeto cobre o ciclo completo de um evento:
 - scraping de inscricoes, grupos e resultados
@@ -8,6 +8,17 @@ O projeto cobre o ciclo completo de um evento:
 - persistencia e reconciliacao no PostgreSQL
 - read models publicos e administrativos
 - frontend publico e painel administrativo
+
+## Objetivos de Produto
+- acompanhar eventos CBTM em tempo real via API publica e scraping resiliente
+- persistir historico de atletas para scout tecnico de medalhas, pontos, sets e desempenho competitivo
+- persistir historico de clubes refletindo os resultados obtidos por seus atletas representantes
+- destacar atletas e clubes com melhor desempenho anual e acumulado, sem mascarar divergencias com a origem oficial
+
+Diretrizes de produto que valem para qualquer evolucao:
+- operar dentro dos limites da Oracle Cloud Always Free (`2 OCPU / 12 GB`)
+- priorizar experiencia mobile-first, responsiva e leve
+- preservar a autonomia operacional do sistema para receber, capturar, reconciliar e publicar eventos
 
 ## Documentacao da Raiz
 - `README.md`: visao funcional, arquitetura e operacao do repositorio.
@@ -128,12 +139,21 @@ Por isso, o projeto normaliza pares e prioriza:
 
 ### Admin
 - `GET /admin/events`
+- `GET /admin/events/efficiency-config`
+- `PUT /admin/events/efficiency-config`
+- `GET /admin/events/merges`
+- `POST /admin/events/merges`
+- `DELETE /admin/events/merges/{mergeId}`
 - `POST /admin/events`
 - `PUT /admin/events/{id}`
 - `DELETE /admin/events/{id}`
 - `POST /admin/events/{id}/mark-completed`
 - `POST /admin/events/{id}/scrape-now`
+- `POST /admin/events/{id}/reprocess-post-scrape`
+- `POST /admin/events/{id}/reprocess-lifecycle`
 - `GET /admin/events/{id}/scrape-runs`
+- `GET /admin/events/{id}/audit`
+- `GET /admin/events/{id}/audit-history`
 - `GET /admin/events/{id}/athlete-conflicts`
 - `POST /admin/events/{id}/athlete-conflicts/{conflictId}/resolve`
 - `POST /admin/events/raw-captures/cleanup`
@@ -144,26 +164,42 @@ Por isso, o projeto normaliza pares e prioriza:
 - `GET /events/{id}`
 - `GET /events/{id}/athletes?search=`
 - `GET /events/{id}/clubs?search=`
+- `GET /events/{id}/categories`
 - `GET /events/{id}/clubs/{clubId}/athletes`
 - `GET /events/{id}/athletes/{athleteId}/summary`
+- `GET /events/{id}/athletes/{athleteId}/identity`
 - `GET /events/{id}/efficiency`
 - `GET /events/{id}/medalists`
+- `GET /events/{id}/group-simulation`
+- `GET /efficiency`
 - `GET /clubs/{clubId}/efficiency-career`
 - `GET /athletes/directory?search=`
 - `GET /athletes/{athleteKey}/career`
+- `POST /support/report-problem`
 
 ## Web
 Rotas principais:
 - home publica: `http://localhost:3000/`
+- hub de eventos: `http://localhost:3000/events`
+- hub de atletas: `http://localhost:3000/atletas`
+- ranking global de clubes: `http://localhost:3000/eficiencia`
 - login admin: `http://localhost:3000/admin/login`
 - painel admin: `http://localhost:3000/admin`
-- carreira do atleta: `http://localhost:3000/user/career/{athleteKey}`
-- eficiencia do clube: `http://localhost:3000/eficiencia/{clubId}`
+- pagina canonica de evento: `http://localhost:3000/events/{id}`
+- pagina canonica do atleta no evento: `http://localhost:3000/events/{id}/athletes/{athleteId}`
+- simulador de grupos: `http://localhost:3000/events/{id}/group-simulator`
+- carreira canonica do atleta: `http://localhost:3000/career/{athleteKey}`
+- eficiencia historica do clube: `http://localhost:3000/eficiencia/{clubId}`
 
 Tambem existem paginas institucionais publicas:
 - `/sobre`
 - `/contato`
 - `/privacidade`
+- `/colabore`
+- `/reportar-problema`
+
+Observacao:
+- ainda existem aliases e redirecionamentos herdados em `/user/...`, mas a documentacao deve privilegiar as rotas canonicas do App Router atual.
 
 ## Ambiente Local
 Pre-requisito: Docker Desktop ativo.
@@ -367,8 +403,11 @@ Leitura honesta do estado atual do projeto:
 - ingestao e reconciliacao de dados: confiaveis
 - eventos agregados e child events: cobertos por regressao critica
 - camadas derivadas principais (`career`, `medalists`, `efficiency`, `group simulation`): consolidadas
+- experiencia publica principal: orientada a leitura mobile e a consumo rapido de dados em evento
+- scouts historicos de atletas e clubes: presentes nas superficies publicas, com recortes acumulados e parte dos recortes anuais ja disponiveis no frontend
 
 Backlog tecnico residual mantido de forma explicita:
+- consolidar e explicitar melhor, na documentacao e nas interfaces, a leitura de destaque anual para clubes e atletas
 - revisoes futuras de qualidade devem priorizar novos casos reais antes de expandir heuristicas
 - toda nova mudanca sensivel em eventos agregados deve manter ou ampliar a `test:regression:critical`
 - notificacoes externas existem como base tecnica, mas permanecem opcionais ate definicao operacional

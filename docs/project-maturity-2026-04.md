@@ -2,6 +2,11 @@
 
 ## Objetivo
 Este documento registra o estado de maturidade atual do projeto `pingpongpaidegua` / `appcbtmeventos` apos a rodada de estabilizacao operacional, migracao de VM e endurecimento das superficies derivadas.
+Ele deve ser lido junto com o baseline funcional do produto:
+- acompanhamento em tempo real de eventos CBTM
+- scout historico de atletas
+- scout historico de clubes refletindo os resultados dos atletas representantes
+- destaque de desempenho anual e acumulado, sem romper os limites da Oracle Always Free
 
 ## Estado Atual
 Leitura consolidada do projeto:
@@ -11,6 +16,7 @@ Leitura consolidada do projeto:
 - sincronizacao destrutiva: endurecida contra snapshot parcial e payload incidental
 - eventos agregados: tratados com cobertura de regressao e correcoes especificas
 - camadas derivadas principais: consolidadas
+- consumo publico majoritario em mobile considerado nas paginas principais e nas tabelas responsivas mais criticas
 
 ## O que foi consolidado
 
@@ -34,6 +40,7 @@ Leitura consolidada do projeto:
 - carreira de pares corrigida para alias legado e classificacao por nome quando necessario
 - diretorio de pares segue politica de mostrar apenas pares com lastro competitivo publicado
 - buscas publicas de atletas e clubes sao acento-insensiveis
+- hubs publicos canonicos atuais ficam em `/events`, `/atletas`, `/career/{athleteKey}` e `/eficiencia/{clubId}`
 
 ### Eventos agregados
 - categorias agregadas recebem sufixo consistente por child event
@@ -77,6 +84,7 @@ Esses riscos nao sao escondidos pelo sistema. A postura do projeto segue sendo:
 Backlog residual mantido de forma explicita:
 - checklist de migracao de VM continua devendo evoluir conforme novas necessidades operacionais
 - canais de notificacao externa continuam opcionais ate definicao operacional
+- destaque anual de clubes ainda depende mais de composicao de superficies existentes do que de uma camada dedicada unica
 - novas correcoes devem priorizar casos reais com reproducao objetiva antes de expandir heuristicas
 
 ## Regra de ouro para evolucao futura
