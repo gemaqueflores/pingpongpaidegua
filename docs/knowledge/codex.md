@@ -5,6 +5,11 @@
 ### 2026-06-15 — PR #12 — Token GitHub hardcoded em AGENTS.md
 `AGENTS.md` continha `ghp_[redacted]` literal — achado A02 OWASP (segredo em repositório versionado). Corrigido no próprio PR para `$env:GITHUB_TOKEN`. Padrão a vigiar: nunca incluir tokens/segredos em arquivos versionados, mesmo em AGENTS.md ou CLAUDE.md.
 
+### 2026-05-21 — Certificado TLS Let's Encrypt expirado sem renovação automática funcional
+VM Oracle Cloud foi reinstalada/recriada e a conta ACME (`acme-v01`) usada pelo certbot foi perdida junto com o ambiente. O `certbot.timer` do Ubuntu estava ativo, mas não conseguia renovar porque a conta ACME não existia mais na nova VM. Sintoma observado: frontend Vercel exibia tela vazia sem mensagem clara, porque a falha TLS era tratada como erro de rede e o estado de eventos ficava vazio.
+
+Causa raiz: certificado expirou em 2026-05-16 e a renovação automática falhou após a recriação da VM. Correção aplicada em 2026-05-21 com renovação via webroot, validação de nginx e reload. Lição: após recriar VM, validar a persistência/configuração de `/etc/letsencrypt/accounts/` e executar o script operacional de renovação antes de assumir que o timer cobre o certificado.
+
 ## Padrões de sucesso
 
 ### 2026-05-22 — PP-001 + PP-002 (PR #2)
