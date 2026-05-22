@@ -84,7 +84,7 @@ services:
     restart: unless-stopped
     environment:
       API_PORT: 4000
-      FRONTEND_URL: http://localhost:3000
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       FRONTEND_ALLOW_VERCEL_PREVIEWS: "true"
       TRUST_PROXY: "1"
       RATE_LIMIT_TRUST_PROXY: "true"

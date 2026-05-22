@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiGetGlobalEfficiency, type EventEfficiencyRow, type GlobalEfficiencyResponse } from "../../lib/user-api";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -24,12 +24,19 @@ export default function EfficiencyHubPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [data, setData] = useState<GlobalEfficiencyResponse | null>(null);
+  const [apiError, setApiError] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     void apiGetGlobalEfficiency()
-      .then((result) => setData(result))
-      .catch(() => setData(null))
+      .then((result) => {
+        setApiError(false);
+        setData(result);
+      })
+      .catch(() => {
+        setApiError(true);
+        setData(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -99,15 +106,39 @@ export default function EfficiencyHubPage() {
             </div>
           )}
 
-          {!loading && filtered.length === 0 ? (
-            <EmptyState
-              title="Nenhum clube encontrado"
-              description="Tente um termo diferente para localizar clubes na eficiência consolidada."
-            />
-          ) : null}
+          <EfficiencyHubEmptyState loading={loading} apiError={apiError} filteredCount={filtered.length} />
         </Card>
       </main>
     </UserShell>
   );
+}
+
+function EfficiencyHubEmptyState({
+  loading,
+  apiError,
+  filteredCount,
+}: {
+  loading: boolean;
+  apiError: boolean;
+  filteredCount: number;
+}) {
+  if (loading) return null;
+  if (apiError) {
+    return (
+      <EmptyState
+        title="Serviço indisponível"
+        description="Não foi possível carregar a eficiência. Tente novamente em instantes."
+      />
+    );
+  }
+  if (filteredCount === 0) {
+    return (
+      <EmptyState
+        title="Nenhum clube encontrado"
+        description="Tente um termo diferente para localizar clubes na eficiência consolidada."
+      />
+    );
+  }
+  return null;
 }
 

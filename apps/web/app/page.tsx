@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   apiGetAthletes,
@@ -145,6 +145,7 @@ export default function HomePage() {
   const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [eventsApiError, setEventsApiError] = useState(false);
   const [loadingAthletes, setLoadingAthletes] = useState(true);
   const [loadingClubs, setLoadingClubs] = useState(true);
   const [athleteTotal, setAthleteTotal] = useState(0);
@@ -166,8 +167,14 @@ export default function HomePage() {
 
   useEffect(() => {
     void apiGetEvents()
-      .then((rows) => setEvents(rows as EventRow[]))
-      .catch(() => setEvents([]))
+      .then((rows) => {
+        setEventsApiError(false);
+        setEvents(rows as EventRow[]);
+      })
+      .catch(() => {
+        setEventsApiError(true);
+        setEvents([]);
+      })
       .finally(() => setLoadingEvents(false));
 
     void apiGetAthletesDirectory()
@@ -628,12 +635,11 @@ export default function HomePage() {
             </div>
           )}
 
-          {!loadingEvents && filteredEvents.length === 0 ? (
-            <EmptyState
-              title="Nenhum evento encontrado"
-              description="Ajuste os filtros para visualizar eventos nesta seção."
-            />
-          ) : null}
+          <HomeEventsEmptyState
+            loadingEvents={loadingEvents}
+            eventsApiError={eventsApiError}
+            filteredCount={filteredEvents.length}
+          />
         </Card>
 
         <PublicFooter />
@@ -641,6 +647,30 @@ export default function HomePage() {
       </div>
     </UserShell>
   );
+}
+
+function HomeEventsEmptyState({
+  loadingEvents,
+  eventsApiError,
+  filteredCount,
+}: {
+  loadingEvents: boolean;
+  eventsApiError: boolean;
+  filteredCount: number;
+}) {
+  if (loadingEvents) return null;
+  if (eventsApiError) {
+    return (
+      <EmptyState
+        title="Serviço indisponível"
+        description="Não foi possível carregar os eventos. Tente novamente em instantes."
+      />
+    );
+  }
+  if (filteredCount === 0) {
+    return <EmptyState title="Nenhum evento encontrado" description="Ajuste os filtros para visualizar eventos nesta seção." />;
+  }
+  return null;
 }
 
 
