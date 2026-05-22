@@ -8,6 +8,7 @@ import { PageHeader } from "../../../../components/ui/PageHeader";
 import { Card } from "../../../../components/ui/Card";
 import { Badge } from "../../../../components/ui/Badge";
 import { MatchCard } from "../../../../components/ui/MatchCard";
+import { EmptyState } from "../../../../components/ui/EmptyState";
 import { Skeleton } from "../../../../components/ui/Skeleton";
 import { AthleteSummaryCard } from "../../../../components/career/AthleteSummaryCard";
 import type { MedalMatrix } from "../../../../components/career/MedalMatrixTable";
@@ -529,15 +530,10 @@ export default function AthleteCareerPage() {
       ) : null}
 
       {error ? (
-        <Card className="grid">
-          <h2>Carreira</h2>
-          <p>{error}</p>
-          <div className="row">
-            <button type="button" className="event-back-button" onClick={() => router.push("/atletas")}>
-              ← Voltar
-            </button>
-          </div>
-        </Card>
+        <EmptyState
+          title="Atleta não encontrado"
+          description="Carreira não encontrada para o atleta informado."
+        />
       ) : null}
 
       {payload && !error ? (

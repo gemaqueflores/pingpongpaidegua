@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ClubEfficiencyCareerPanel } from "../../../../components/user/ClubEfficiencyCareerPanel";
 import { Card } from "../../../../components/ui/Card";
+import { EmptyState } from "../../../../components/ui/EmptyState";
 import { PageHeader } from "../../../../components/ui/PageHeader";
 import { Skeleton } from "../../../../components/ui/Skeleton";
 import { apiGetClubEfficiencyCareer, type ClubEfficiencyCareerResponse } from "../../../../lib/user-api";
@@ -15,23 +16,32 @@ export default function ClubEfficiencyCareerPage() {
 
   const [data, setData] = useState<ClubEfficiencyCareerResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const [invalidClubId, setInvalidClubId] = useState(false);
   const [expandedEvents, setExpandedEvents] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (!Number.isFinite(clubId) || clubId <= 0) {
-      setError("Clube inválido.");
+      setData(null);
+      setError(false);
+      setInvalidClubId(true);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    setError(null);
+    setError(false);
+    setInvalidClubId(false);
     void apiGetClubEfficiencyCareer(clubId)
-      .then((response) => setData(response))
-      .catch((err: unknown) => {
+      .then((response) => {
+        setError(false);
+        setInvalidClubId(false);
+        setData(response);
+      })
+      .catch(() => {
         setData(null);
-        setError(err instanceof Error ? err.message : "Falha ao carregar eficiência do clube.");
+        setInvalidClubId(false);
+        setError(true);
       })
       .finally(() => setLoading(false));
   }, [clubId]);
@@ -57,10 +67,15 @@ export default function ClubEfficiencyCareerPage() {
         </Card>
       ) : null}
 
+      {!loading && invalidClubId ? (
+        <EmptyState title="Clube não encontrado" description="O identificador informado não é válido." />
+      ) : null}
+
       {!loading && error ? (
-        <Card className="grid">
-          <p>{error}</p>
-        </Card>
+        <EmptyState
+          title="Serviço indisponível"
+          description="Não foi possível carregar a eficiência deste clube. Tente novamente em instantes."
+        />
       ) : null}
 
       {!loading && data ? (
