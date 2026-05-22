@@ -276,3 +276,57 @@ test("PP-002 T-U-06 paginas limpam erro em chamada bem-sucedida", () => {
     assert.ok(source.includes(resetCall), `${label}: sucesso deve limpar estado de erro`);
   }
 });
+
+test("PP-004 T-U-01 eficiencia/[clubId] renderiza EmptyState de servico indisponivel", () => {
+  const html = renderToStaticMarkup(
+    <EmptyState
+      title="Serviço indisponível"
+      description="Não foi possível carregar a eficiência deste clube. Tente novamente em instantes."
+    />,
+  );
+
+  assert.match(html, /Serviço indisponível/);
+  assert.doesNotMatch(html, /Not Found/);
+  assert.doesNotMatch(html, /Internal Server Error/);
+});
+
+test("PP-004 T-U-02 eficiencia/[clubId] renderiza EmptyState de clube nao encontrado", () => {
+  const html = renderToStaticMarkup(
+    <EmptyState title="Clube não encontrado" description="O identificador informado não é válido." />,
+  );
+
+  assert.match(html, /Clube não encontrado/);
+});
+
+test("PP-004 T-U-03 eficiencia/[clubId] catch nao captura err.message", () => {
+  const files = [
+    "../app/eficiencia/[clubId]/page.tsx",
+    "../app/user/eficiencia/[clubId]/page.tsx",
+  ] as const;
+
+  for (const file of files) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /err\.message/);
+    assert.doesNotMatch(source, /err instanceof Error/);
+  }
+});
+
+test("PP-004 T-U-04 career/[athleteKey] renderiza EmptyState de atleta nao encontrado", () => {
+  const source = readFileSync(new URL("../app/user/career/[athleteKey]/page.tsx", import.meta.url), "utf8");
+  const html = renderToStaticMarkup(
+    <EmptyState
+      title="Atleta não encontrado"
+      description="Carreira não encontrada para o atleta informado."
+    />,
+  );
+
+  assert.match(source, /Atleta não encontrado/);
+  assert.match(html, /Atleta não encontrado/);
+  assert.doesNotMatch(source, /<h2>Carreira<\/h2>/);
+});
+
+test("PP-004 T-U-05 career/[athleteKey] nao exibe error diretamente na UI", () => {
+  const source = readFileSync(new URL("../app/user/career/[athleteKey]/page.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(source, /<p>\{error\}<\/p>/);
+});
