@@ -1,4 +1,5 @@
 ﻿import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -9,6 +10,9 @@ import { StatBlock } from "../components/ui/StatBlock";
 import { AthleteSummaryCard } from "../components/career/AthleteSummaryCard";
 import { MedalMatrixTable } from "../components/career/MedalMatrixTable";
 import { ClubEfficiencyCareerPanel } from "../components/user/ClubEfficiencyCareerPanel";
+import { EmptyState } from "../components/ui/EmptyState";
+
+(globalThis as typeof globalThis & { React: typeof React }).React = React;
 
 test("Hero snapshot", () => {
   const html = renderToStaticMarkup(
@@ -192,4 +196,83 @@ test("ClubEfficiencyCareerPanel snapshot", () => {
   assert.match(html, /Próximo evento/);
   assert.match(html, /Histórico por evento/);
   assert.match(html, /Contribuição por atleta/);
+});
+
+test("PP-002 T-U-01 events/page exibe erro da API antes do filtro vazio", () => {
+  const source = readFileSync(new URL("../app/events/page.tsx", import.meta.url), "utf8");
+  const html = renderToStaticMarkup(
+    <EmptyState
+      title="Serviço indisponível"
+      description="Não foi possível carregar os eventos. Tente novamente em instantes."
+    />,
+  );
+
+  assert.match(source, /apiError[\s\S]*filteredCount === 0/);
+  assert.match(html, /Serviço indisponível/);
+  assert.doesNotMatch(html, /Nenhum evento atende aos filtros/);
+});
+
+test("PP-002 T-U-02 events/page preserva estado vazio sem erro", () => {
+  const source = readFileSync(new URL("../app/events/page.tsx", import.meta.url), "utf8");
+  const html = renderToStaticMarkup(
+    <EmptyState title="Sem resultados" description="Nenhum evento atende aos filtros selecionados." />,
+  );
+
+  assert.match(source, /filteredCount === 0/);
+  assert.match(html, /Sem resultados/);
+  assert.doesNotMatch(html, /Serviço indisponível/);
+});
+
+test("PP-002 T-U-03 atletas/page exibe erro da API", () => {
+  const source = readFileSync(new URL("../app/atletas/page.tsx", import.meta.url), "utf8");
+  const html = renderToStaticMarkup(
+    <EmptyState
+      title="Serviço indisponível"
+      description="Não foi possível carregar os atletas. Tente novamente em instantes."
+    />,
+  );
+
+  assert.match(source, /apiError && athleteCount === 0/);
+  assert.match(html, /Serviço indisponível/);
+});
+
+test("PP-002 T-U-04 eficiencia/page exibe erro da API", () => {
+  const source = readFileSync(new URL("../app/eficiencia/page.tsx", import.meta.url), "utf8");
+  const html = renderToStaticMarkup(
+    <EmptyState
+      title="Serviço indisponível"
+      description="Não foi possível carregar a eficiência. Tente novamente em instantes."
+    />,
+  );
+
+  assert.match(source, /if \(apiError\)/);
+  assert.match(html, /Serviço indisponível/);
+});
+
+test("PP-002 T-U-05 home exibe erro da API na secao de eventos", () => {
+  const source = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const html = renderToStaticMarkup(
+    <EmptyState
+      title="Serviço indisponível"
+      description="Não foi possível carregar os eventos. Tente novamente em instantes."
+    />,
+  );
+
+  assert.match(source, /if \(eventsApiError\)/);
+  assert.match(html, /Serviço indisponível/);
+});
+
+test("PP-002 T-U-06 paginas limpam erro em chamada bem-sucedida", () => {
+  const files = [
+    ["events", "app/events/page.tsx", "setApiError(false)"],
+    ["atletas", "app/atletas/page.tsx", "setApiError(false)"],
+    ["eficiencia", "app/eficiencia/page.tsx", "setApiError(false)"],
+    ["home", "app/page.tsx", "setEventsApiError(false)"],
+  ] as const;
+
+  for (const [label, path, resetCall] of files) {
+    const source = readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+    assert.match(source, /\.then\(\(.*?\) => \{/s, `${label}: sucesso deve usar bloco then`);
+    assert.ok(source.includes(resetCall), `${label}: sucesso deve limpar estado de erro`);
+  }
 });

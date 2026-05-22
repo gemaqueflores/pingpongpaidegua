@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiGetEvents, type UserEventRow } from "../../lib/user-api";
 import { Card } from "../../components/ui/Card";
@@ -113,14 +113,21 @@ export default function EventsHubPage() {
   const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState(false);
   const [eventTypeFilter, setEventTypeFilter] = useState<EventTypeFilter>("ALL");
   const [eventStatusFilter, setEventStatusFilter] = useState<EventStatusFilter>("ALL");
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   useEffect(() => {
     void apiGetEvents()
-      .then((rows) => setEvents(rows as EventRow[]))
-      .catch(() => setEvents([]))
+      .then((rows) => {
+        setApiError(false);
+        setEvents(rows as EventRow[]);
+      })
+      .catch(() => {
+        setApiError(true);
+        setEvents([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -195,12 +202,33 @@ export default function EventsHubPage() {
               ))}
             </div>
           )}
-          {!loading && filteredEvents.length === 0 ? (
-            <EmptyState title="Sem resultados" description="Nenhum evento atende aos filtros selecionados." />
-          ) : null}
+          <EventsHubEmptyState loading={loading} apiError={apiError} filteredCount={filteredEvents.length} />
         </Card>
       </main>
     </UserShell>
   );
 }
 
+function EventsHubEmptyState({
+  loading,
+  apiError,
+  filteredCount,
+}: {
+  loading: boolean;
+  apiError: boolean;
+  filteredCount: number;
+}) {
+  if (loading) return null;
+  if (apiError) {
+    return (
+      <EmptyState
+        title="Serviço indisponível"
+        description="Não foi possível carregar os eventos. Tente novamente em instantes."
+      />
+    );
+  }
+  if (filteredCount === 0) {
+    return <EmptyState title="Sem resultados" description="Nenhum evento atende aos filtros selecionados." />;
+  }
+  return null;
+}

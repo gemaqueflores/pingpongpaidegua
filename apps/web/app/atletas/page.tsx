@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiGetAthletesDirectory } from "../../lib/user-api";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -25,12 +25,19 @@ export default function AthletesHubPage() {
   const [search, setSearch] = useState("");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [athletes, setAthletes] = useState<AthleteDirectoryRow[]>([]);
+  const [apiError, setApiError] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     void apiGetAthletesDirectory(search)
-      .then((rows) => setAthletes(rows as AthleteDirectoryRow[]))
-      .catch(() => setAthletes([]))
+      .then((rows) => {
+        setApiError(false);
+        setAthletes(rows as AthleteDirectoryRow[]);
+      })
+      .catch(() => {
+        setApiError(true);
+        setAthletes([]);
+      })
       .finally(() => setLoading(false));
   }, [search]);
 
@@ -85,12 +92,7 @@ export default function AthletesHubPage() {
             </div>
           )}
 
-          {!loading && athletes.length === 0 ? (
-            <EmptyState
-              title="Nenhum atleta encontrado"
-              description="Refine a busca para localizar atletas cadastrados."
-            />
-          ) : null}
+          <AthletesHubEmptyState loading={loading} apiError={apiError} athleteCount={athletes.length} />
 
           {!loading && athletes.length > visible ? (
             <div className="row" style={{ justifyContent: "center" }}>
@@ -101,4 +103,28 @@ export default function AthletesHubPage() {
       </main>
     </UserShell>
   );
+}
+
+function AthletesHubEmptyState({
+  loading,
+  apiError,
+  athleteCount,
+}: {
+  loading: boolean;
+  apiError: boolean;
+  athleteCount: number;
+}) {
+  if (loading) return null;
+  if (apiError && athleteCount === 0) {
+    return (
+      <EmptyState
+        title="Serviço indisponível"
+        description="Não foi possível carregar os atletas. Tente novamente em instantes."
+      />
+    );
+  }
+  if (athleteCount === 0) {
+    return <EmptyState title="Nenhum atleta encontrado" description="Refine a busca para localizar atletas cadastrados." />;
+  }
+  return null;
 }
