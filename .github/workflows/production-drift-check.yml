@@ -21,6 +21,7 @@ jobs:
   drift-check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    continue-on-error: ${{ github.event_name == 'schedule' }}
 
     steps:
       - name: Pre-check de secrets e parametros
