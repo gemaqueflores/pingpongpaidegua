@@ -3573,11 +3573,6 @@ export class UserService {
         eventId: { in: scope.allEventIds },
         clubId,
         createdFromWarning: false,
-        nameDisplay: {
-          not: {
-            contains: "#",
-          },
-        },
         categories: categoryId
           ? {
               some: {
