@@ -89,3 +89,71 @@ test("T-U-01 listAthletes inclui pares de duplas no evento", async () => {
   assert.ok(result.some((athlete) => !athlete.nameDisplay.includes("#")));
   assert.ok(!stringify(whereArg).includes('"contains":"#"'));
 });
+
+test("T-U-02 listAthleteDirectory mantem filtro de pares no diretorio global", async () => {
+  const prisma = {
+    athlete: {
+      async findMany() {
+        return [
+          {
+            id: 20,
+            eventId: 52,
+            nameDisplay: "SILVA A # SILVA B",
+            nameNormalized: "silva a # silva b",
+          },
+        ];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [{ athleteId: 20, categoryId: 200 }];
+      },
+    },
+    match: {
+      async findMany() {
+        return [];
+      },
+    },
+  };
+  const service = createService(prisma);
+
+  const result = await service.listAthleteDirectory("");
+
+  assert.equal(result.length, 0);
+});
+
+test("T-U-03 listClubs inclui pares na contagem de atletas do clube", async () => {
+  let athletesByClubWhere: Record<string, unknown> | null = null;
+  const prisma = {
+    club: {
+      async findMany() {
+        return [{ id: 1, name: "CLUBE A" }];
+      },
+    },
+    athlete: {
+      async findMany(args: { where: Record<string, unknown> }) {
+        athletesByClubWhere = args.where;
+        return [
+          { clubId: 1, nameNormalized: "atleta individual 1" },
+          { clubId: 1, nameNormalized: "atleta individual 2" },
+          { clubId: 1, nameNormalized: "atleta individual 3" },
+          { clubId: 1, nameNormalized: "silva a # silva b" },
+          { clubId: 1, nameNormalized: "dupla mista a # dupla mista b" },
+        ];
+      },
+    },
+  };
+  const service = createService(prisma, {
+    canonicalEventId: 51,
+    allEventIds: [51, 52, 53],
+    childSuffixByEventId: new Map([
+      [52, " - DUPLAS"],
+      [53, " - DUPLAS MISTAS"],
+    ]),
+  });
+
+  const result = await service.listClubs(51, "", null);
+
+  assert.equal(result[0]?.athleteCount, 5);
+  assert.ok(!stringify(athletesByClubWhere).includes('"contains":"#"'));
+});
