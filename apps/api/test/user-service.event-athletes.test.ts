@@ -157,3 +157,49 @@ test("T-U-03 listClubs inclui pares na contagem de atletas do clube", async () =
   assert.equal(result[0]?.athleteCount, 5);
   assert.ok(!stringify(athletesByClubWhere).includes('"contains":"#"'));
 });
+
+test("T-U-04 listClubAthletes retorna pares do clube", async () => {
+  let athleteWhereArg: Record<string, unknown> | null = null;
+  const prisma = {
+    club: {
+      async findFirst() {
+        return { id: 1, name: "CLUBE A", normalizedName: "clube a" };
+      },
+    },
+    athlete: {
+      async findMany(args: { where: Record<string, unknown> }) {
+        athleteWhereArg = args.where;
+        return [
+          {
+            id: 20,
+            eventId: 52,
+            nameDisplay: "SILVA A # SILVA B",
+            nameNormalized: "silva a # silva b",
+            stateCode: "PA",
+            region: "NORTE",
+            categories: [
+              {
+                registrationStatus: "INSCRITO",
+                category: { id: 200, eventId: 52, name: "ABSOLUTO A" },
+              },
+            ],
+          },
+        ];
+      },
+    },
+  };
+  const service = createService(prisma, {
+    canonicalEventId: 51,
+    allEventIds: [51, 52, 53],
+    childSuffixByEventId: new Map([
+      [52, " - DUPLAS"],
+      [53, " - DUPLAS MISTAS"],
+    ]),
+  });
+
+  const result = await service.listClubAthletes(51, 1, null);
+
+  assert.equal(result.athletes[0]?.nameDisplay, "SILVA A # SILVA B");
+  assert.deepEqual(result.athletes[0]?.categoryNames, ["ABSOLUTO A - DUPLAS"]);
+  assert.ok(!stringify(athleteWhereArg).includes('"contains":"#"'));
+});
