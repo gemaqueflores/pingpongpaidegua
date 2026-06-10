@@ -349,3 +349,63 @@ test("T-U-06 listEventSchedule ignora categorias sem partidas e categorias ignor
     ["ABSOLUTO A"],
   );
 });
+
+test("T-I-01 controller GET events/:id/athletes inclui pares", async () => {
+  const controller = new UserController({
+    async listAthletes(eventId: number) {
+      assert.equal(eventId, 51);
+      return [
+        {
+          id: 20,
+          rawAthleteId: 20,
+          nameDisplay: "SILVA A # SILVA B",
+          stateCode: "PA",
+          region: "NORTE",
+          club: { id: 1, name: "CLUBE A" },
+        },
+      ];
+    },
+  } as unknown as UserService);
+
+  const response = await controller.listAthletes(51, "", undefined, undefined);
+
+  assert.ok(response.some((athlete) => athlete.nameDisplay.includes("#")));
+});
+
+test("T-I-02 controller GET events/:id/schedule retorna estrutura correta", async () => {
+  const controller = new UserController({
+    async listEventSchedule(eventId: number) {
+      assert.equal(eventId, 51);
+      return {
+        eventId,
+        categories: [
+          {
+            categoryId: 200,
+            categoryName: "ABSOLUTO A - DUPLAS",
+            matches: [
+              {
+                id: 1,
+                round: "Grupo 01",
+                tableNumber: "1",
+                matchDatetime: "2026-06-14T12:00:00.000Z",
+                scoreRaw: null,
+                playerA: { id: 10, name: "SILVA A # SILVA B", clubName: "CLUBE A" },
+                playerB: { id: 20, name: "LIMA A # LIMA B", clubName: "CLUBE B" },
+              },
+            ],
+          },
+        ],
+      };
+    },
+  } as unknown as UserService) as UserController & {
+    listEventSchedule(eventId: number): Promise<{
+      eventId: number;
+      categories: Array<{ matches: Array<{ matchDatetime: string | null }> }>;
+    }>;
+  };
+
+  const response = await controller.listEventSchedule(51);
+
+  assert.equal(response.eventId, 51);
+  assert.ok(response.categories[0]?.matches[0]?.matchDatetime);
+});
