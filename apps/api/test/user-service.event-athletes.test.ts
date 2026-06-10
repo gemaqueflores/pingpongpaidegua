@@ -9,6 +9,22 @@ type EventScope = {
   childSuffixByEventId: Map<number, string>;
 };
 
+type ScheduleService = UserService & {
+  listEventSchedule(eventId: number): Promise<{
+    eventId: number;
+    categories: Array<{
+      categoryId: number;
+      categoryName: string;
+      matches: Array<{
+        id: number;
+        matchDatetime: string | null;
+        playerA: { id: number | null; name: string; clubName: string | null } | null;
+        playerB: { id: number | null; name: string; clubName: string | null } | null;
+      }>;
+    }>;
+  }>;
+};
+
 function createService(prisma: Record<string, unknown>, scope?: EventScope) {
   const service = new UserService(prisma as never, prisma as never) as UserService & {
     resolveEventScope(eventId: number): Promise<EventScope>;
@@ -202,4 +218,134 @@ test("T-U-04 listClubAthletes retorna pares do clube", async () => {
   assert.equal(result.athletes[0]?.nameDisplay, "SILVA A # SILVA B");
   assert.deepEqual(result.athletes[0]?.categoryNames, ["ABSOLUTO A - DUPLAS"]);
   assert.ok(!stringify(athleteWhereArg).includes('"contains":"#"'));
+});
+
+test("T-U-05 listEventSchedule retorna partidas agrupadas por categoria com sufixo e ordenacao", async () => {
+  const prisma = {
+    match: {
+      async findMany() {
+        return [
+          {
+            id: 2,
+            eventId: 52,
+            categoryId: 200,
+            round: "Grupo 01",
+            tableNumber: "2",
+            matchDatetime: null,
+            scoreRaw: "",
+            scorePlayers: [
+              { name: "PAR SEM HORA A", athleteId: 30 },
+              { name: "PAR SEM HORA B", athleteId: 40 },
+            ],
+            category: { id: 200, eventId: 52, name: "ABSOLUTO A", cbtmCategoryId: "200" },
+            participants: [
+              { athleteId: 30, athlete: { id: 30, nameDisplay: "PAR SEM HORA A", club: { id: 1, name: "CLUBE A" } } },
+              { athleteId: 40, athlete: { id: 40, nameDisplay: "PAR SEM HORA B", club: { id: 2, name: "CLUBE B" } } },
+            ],
+          },
+          {
+            id: 1,
+            eventId: 52,
+            categoryId: 200,
+            round: "Grupo 01",
+            tableNumber: "1",
+            matchDatetime: new Date("2026-06-14T12:00:00.000Z"),
+            scoreRaw: "3-1",
+            scorePlayers: [
+              { name: "SILVA A # SILVA B", athleteId: 10 },
+              { name: "LIMA A # LIMA B", athleteId: 20 },
+            ],
+            category: { id: 200, eventId: 52, name: "ABSOLUTO A", cbtmCategoryId: "200" },
+            participants: [
+              { athleteId: 10, athlete: { id: 10, nameDisplay: "SILVA A # SILVA B", club: { id: 1, name: "CLUBE A" } } },
+              { athleteId: 20, athlete: { id: 20, nameDisplay: "LIMA A # LIMA B", club: { id: 2, name: "CLUBE B" } } },
+            ],
+          },
+          {
+            id: 3,
+            eventId: 53,
+            categoryId: 300,
+            round: "Final",
+            tableNumber: "3",
+            matchDatetime: new Date("2026-06-14T13:00:00.000Z"),
+            scoreRaw: null,
+            scorePlayers: null,
+            category: { id: 300, eventId: 53, name: "DUPLA MISTA", cbtmCategoryId: "300" },
+            participants: [
+              { athleteId: 50, athlete: { id: 50, nameDisplay: "MISTA A # MISTA B", club: { id: 1, name: "CLUBE A" } } },
+              { athleteId: 60, athlete: { id: 60, nameDisplay: "MISTA C # MISTA D", club: { id: 2, name: "CLUBE B" } } },
+            ],
+          },
+        ];
+      },
+    },
+  };
+  const service = createService(prisma, {
+    canonicalEventId: 51,
+    allEventIds: [51, 52, 53],
+    childSuffixByEventId: new Map([
+      [52, " - DUPLAS"],
+      [53, " - DUPLAS MISTAS"],
+    ]),
+  }) as ScheduleService;
+
+  const result = await service.listEventSchedule(51);
+
+  assert.equal(result.eventId, 51);
+  assert.deepEqual(
+    result.categories.map((category) => category.categoryName),
+    ["ABSOLUTO A - DUPLAS", "DUPLA MISTA - DUPLAS MISTAS"],
+  );
+  assert.deepEqual(
+    result.categories[0]?.matches.map((match) => match.id),
+    [1, 2],
+  );
+  assert.equal(result.categories[0]?.matches[0]?.matchDatetime, "2026-06-14T12:00:00.000Z");
+  assert.equal(result.categories[0]?.matches[0]?.playerA?.name, "SILVA A # SILVA B");
+});
+
+test("T-U-06 listEventSchedule ignora categorias sem partidas e categorias ignoradas", async () => {
+  const prisma = {
+    match: {
+      async findMany() {
+        return [
+          {
+            id: 1,
+            eventId: 51,
+            categoryId: 100,
+            round: "Grupo 01",
+            tableNumber: "1",
+            matchDatetime: null,
+            scoreRaw: "",
+            scorePlayers: null,
+            category: { id: 100, eventId: 51, name: "ABSOLUTO A", cbtmCategoryId: "100" },
+            participants: [
+              { athleteId: 10, athlete: { id: 10, nameDisplay: "ATLETA A", club: { id: 1, name: "CLUBE A" } } },
+              { athleteId: 20, athlete: { id: 20, nameDisplay: "ATLETA B", club: { id: 2, name: "CLUBE B" } } },
+            ],
+          },
+          {
+            id: 2,
+            eventId: 51,
+            categoryId: 999,
+            round: "Grupo 01",
+            tableNumber: "2",
+            matchDatetime: null,
+            scoreRaw: "",
+            scorePlayers: null,
+            category: { id: 999, eventId: 51, name: "IGNORADA", cbtmCategoryId: "9999" },
+            participants: [],
+          },
+        ];
+      },
+    },
+  };
+  const service = createService(prisma) as ScheduleService;
+
+  const result = await service.listEventSchedule(51);
+
+  assert.deepEqual(
+    result.categories.map((category) => category.categoryName),
+    ["ABSOLUTO A"],
+  );
 });
