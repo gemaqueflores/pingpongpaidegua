@@ -135,12 +135,12 @@ test("simulateGroups em evento agregado aplica sufixo do child event nas categor
   service.ensureEvent = async (eventId: number) => ({
     id: eventId,
     concluido: false,
-    inicioInscricoes: new Date("2026-04-01T00:00:00.000Z"),
-    fimInscricoes: new Date("2026-04-20T00:00:00.000Z"),
-    inicioRealizacao: new Date("2026-04-25T00:00:00.000Z"),
-    fimRealizacao: new Date("2026-04-27T00:00:00.000Z"),
-    dataInicio: new Date("2026-04-25T00:00:00.000Z"),
-    dataFim: new Date("2026-04-27T00:00:00.000Z"),
+    inicioInscricoes: new Date("2026-07-01T00:00:00.000Z"),
+    fimInscricoes: new Date("2026-07-20T00:00:00.000Z"),
+    inicioRealizacao: new Date("2026-07-25T00:00:00.000Z"),
+    fimRealizacao: new Date("2026-07-27T00:00:00.000Z"),
+    dataInicio: new Date("2026-07-25T00:00:00.000Z"),
+    dataFim: new Date("2026-07-27T00:00:00.000Z"),
   });
   service.readEventPublicationFlags = async () => ({
     hasPublishedMatches: false,

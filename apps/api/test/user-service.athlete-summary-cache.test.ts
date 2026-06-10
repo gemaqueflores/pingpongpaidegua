@@ -173,7 +173,7 @@ test("athlete summary persiste read model e reutiliza cache valido no mesmo scra
 test("athlete summary usa cache stale quando recomputacao falha", async () => {
   const harness = createAthleteSummaryHarness();
   harness.setCachedRecord({
-    key: "athlete-summary|event:1|athlete:5001|variant:phase_hierarchy_datetime:v2",
+    key: "athlete-summary|event:1|athlete:5001|variant:phase_hierarchy_datetime:v3",
     sourceScrapeRunId: 33,
     payload: {
       event: { id: 1, name: "1TMB26" },
