@@ -72,6 +72,12 @@ export class UserController {
     return this.service.listEventCategoryMedalists(eventId);
   }
 
+  @Get("events/:id/schedule")
+  @PublicCacheTtl(30)
+  async listEventSchedule(@Param("id", ParseIntPipe) eventId: number) {
+    return this.service.listEventSchedule(eventId);
+  }
+
   @Get("efficiency")
   async listGlobalEfficiency() {
     return this.service.listGlobalEfficiency();
