@@ -1702,11 +1702,6 @@ export class UserService {
       where: {
         eventId: { in: scope.allEventIds },
         createdFromWarning: false,
-        nameDisplay: {
-          not: {
-            contains: "#",
-          },
-        },
         clubId: { in: clubIds },
         categories: categoryId
           ? {
