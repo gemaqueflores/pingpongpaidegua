@@ -40,8 +40,8 @@ describe("parser multi-chunk", () => {
     const synthetic = parseDxPayloads(5246, [firstInscricao!], {
       categoriesDiscovered: [
         { categoryId: "111", categoryName: "ABSOLUTO E (MAS)", valid: true },
-        { categoryId: "88888888", categoryName: "TOTAL", valid: false },
-        { categoryId: "99999999", categoryName: "TECNICO", valid: false },
+        { categoryId: "88888888", categoryName: "TECNICO", valid: false },
+        { categoryId: "99999999", categoryName: "TOTAL", valid: false },
       ],
     });
 

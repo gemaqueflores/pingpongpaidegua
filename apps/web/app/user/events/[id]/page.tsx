@@ -9,10 +9,12 @@ import {
   apiGetClubAthletes,
   apiGetClubs,
   apiGetEventEfficiency,
+  apiGetEventSchedule,
   apiGetEventSummary,
   type EventCategoryMedalistsResponse,
   type EventEfficiencyResponse,
   type EventEfficiencyRow,
+  type EventScheduleResponse,
   type UserEventRow,
 } from "../../../../lib/user-api";
 import { Hero } from "../../../../components/ui/Hero";
@@ -25,7 +27,7 @@ import { EmptyState } from "../../../../components/ui/EmptyState";
 import { DataTableResponsive } from "../../../../components/ui/DataTableResponsive";
 
 type EventRow = UserEventRow;
-type EventTab = "grupos" | "clubes" | "atletas" | "eficiencia";
+type EventTab = "grupos" | "confrontos" | "clubes" | "atletas" | "eficiencia";
 type EfficiencyViewMode = "quantidade" | "pontuacao";
 
 type ClubRow = {
@@ -115,6 +117,10 @@ function formatDateTime(value: string | null): string {
     parts.find((part) => part.type === type)?.value ?? "00";
 
   return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}`;
+}
+
+function formatScheduleName(value: string | null | undefined): string {
+  return (value ?? "-").replace(/\s*#\s*/g, " / ");
 }
 
 function inferEventType(name: string): "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN" {
@@ -216,6 +222,8 @@ export default function EventDetailPage() {
   const [medalistsData, setMedalistsData] = useState<EventCategoryMedalistsResponse | null>(null);
   const [medalistsLoading, setMedalistsLoading] = useState(false);
   const [medalistsVisible, setMedalistsVisible] = useState(MEDALISTS_PAGE_SIZE);
+  const [scheduleData, setScheduleData] = useState<EventScheduleResponse | null>(null);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   const [efficiencyMode, setEfficiencyMode] = useState<EfficiencyViewMode>("pontuacao");
 
   useEffect(() => {
@@ -271,6 +279,17 @@ export default function EventDetailPage() {
     void apiGetEventCategoryMedalists(eventId)
       .then((response) => setMedalistsData(response))
       .finally(() => setMedalistsLoading(false));
+  }, [activeTab, eventId, event?.lastScrapeAt]);
+
+  useEffect(() => {
+    if (activeTab !== "confrontos") {
+      return;
+    }
+
+    setScheduleLoading(true);
+    void apiGetEventSchedule(eventId)
+      .then((response) => setScheduleData(response))
+      .finally(() => setScheduleLoading(false));
   }, [activeTab, eventId, event?.lastScrapeAt]);
 
   useEffect(() => {
@@ -377,8 +396,10 @@ export default function EventDetailPage() {
     (event?.situacaoComputada === "POS_INSCRICOES_PRE_EVENTO" && Boolean(event?.groupsDefined));
   const hideGroupsTab = Boolean(event?.concluido) || event?.situacaoComputada === "EM_ANDAMENTO" || isGroupsPublished;
 
+  const hasPublishedMatches = (event?.totalPartidasPublicadas ?? 0) > 0;
   const tabs: Array<{ id: EventTab; label: string }> = [
     ...(hideGroupsTab ? [] : [{ id: "grupos" as const, label: "Grupos" }]),
+    ...(hasPublishedMatches ? [{ id: "confrontos" as const, label: "Confrontos" }] : []),
     { id: "clubes", label: "Clubes" },
     { id: "atletas", label: "Atletas" },
     { id: "eficiencia", label: "Eficiência do evento" },
@@ -547,6 +568,67 @@ export default function EventDetailPage() {
           ) : null}
           {!event?.groupsDefined && !event?.groupSimulationEligible ? (
             <p className="arena-muted">Simulador indisponível para o momento atual do evento.</p>
+          ) : null}
+        </Card>
+      ) : null}
+
+      {activeTab === "confrontos" ? (
+        <Card className="grid event-tab-panel">
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <h2>Confrontos</h2>
+            <Badge tone="default">
+              {String(scheduleData?.categories.reduce((sum, category) => sum + category.matches.length, 0) ?? 0)} partidas
+            </Badge>
+          </div>
+          {scheduleLoading ? (
+            <div className="grid">
+              <Skeleton height="64px" />
+              <Skeleton height="64px" />
+              <Skeleton height="64px" />
+            </div>
+          ) : null}
+          {!scheduleLoading && (scheduleData?.categories.length ?? 0) === 0 ? (
+            <EmptyState
+              title="Nenhum confronto encontrado"
+              description="Os confrontos serão exibidos quando houver partidas publicadas para este evento."
+            />
+          ) : null}
+          {!scheduleLoading && scheduleData?.categories.length ? (
+            <div className="grid" style={{ gap: "12px" }}>
+              {scheduleData.categories.map((category, index) => (
+                <details key={category.categoryId} className="athlete-list-card" open={index === 0}>
+                  <summary className="row" style={{ justifyContent: "space-between", cursor: "pointer" }}>
+                    <strong>{category.categoryName}</strong>
+                    <span className="arena-muted">{category.matches.length} partidas</span>
+                  </summary>
+                  <div className="grid" style={{ gap: "8px", marginTop: "10px" }}>
+                    {category.matches.map((match) => (
+                      <article key={match.id} className="event-schedule-match">
+                        <div className="row" style={{ justifyContent: "space-between", gap: "10px" }}>
+                          <strong>{formatDateTime(match.matchDatetime)}</strong>
+                          <span className="arena-muted">
+                            {match.tableNumber ? `Mesa ${match.tableNumber}` : "Mesa -"}
+                            {match.round ? ` | ${match.round}` : ""}
+                          </span>
+                        </div>
+                        <div className="row" style={{ justifyContent: "space-between", gap: "12px" }}>
+                          <span>
+                            {formatScheduleName(match.playerA?.name)}
+                            {match.playerA?.clubName ? ` · ${match.playerA.clubName}` : ""}
+                          </span>
+                          <strong>vs</strong>
+                          <span>
+                            {formatScheduleName(match.playerB?.name)}
+                            {match.playerB?.clubName ? ` · ${match.playerB.clubName}` : ""}
+                          </span>
+                        </div>
+                        {match.scoreRaw ? <Badge tone="default">Placar: {match.scoreRaw}</Badge> : null}
+                      </article>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
           ) : null}
         </Card>
       ) : null}
