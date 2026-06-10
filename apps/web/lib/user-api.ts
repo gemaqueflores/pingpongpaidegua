@@ -104,6 +104,23 @@ export interface EventCategoryMedalistsResponse {
   }>;
 }
 
+export type EventScheduleResponse = {
+  eventId: number;
+  categories: Array<{
+    categoryId: number;
+    categoryName: string;
+    matches: Array<{
+      id: number;
+      round: string | null;
+      tableNumber: string | null;
+      matchDatetime: string | null;
+      scoreRaw: string | null;
+      playerA: { id: number | null; name: string; clubName: string | null } | null;
+      playerB: { id: number | null; name: string; clubName: string | null } | null;
+    }>;
+  }>;
+};
+
 export interface GlobalEfficiencyResponse {
   weights: {
     pesoOuro: number;
@@ -362,6 +379,15 @@ export async function apiGetEventEfficiency(eventId: number): Promise<EventEffic
 
 export async function apiGetEventCategoryMedalists(eventId: number): Promise<EventCategoryMedalistsResponse> {
   const response = await fetchWithRecovery(`${API_BASE}/events/${eventId}/medalists`, {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+
+  return handleResponse(response);
+}
+
+export async function apiGetEventSchedule(eventId: number): Promise<EventScheduleResponse> {
+  const response = await fetchWithRecovery(`${API_BASE}/events/${eventId}/schedule`, {
     headers: getHeaders(),
     cache: "no-store",
   });
