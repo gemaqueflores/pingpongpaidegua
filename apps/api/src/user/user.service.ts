@@ -1587,13 +1587,6 @@ export class UserService {
         },
         AND: [
           {
-            nameDisplay: {
-              not: {
-                contains: "#",
-              },
-            },
-          },
-          {
             nameNormalized: {
               contains: normalizedSearch || undefined,
               mode: "insensitive",
