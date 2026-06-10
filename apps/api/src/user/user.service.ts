@@ -2127,6 +2127,139 @@ export class UserService {
     });
   }
 
+  async listEventSchedule(eventId: number): Promise<{
+    eventId: number;
+    categories: Array<{
+      categoryId: number;
+      categoryName: string;
+      matches: Array<{
+        id: number;
+        round: string | null;
+        tableNumber: string | null;
+        matchDatetime: string | null;
+        scoreRaw: string | null;
+        playerA: { id: number | null; name: string; clubName: string | null } | null;
+        playerB: { id: number | null; name: string; clubName: string | null } | null;
+      }>;
+    }>;
+  }> {
+    const scope = await this.resolveEventScope(eventId);
+    await this.ensureEvent(scope.canonicalEventId);
+
+    const matches = await this.prisma.match.findMany({
+      where: {
+        eventId: { in: scope.allEventIds },
+      },
+      include: {
+        category: true,
+        participants: {
+          include: {
+            athlete: {
+              include: {
+                club: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const orderedMatches = matches
+      .filter((match) => !match.category.cbtmCategoryId || !IGNORED_CATEGORY_IDS.includes(match.category.cbtmCategoryId))
+      .sort((left, right) => {
+        const leftTime = left.matchDatetime?.getTime() ?? Number.POSITIVE_INFINITY;
+        const rightTime = right.matchDatetime?.getTime() ?? Number.POSITIVE_INFINITY;
+        if (leftTime !== rightTime) {
+          return leftTime - rightTime;
+        }
+        const roundCompare = (left.round ?? "").localeCompare(right.round ?? "", "pt-BR", { sensitivity: "base" });
+        if (roundCompare !== 0) {
+          return roundCompare;
+        }
+        const tableCompare = (left.tableNumber ?? "").localeCompare(right.tableNumber ?? "", "pt-BR", {
+          numeric: true,
+          sensitivity: "base",
+        });
+        if (tableCompare !== 0) {
+          return tableCompare;
+        }
+        return left.id - right.id;
+      });
+
+    const categories = new Map<
+      number,
+      {
+        categoryId: number;
+        categoryName: string;
+        firstMatchTimestamp: number;
+        matches: Array<{
+          id: number;
+          round: string | null;
+          tableNumber: string | null;
+          matchDatetime: string | null;
+          scoreRaw: string | null;
+          playerA: { id: number | null; name: string; clubName: string | null } | null;
+          playerB: { id: number | null; name: string; clubName: string | null } | null;
+        }>;
+      }
+    >();
+
+    const toSchedulePlayer = (player: AthleteSummaryPlayer | null) =>
+      player
+        ? {
+            id: player.id,
+            name: player.name,
+            clubName: player.club?.name ?? null,
+          }
+        : null;
+
+    for (const match of orderedMatches) {
+      const categoryName =
+        match.category.eventId === scope.canonicalEventId
+          ? match.category.name
+          : `${match.category.name}${scope.childSuffixByEventId.get(match.category.eventId) ?? " -X"}`;
+      const bucket =
+        categories.get(match.category.id) ??
+        {
+          categoryId: match.category.id,
+          categoryName,
+          firstMatchTimestamp: match.matchDatetime?.getTime() ?? Number.POSITIVE_INFINITY,
+          matches: [],
+        };
+      const ordered = this.resolveOrderedPlayers(
+        match.scorePlayers,
+        match.participants.map((participant) => participant.athlete),
+      );
+
+      bucket.firstMatchTimestamp = Math.min(
+        bucket.firstMatchTimestamp,
+        match.matchDatetime?.getTime() ?? Number.POSITIVE_INFINITY,
+      );
+      bucket.matches.push({
+        id: match.id,
+        round: match.round,
+        tableNumber: match.tableNumber,
+        matchDatetime: match.matchDatetime ? match.matchDatetime.toISOString() : null,
+        scoreRaw: match.scoreRaw || null,
+        playerA: toSchedulePlayer(ordered.players[0]),
+        playerB: toSchedulePlayer(ordered.players[1]),
+      });
+      categories.set(match.category.id, bucket);
+    }
+
+    return {
+      eventId: scope.canonicalEventId,
+      categories: [...categories.values()]
+        .sort((left, right) => {
+          if (left.firstMatchTimestamp !== right.firstMatchTimestamp) {
+            return left.firstMatchTimestamp - right.firstMatchTimestamp;
+          }
+          return left.categoryName.localeCompare(right.categoryName, "pt-BR", { sensitivity: "base" });
+        })
+        .map(({ firstMatchTimestamp: _firstMatchTimestamp, ...category }) => category),
+    };
+  }
+
   async listGlobalEfficiency() {
     const now = Date.now();
     if (this.globalEfficiencyCache && this.globalEfficiencyCache.expiresAt > now) {

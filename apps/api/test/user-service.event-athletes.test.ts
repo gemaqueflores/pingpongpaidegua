@@ -333,7 +333,7 @@ test("T-U-06 listEventSchedule ignora categorias sem partidas e categorias ignor
             matchDatetime: null,
             scoreRaw: "",
             scorePlayers: null,
-            category: { id: 999, eventId: 51, name: "IGNORADA", cbtmCategoryId: "9999" },
+            category: { id: 999, eventId: 51, name: "IGNORADA", cbtmCategoryId: "88888888" },
             participants: [],
           },
         ];
