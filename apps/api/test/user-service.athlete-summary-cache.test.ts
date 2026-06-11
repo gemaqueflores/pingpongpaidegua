@@ -14,7 +14,7 @@ function createAthleteSummaryHarness() {
   let athleteFindFirstCalls = 0;
   let failAthleteLookup = false;
   let matchFindManyCalls = 0;
-  let matchFindManyImpl: (() => Promise<unknown[]>) | null = null;
+  let matchFindManyImpl: ((args: unknown) => Promise<unknown[]>) | null = null;
 
   const prismaRead = {
     readModelCache: {
@@ -64,10 +64,10 @@ function createAthleteSummaryHarness() {
       },
     },
     match: {
-      async findMany() {
+      async findMany(args: unknown) {
         matchFindManyCalls += 1;
         if (matchFindManyImpl) {
-          return matchFindManyImpl();
+          return matchFindManyImpl(args);
         }
         return [];
       },
@@ -146,7 +146,7 @@ function createAthleteSummaryHarness() {
     getAthleteFindFirstCalls() {
       return athleteFindFirstCalls;
     },
-    setMatchFindManyImpl(value: (() => Promise<unknown[]>) | null) {
+    setMatchFindManyImpl(value: ((args: unknown) => Promise<unknown[]>) | null) {
       matchFindManyImpl = value;
     },
     getMatchFindManyCalls() {
@@ -426,5 +426,271 @@ test("athlete summary mantém jogos projetados de dupla sem poluir performance p
   assert.equal(
     response.matches.some((match) => match.category.id === 20),
     true,
+  );
+});
+
+function makeAthleteSummaryMatch(input: {
+  id: number;
+  eventId: number;
+  categoryId: number;
+  matchKey: string;
+  firstPlayer: { id: number; name: string };
+  secondPlayer: { id: number; name: string };
+}) {
+  return {
+    id: input.id,
+    eventId: input.eventId,
+    categoryId: input.categoryId,
+    cbtmMatchId: null,
+    phase: "RESULTADOS",
+    round: "Grupo 01",
+    tableNumber: "1",
+    matchDatetime: new Date("2026-03-20T10:00:00.000Z"),
+    scoreRaw: "3-0",
+    setsJson: [
+      { p1: 11, p2: 6 },
+      { p1: 11, p2: 7 },
+      { p1: 11, p2: 8 },
+    ],
+    scoreFinal: { setsA: 3, setsB: 0 },
+    scoreSets: [
+      { set: 1, a: 11, b: 6 },
+      { set: 2, a: 11, b: 7 },
+      { set: 3, a: 11, b: 8 },
+    ],
+    sourceFlags: null,
+    p1Sets: 3,
+    p2Sets: 0,
+    winnerIndex: 0,
+    scorePlayers: [
+      { athleteId: input.firstPlayer.id, name: input.firstPlayer.name },
+      { athleteId: input.secondPlayer.id, name: input.secondPlayer.name },
+    ],
+    sourceUrl: `https://example.test/${input.id}`,
+    fetchedAt: new Date("2026-03-20T10:05:00.000Z"),
+    matchKey: input.matchKey,
+    event: {
+      id: input.eventId,
+      cbtmEventId: input.eventId + 5000,
+      nome: input.eventId === 2 ? "1TMB26 - DUPLAS" : "1TMB26",
+      nivel: "ESTADUAL",
+      dataInicio: new Date("2026-03-20T00:00:00.000Z"),
+      dataFim: new Date("2026-03-21T00:00:00.000Z"),
+      concluido: false,
+    },
+    category: {
+      id: input.categoryId,
+      name: input.categoryId === 20 ? "ABSOLUTO E (MAS) - DUPLAS" : "ABSOLUTO E (MAS)",
+      cbtmCategoryId: String(input.categoryId),
+    },
+    participants: [
+      {
+        athleteId: input.firstPlayer.id,
+        athlete: {
+          id: input.firstPlayer.id,
+          nameDisplay: input.firstPlayer.name,
+          club: { id: 77, name: "CLUBE TESTE" },
+        },
+      },
+      {
+        athleteId: input.secondPlayer.id,
+        athlete: {
+          id: input.secondPlayer.id,
+          nameDisplay: input.secondPlayer.name,
+          club: { id: 88, name: "CLUBE OPONENTE" },
+        },
+      },
+    ],
+  };
+}
+
+function queryContainsText(args: unknown, text: string): boolean {
+  return JSON.stringify(args).includes(`"contains":"${text}"`);
+}
+
+test("PP-006 T-U-01 buildAthleteSummaryMatch projeta atleta em par com separador hifen", () => {
+  const harness = createAthleteSummaryHarness();
+  const service = harness.service as UserService & {
+    buildAthleteSummaryMatch(match: unknown, athleteId: number, athleteNameKeys: Set<string>): {
+      athleteIndex: 0 | 1 | null;
+      isProjectedParticipant?: boolean;
+    } | null;
+    buildAthleteNameKeys(nameDisplay: string, nameNormalized?: string | null): Set<string>;
+  };
+
+  const match = makeAthleteSummaryMatch({
+    id: 7001,
+    eventId: 2,
+    categoryId: 20,
+    matchKey: "pp006-unit-hifen",
+    firstPlayer: { id: 9901, name: "ATLAS - ZEUS" },
+    secondPlayer: { id: 9902, name: "HERA # APOLO" },
+  });
+
+  const result = service.buildAthleteSummaryMatch(match, 9001, service.buildAthleteNameKeys("ATLAS", "atlas"));
+
+  assert.ok(result);
+  assert.equal(result.athleteIndex, 0);
+  assert.equal(result.isProjectedParticipant, true);
+});
+
+test("PP-006 T-U-02 buildAthleteNameKeys reconhece membro de par separado por hifen", () => {
+  const harness = createAthleteSummaryHarness();
+  const service = harness.service as UserService & {
+    buildAthleteSummaryMatch(match: unknown, athleteId: number, athleteNameKeys: Set<string>): {
+      athleteIndex: 0 | 1 | null;
+      isProjectedParticipant?: boolean;
+    } | null;
+    buildAthleteNameKeys(nameDisplay: string, nameNormalized?: string | null): Set<string>;
+  };
+
+  const match = makeAthleteSummaryMatch({
+    id: 7002,
+    eventId: 2,
+    categoryId: 20,
+    matchKey: "pp006-unit-composite-hifen",
+    firstPlayer: { id: 9901, name: "ATLAS - ZEUS" },
+    secondPlayer: { id: 9902, name: "HERA # APOLO" },
+  });
+
+  const result = service.buildAthleteSummaryMatch(
+    match,
+    9001,
+    service.buildAthleteNameKeys("ATLAS - ZEUS", "atlas - zeus"),
+  );
+
+  assert.ok(result);
+  assert.equal(result.athleteIndex, 0);
+  assert.equal(result.isProjectedParticipant, true);
+});
+
+test("PP-006 T-I-01 athlete summary retorna matches de par com separador hifen", async () => {
+  const harness = createAthleteSummaryHarness();
+  const directMatch = makeAthleteSummaryMatch({
+    id: 501,
+    eventId: 1,
+    categoryId: 10,
+    matchKey: "pp006-direct",
+    firstPlayer: { id: 9001, name: "ATLETA TESTE" },
+    secondPlayer: { id: 9002, name: "OPONENTE TESTE" },
+  });
+  const hashMatch = makeAthleteSummaryMatch({
+    id: 54759,
+    eventId: 2,
+    categoryId: 20,
+    matchKey: "pp006-hash",
+    firstPlayer: { id: 9901, name: "ATLETA TESTE # PARCEIRO TESTE" },
+    secondPlayer: { id: 9902, name: "DUPLA OPONENTE A # DUPLA OPONENTE B" },
+  });
+  const hyphenMatches = [
+    makeAthleteSummaryMatch({
+      id: 54763,
+      eventId: 2,
+      categoryId: 20,
+      matchKey: "pp006-hyphen-1",
+      firstPlayer: { id: 9903, name: "ATLETA TESTE - PARCEIRO TESTE" },
+      secondPlayer: { id: 9904, name: "DUPLA OPONENTE A # DUPLA OPONENTE B" },
+    }),
+    makeAthleteSummaryMatch({
+      id: 54765,
+      eventId: 2,
+      categoryId: 20,
+      matchKey: "pp006-hyphen-2",
+      firstPlayer: { id: 9905, name: "ATLETA TESTE - PARCEIRO TESTE" },
+      secondPlayer: { id: 9906, name: "DUPLA OPONENTE C # DUPLA OPONENTE D" },
+    }),
+  ];
+
+  let call = 0;
+  harness.setMatchFindManyImpl(async (args) => {
+    call += 1;
+    if (call === 1) {
+      return [directMatch];
+    }
+    const matches = [];
+    if (queryContainsText(args, "#")) {
+      matches.push(hashMatch);
+    }
+    if (queryContainsText(args, " - ")) {
+      matches.push(...hyphenMatches);
+    }
+    return matches;
+  });
+
+  const response = await harness.service.getAthleteSummary(1, 5001, "phase_hierarchy_datetime");
+  const matchIds = response.matches.map((match) => match.id);
+
+  assert.ok(matchIds.includes(54763));
+  assert.ok(matchIds.includes(54765));
+  assert.ok(response.matches.length >= 3);
+});
+
+test("PP-006 T-I-02 athlete summary nao duplica matches apos incluir hifen", async () => {
+  const harness = createAthleteSummaryHarness();
+  const directMatch = makeAthleteSummaryMatch({
+    id: 501,
+    eventId: 1,
+    categoryId: 10,
+    matchKey: "pp006-dedup-direct",
+    firstPlayer: { id: 9001, name: "ATLETA TESTE" },
+    secondPlayer: { id: 9002, name: "OPONENTE TESTE" },
+  });
+  const hyphenMatch = makeAthleteSummaryMatch({
+    id: 54763,
+    eventId: 2,
+    categoryId: 20,
+    matchKey: "pp006-dedup-hyphen",
+    firstPlayer: { id: 9903, name: "ATLETA TESTE - PARCEIRO TESTE" },
+    secondPlayer: { id: 9904, name: "DUPLA OPONENTE A # DUPLA OPONENTE B" },
+  });
+
+  let call = 0;
+  harness.setMatchFindManyImpl(async (args) => {
+    call += 1;
+    if (call === 1) {
+      return [directMatch, hyphenMatch];
+    }
+    return queryContainsText(args, " - ") ? [hyphenMatch] : [];
+  });
+
+  const response = await harness.service.getAthleteSummary(1, 5001, "phase_hierarchy_datetime");
+  const matchIds = response.matches.map((match) => match.id);
+
+  assert.equal(new Set(matchIds).size, matchIds.length);
+  assert.equal(response.deduplicatedMatchesRemoved, 0);
+});
+
+test("PP-006 T-I-03 athlete summary preserva atleta somente individual", async () => {
+  const harness = createAthleteSummaryHarness();
+  const directMatches = [
+    makeAthleteSummaryMatch({
+      id: 501,
+      eventId: 1,
+      categoryId: 10,
+      matchKey: "pp006-individual-1",
+      firstPlayer: { id: 9001, name: "ATLETA TESTE" },
+      secondPlayer: { id: 9002, name: "OPONENTE TESTE" },
+    }),
+    makeAthleteSummaryMatch({
+      id: 502,
+      eventId: 1,
+      categoryId: 10,
+      matchKey: "pp006-individual-2",
+      firstPlayer: { id: 9003, name: "OUTRO OPONENTE" },
+      secondPlayer: { id: 9001, name: "ATLETA TESTE" },
+    }),
+  ];
+
+  let call = 0;
+  harness.setMatchFindManyImpl(async () => {
+    call += 1;
+    return call === 1 ? directMatches : [];
+  });
+
+  const response = await harness.service.getAthleteSummary(1, 5001, "phase_hierarchy_datetime");
+
+  assert.deepEqual(
+    response.matches.map((match) => match.id).sort((left, right) => left - right),
+    [501, 502],
   );
 });
