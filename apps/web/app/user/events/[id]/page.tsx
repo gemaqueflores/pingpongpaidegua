@@ -394,7 +394,11 @@ export default function EventDetailPage() {
   const isGroupsPublished =
     event?.situacaoComputada === "GRADES_PUBLICADAS_PRE_JOGO" ||
     (event?.situacaoComputada === "POS_INSCRICOES_PRE_EVENTO" && Boolean(event?.groupsDefined));
-  const hideGroupsTab = Boolean(event?.concluido) || event?.situacaoComputada === "EM_ANDAMENTO" || isGroupsPublished;
+  const hideGroupsTab =
+    Boolean(event?.concluido) ||
+    event?.situacaoComputada === "EM_ANDAMENTO" ||
+    event?.situacaoComputada === "POS_EVENTO" ||
+    isGroupsPublished;
 
   const hasPublishedMatches = (event?.totalPartidasPublicadas ?? 0) > 0;
   const tabs: Array<{ id: EventTab; label: string }> = [
