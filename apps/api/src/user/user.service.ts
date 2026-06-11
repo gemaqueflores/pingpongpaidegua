@@ -3950,15 +3950,13 @@ export class UserService {
       const projectedDoublesMatches = await this.prisma.match.findMany({
         where: {
           eventId: { in: scope.allEventIds },
-          participants: {
-            some: {
-              athlete: {
-                nameDisplay: {
-                  contains: "#",
-                },
-              },
+        participants: {
+          some: {
+            athlete: {
+              OR: [{ nameDisplay: { contains: "#" } }, { nameDisplay: { contains: " - " } }],
             },
           },
+        },
         },
         select: matchSelect,
       });
