@@ -3953,9 +3953,7 @@ export class UserService {
           participants: {
             some: {
               athlete: {
-                nameDisplay: {
-                  contains: "#",
-                },
+                OR: [{ nameDisplay: { contains: "#" } }, { nameDisplay: { contains: " - " } }],
               },
             },
           },
