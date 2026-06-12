@@ -2231,6 +2231,11 @@ export class UserService {
         match.scorePlayers,
         match.participants.map((participant) => participant.athlete),
       );
+      const playerA = toSchedulePlayer(ordered.players[0]);
+      const playerB = toSchedulePlayer(ordered.players[1]);
+      if (!playerA || !playerB) {
+        continue;
+      }
 
       bucket.firstMatchTimestamp = Math.min(
         bucket.firstMatchTimestamp,
@@ -2242,8 +2247,8 @@ export class UserService {
         tableNumber: match.tableNumber,
         matchDatetime: match.matchDatetime ? match.matchDatetime.toISOString() : null,
         scoreRaw: match.scoreRaw || null,
-        playerA: toSchedulePlayer(ordered.players[0]),
-        playerB: toSchedulePlayer(ordered.players[1]),
+        playerA,
+        playerB,
       });
       categories.set(match.category.id, bucket);
     }

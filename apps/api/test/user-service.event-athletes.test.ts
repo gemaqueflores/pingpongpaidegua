@@ -276,6 +276,18 @@ test("T-U-05 listEventSchedule retorna partidas agrupadas por categoria com sufi
               { athleteId: 60, athlete: { id: 60, nameDisplay: "MISTA C # MISTA D", club: { id: 2, name: "CLUBE B" } } },
             ],
           },
+          {
+            id: 4,
+            eventId: 53,
+            categoryId: 300,
+            round: "Semifinal",
+            tableNumber: "4",
+            matchDatetime: new Date("2026-06-14T14:00:00.000Z"),
+            scoreRaw: null,
+            scorePlayers: null,
+            category: { id: 300, eventId: 53, name: "DUPLA MISTA", cbtmCategoryId: "300" },
+            participants: [],
+          },
         ];
       },
     },
@@ -302,6 +314,8 @@ test("T-U-05 listEventSchedule retorna partidas agrupadas por categoria com sufi
   );
   assert.equal(result.categories[0]?.matches[0]?.matchDatetime, "2026-06-14T12:00:00.000Z");
   assert.equal(result.categories[0]?.matches[0]?.playerA?.name, "SILVA A # SILVA B");
+  assert.ok(result.categories.every((category) => category.matches.every((match) => match.playerA && match.playerB)));
+  assert.ok(!result.categories.some((category) => category.matches.some((match) => match.id === 4)));
 });
 
 test("T-U-06 listEventSchedule ignora categorias sem partidas e categorias ignoradas", async () => {
