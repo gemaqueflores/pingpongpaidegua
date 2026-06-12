@@ -441,6 +441,13 @@ export class ScrapeProcessor {
           () => this.clearEventData(eventId),
           "event.clearData",
         );
+        await this.withDbRetry(
+          () =>
+            prisma.readModelCache.deleteMany({
+              where: { eventId },
+            }),
+          "readModelCache.deleteMany:stage1",
+        );
 
         await this.withDbRetry(
           () =>

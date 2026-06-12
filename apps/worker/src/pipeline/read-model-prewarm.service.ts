@@ -3,18 +3,23 @@ import { log } from "../logger";
 import { prisma } from "../prisma";
 
 export class ReadModelPrewarmService {
-  async prewarmEvent(eventId: number): Promise<void> {
+  async prewarmEvent(eventId: number, publishMode: "compare" | "replace" = "compare"): Promise<void> {
     if (!config.readModelPrewarmEnabled) {
       return;
     }
 
     const baseUrl = config.readModelPrewarmApiBaseUrl.replace(/\/$/, "");
-    const eventUrl = `${baseUrl}/events/${eventId}`;
-    const efficiencyUrl = `${baseUrl}/events/${eventId}/efficiency`;
-    const medalistsUrl = `${baseUrl}/events/${eventId}/medalists`;
+    const modeSuffix = `publishMode=${encodeURIComponent(publishMode)}`;
+    const eventUrl = `${baseUrl}/events/${eventId}?${modeSuffix}`;
+    const athletesUrl = `${baseUrl}/events/${eventId}/athletes?pageSize=2000&${modeSuffix}`;
+    const clubsUrl = `${baseUrl}/events/${eventId}/clubs?pageSize=2000&${modeSuffix}`;
+    const categoriesUrl = `${baseUrl}/events/${eventId}/categories?${modeSuffix}`;
+    const scheduleUrl = `${baseUrl}/events/${eventId}/schedule?${modeSuffix}`;
+    const efficiencyUrl = `${baseUrl}/events/${eventId}/efficiency?${modeSuffix}`;
+    const medalistsUrl = `${baseUrl}/events/${eventId}/medalists?${modeSuffix}`;
 
     try {
-      await this.fetchWithTimeout(eventUrl, config.readModelPrewarmTimeoutMs);
+      await this.fetchWithTimeout(eventUrl, config.readModelPrewarmTimeoutMs, publishMode);
     } catch (error) {
       log("warn", "Falha no prewarm do resumo de evento", {
         eventId,
@@ -24,7 +29,7 @@ export class ReadModelPrewarmService {
       return;
     }
     try {
-      await this.fetchWithTimeout(efficiencyUrl, config.readModelPrewarmTimeoutMs);
+      await this.fetchWithTimeout(efficiencyUrl, config.readModelPrewarmTimeoutMs, publishMode);
     } catch (error) {
       log("warn", "Falha no prewarm da eficiencia do evento", {
         eventId,
@@ -33,13 +38,29 @@ export class ReadModelPrewarmService {
       });
     }
     try {
-      await this.fetchWithTimeout(medalistsUrl, config.readModelPrewarmTimeoutMs);
+      await this.fetchWithTimeout(medalistsUrl, config.readModelPrewarmTimeoutMs, publishMode);
     } catch (error) {
       log("warn", "Falha no prewarm dos medalhistas do evento", {
         eventId,
         url: medalistsUrl,
         error: String(error),
       });
+    }
+    for (const item of [
+      ["atletas", athletesUrl],
+      ["clubes", clubsUrl],
+      ["categorias", categoriesUrl],
+      ["agenda", scheduleUrl],
+    ] as const) {
+      try {
+        await this.fetchWithTimeout(item[1], config.readModelPrewarmTimeoutMs, publishMode);
+      } catch (error) {
+        log("warn", `Falha no prewarm de ${item[0]} do evento`, {
+          eventId,
+          url: item[1],
+          error: String(error),
+        });
+      }
     }
 
     const athleteRows = await prisma.athlete.findMany({
@@ -66,9 +87,9 @@ export class ReadModelPrewarmService {
         const index = cursor;
         cursor += 1;
         const athleteId = athleteIds[index];
-        const summaryUrl = `${baseUrl}/events/${eventId}/athletes/${athleteId}/summary?orderBy=phase_hierarchy_datetime`;
+        const summaryUrl = `${baseUrl}/events/${eventId}/athletes/${athleteId}/summary?orderBy=phase_hierarchy_datetime&${modeSuffix}`;
         try {
-          await this.fetchWithTimeout(summaryUrl, config.readModelPrewarmTimeoutMs);
+          await this.fetchWithTimeout(summaryUrl, config.readModelPrewarmTimeoutMs, publishMode);
         } catch (error) {
           log("warn", "Falha no prewarm do resumo de atleta", {
             eventId,
@@ -87,12 +108,17 @@ export class ReadModelPrewarmService {
       eventSummary: true,
       eventEfficiency: true,
       eventMedalists: true,
+      eventAthletes: true,
+      eventClubs: true,
+      eventCategories: true,
+      eventSchedule: true,
       athleteSummaries: athleteIds.length,
+      publishMode,
       concurrency,
     });
   }
 
-  private async fetchWithTimeout(url: string, timeoutMs: number): Promise<void> {
+  private async fetchWithTimeout(url: string, timeoutMs: number, publishMode: "compare" | "replace"): Promise<void> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -100,6 +126,7 @@ export class ReadModelPrewarmService {
         method: "GET",
         headers: {
           "x-prewarm": "1",
+          "x-read-model-publish-mode": publishMode,
         },
         signal: controller.signal,
       });

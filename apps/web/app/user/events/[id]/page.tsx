@@ -225,6 +225,8 @@ export default function EventDetailPage() {
   const [scheduleData, setScheduleData] = useState<EventScheduleResponse | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [efficiencyMode, setEfficiencyMode] = useState<EfficiencyViewMode>("pontuacao");
+  const eventPublishedAt = event?.publishedAt ?? event?._meta?.publishedAt ?? event?.lastScrapeAt ?? null;
+  const eventBuilding = Boolean(event?._meta?.building);
 
   useEffect(() => {
     void apiGetEventSummary(eventId)
@@ -273,7 +275,7 @@ export default function EventDetailPage() {
     void apiGetEventEfficiency(eventId)
       .then((response) => setEfficiencyData(response))
       .finally(() => setEfficiencyLoading(false));
-  }, [activeTab, eventId, event?.lastScrapeAt]);
+  }, [activeTab, eventId, eventPublishedAt]);
 
   useEffect(() => {
     if (activeTab !== "eficiencia") {
@@ -284,7 +286,7 @@ export default function EventDetailPage() {
     void apiGetEventCategoryMedalists(eventId)
       .then((response) => setMedalistsData(response))
       .finally(() => setMedalistsLoading(false));
-  }, [activeTab, eventId, event?.lastScrapeAt]);
+  }, [activeTab, eventId, eventPublishedAt]);
 
   useEffect(() => {
     if (activeTab !== "confrontos") {
@@ -295,7 +297,7 @@ export default function EventDetailPage() {
     void apiGetEventSchedule(eventId)
       .then((response) => setScheduleData(response))
       .finally(() => setScheduleLoading(false));
-  }, [activeTab, eventId, event?.lastScrapeAt]);
+  }, [activeTab, eventId, eventPublishedAt]);
 
   useEffect(() => {
     setMedalistsVisible(MEDALISTS_PAGE_SIZE);
@@ -521,16 +523,22 @@ export default function EventDetailPage() {
             </div>
           </div>
           <div className="row event-last-update-row">
-            <Badge tone="default">Última atualização: {formatDateTime(event?.lastScrapeAt ?? null)}</Badge>
+            <Badge tone="default">Última atualização: {formatDateTime(eventPublishedAt)}</Badge>
           </div>
-          <div className="event-metrics">
+          {eventBuilding ? (
+            <EmptyState
+              title="Preparando dados"
+              description="Os dados do evento estão sendo preparados. As abas serão atualizadas quando o primeiro espelho estiver publicado."
+            />
+          ) : null}
+          {!eventBuilding ? <div className="event-metrics">
             <span className="event-metric-card"><small>Atletas</small><strong>{String(event?.totalInscritos ?? 0)}</strong></span>
             <span className="event-metric-card"><small>Categorias</small><strong>{String(event?.totalCategorias ?? 0)}</strong></span>
             <span className="event-metric-card"><small>Inscrições</small><strong>{String(event?.associacoesAtletaCategoria ?? event?.inscricoesTotaisOficiais ?? event?.totalInscritos ?? 0)}</strong></span>
             <span className="event-metric-card"><small>Partidas Previstas</small><strong>{String(event?.totalPartidasPrevistas ?? event?.totalPartidasCalculadas ?? event?.totalPartidas ?? 0)}</strong></span>
             <span className="event-metric-card"><small>Partidas</small><strong>{String(event?.totalPartidasJogadas ?? event?.totalPartidas ?? 0)}</strong></span>
             <span className="event-metric-card"><small>WO</small><strong>{String(event?.totalPartidasWo ?? 0)}</strong></span>
-          </div>
+          </div> : null}
           <div className="event-tabs-shell">
             <SegmentedControl
               className="letter-tab-strip letter-tab-sticky"
