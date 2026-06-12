@@ -239,8 +239,13 @@ export default function EventDetailPage() {
 
   useEffect(() => {
     if (!event) return;
+    const hasPublishedMatches = (event.totalPartidasPublicadas ?? 0) > 0;
     if (hasReachedEventLastDay(event)) {
       setActiveTab("eficiencia");
+      return;
+    }
+    if (hasPublishedMatches) {
+      setActiveTab("confrontos");
       return;
     }
     const groupsPublished =
@@ -394,13 +399,14 @@ export default function EventDetailPage() {
   const isGroupsPublished =
     event?.situacaoComputada === "GRADES_PUBLICADAS_PRE_JOGO" ||
     (event?.situacaoComputada === "POS_INSCRICOES_PRE_EVENTO" && Boolean(event?.groupsDefined));
+  const hasPublishedMatches = (event?.totalPartidasPublicadas ?? 0) > 0;
   const hideGroupsTab =
     Boolean(event?.concluido) ||
     event?.situacaoComputada === "EM_ANDAMENTO" ||
     event?.situacaoComputada === "POS_EVENTO" ||
-    isGroupsPublished;
+    isGroupsPublished ||
+    hasPublishedMatches;
 
-  const hasPublishedMatches = (event?.totalPartidasPublicadas ?? 0) > 0;
   const tabs: Array<{ id: EventTab; label: string }> = [
     ...(hideGroupsTab ? [] : [{ id: "grupos" as const, label: "Grupos" }]),
     ...(hasPublishedMatches ? [{ id: "confrontos" as const, label: "Confrontos" }] : []),
