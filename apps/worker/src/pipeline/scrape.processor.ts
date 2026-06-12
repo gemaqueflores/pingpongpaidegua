@@ -31,10 +31,6 @@ interface EventDataCleanupSummary {
   orphanClubs: number;
 }
 
-export function buildReadModelCacheCleanupWhere(eventId: number): { eventId: number } {
-  return { eventId };
-}
-
 interface EventMatchesCleanupSummary {
   matchParticipants: number;
   matches: number;
@@ -2709,7 +2705,7 @@ export class ScrapeProcessor {
 
   private async clearEventReadModelCaches(eventId: number): Promise<unknown> {
     return prisma.readModelCache.deleteMany({
-      where: buildReadModelCacheCleanupWhere(eventId),
+      where: { eventId },
     });
   }
 
