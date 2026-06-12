@@ -281,3 +281,95 @@ Fase 1 (espelho estável): T-U-01 → T-U-02 → T-U-03 → T-U-04 → T-U-05 �
 Fase 2 (publicação comparativa): T-U-08 → T-U-09 → T-U-10 → T-U-11 → T-U-12 → T-U-13 → T-I-02 → T-I-03.
 Fase 3 (web): T-C-01 → T-C-02.
 A Fase 1 já elimina o sintoma "zera e sobe"; a Fase 2 elimina a regressão por run instável. Corte de escopo em emergência = fechar Fase 1+3 e entregar Fase 2 em PR subsequente — somente com autorização explícita de Leo.
+
+---
+
+## VEREDITO FINAL — 2026-06-12 — ✅ APROVADO COM RESSALVAS
+
+Rodada 3 (commit `9107578`): toda a entrega técnica ✅; Q12 (Red-Green por T-*) dispensado por
+**waiver explícito de Leo** nesta entrega (4ª ocorrência do padrão — classe E proposta no
+encerramento da sessão). Ressalvas ⚠️ ativas listadas nas seções R2-* e no parecer da rodada 3
+(destaque operacional: configurar `READ_MODEL_PREWARM_TOKEN` na API e no worker antes do deploy).
+PR #11 liberado para merge.
+
+---
+
+## Correções obrigatórias — Parecer 2026-06-12 (PR #11, commit 088c86e) — ❌ bloqueado [histórico — superado pelo veredito acima]
+
+> **Re-revisão 2026-06-12 (commit 17f5581):** CB-1 ✓, CB-2 ✓, CB-3 ✓, CB-4 ✓ (edge residual em ⚠️),
+> CB-6 ✓, CB-7 ✓. **Pendentes: CB-5 parcial (T-I-03 é teste-teatro — ver R2-1 abaixo) e CB-8
+> repetido (correção inteira em 1 commit — ver R2-2).** Detalhes na seção "Parecer re-revisão".
+
+### R2-1 [Q9] T-I-03 real ainda ausente — ✓ CORRIGIDO (commit 9107578, re-revisão rodada 3)
+Teste agora dirige `processEventJob` com reason stage-1 e asserta o `deleteMany` no fluxo;
+função-fachada removida. Ressalva registrada: `releaseEventLock` → `prisma.event.updateMany`
+não é mockado — o teste executa um UPDATE real (no-op) e depende de postgres vivo; mockar em
+follow-up para não flakear em CI sem DB.
+
+### R2-2 [Q12] Red-Green ausente pela segunda rodada consecutiva
+Correções CB-1..7 entregues em 1 commit único (`17f5581`), sem red/green por item, contrariando
+instrução explícita do CB-8. Histórico não é corrigível retroativamente sem reescrita — resolução
+é decisão de Leo: waiver explícito de Q12 nesta entrega (4ª ocorrência do padrão no projeto) ou
+reexecução do histórico pelo Codex.
+
+> Codex: tratar TODOS os itens abaixo. Re-revisão será completa (não apenas dos bloqueantes).
+
+### CB-1 [C1/R2] Detecção de run ativo ignora eventos filhos do escopo
+`resolveEventReadModelCache` verifica apenas `input.event.scrapeLockedAt` (canonical). Scrape de
+evento filho muta as mesmas tabelas lidas pelos builders (`eventId: { in: scope.allEventIds }`)
+e a API computa/publica estado intermediário. Corrigir: lock ativo = qualquer evento de
+`scope.allEventIds` com `scrapeLockedAt` dentro da janela (consulta aos eventos do escopo no
+ponto de serving, ou propagação dos locks do escopo via parâmetro). Cobrir com teste (evento
+canonical destravado + filho travado → serve espelho, sem compute).
+
+### CB-2 [C3] matchKey do espelho usa `match.id` recriável — merge duplica confrontos
+`buildScheduleMatchKey` monta `id|round|tableNumber|matchDatetime`. O upsert do worker deleta e
+recria matches (dedup, prune stage-3, limpezas), trocando o `id` da mesma partida lógica →
+o merge não casa N vs N+1, preserva a cópia antiga e adota a nova = partidas duplicadas e
+preservação infinita. Corrigir: usar o campo `matchKey` do banco (`matches.match_key`, único e
+estável — já disponível no `findMany`). Adicionar teste de merge onde a mesma partida lógica
+muda de `id` entre N e N+1 e NÃO duplica.
+
+### CB-3 [Critério 5c] All-or-nothing é no-op para `event-efficiency` e `event-medalists`
+`hasAllOrNothingRegression` verifica `totalInscritos`/`totalCategorias`/`totalPartidas*`, campos
+que não existem nesses payloads → regressão nunca detectada, N+1 sempre publicado. Corrigir com
+sinalização própria por kind (ex.: contagem de `categories`/linhas do ranking) ou propagar a
+decisão de regressão do escopo. Cobrir com teste por kind.
+
+### CB-4 [Preservação] `listClubs` com `categoryId` inválido devolvia 404, agora devolve []
+Legacy chamava `ensureCategoryOfEvent` (NotFound). `selectClubsFromSnapshot` é chamado com
+`throwOnInvalidCategory=false`. Corrigir para preservar o 404 (true + `snapshotHasCategory` ou
+validação equivalente) e cobrir com teste.
+
+### CB-5 [Q9] T-I-01, T-I-02, T-I-03 não implementados
+Nenhum teste de integração novo: falta espelho íntegro durante mutação simulada (T-I-01), ciclo
+de publicação pós-run + chave canônica via evento filho (T-I-02) e stage-1 invalida espelho
+(T-I-03 — o `readModelCache.deleteMany` do `scrape.processor.ts` está sem nenhum teste).
+
+### CB-6 [Q11/T-C-01] Teste web verifica texto-fonte, não comportamento
+`event-published-at.test.tsx` faz regex sobre o source do `page.tsx`. A Spec exige assertar o
+efeito: refetch NÃO dispara quando `lastScrapeAt` muda com `publishedAt` fixo, e dispara quando
+`publishedAt` muda. Reescrever T-C-01 (e T-C-02 renderizando o estado building real do
+componente, não `EmptyState` isolado + regex).
+
+### CB-7 [Q15/A01 — security Médio, correção exigida nesta rodada]
+`PublicReadCacheInterceptor` aceita `x-read-model-publish-mode`/`?publishMode=` de qualquer
+chamador anônimo; `replace` bypassa o comparador e sobrescreve o espelho persistido
+(achado confirmado, confidence 8/10). Corrigir: ignorar o query param; honrar o header somente
+com credencial interna validada (segredo compartilhado worker→API via env, ex.
+`x-internal-prewarm-token`), default `compare` para todo o resto. Teste: requisição com
+`?publishMode=replace` sem credencial → modo `compare`.
+
+### CB-8 [Q12] Red-Green ausente
+Entrega inteira em 1 commit (088c86e), sem nenhum par red/green por T-*. Corrigir os CB-1..7
+seguindo Red-Green por T-* com commits separados (test red → fix/feat green), conforme
+§RED-GREEN do orquestrador. (3ª ocorrência do padrão no projeto — registrada para classe E.)
+
+### Ressalvas ⚠️ (corrigir se trivial nesta rodada, senão declarar)
+- `publishedAt` avança quando o payload recomputado é idêntico → refetch desnecessário no front; recomendado short-circuit por deep-equal.
+- Shape do kind `event-summary-v12` mudou (`publishedAt`/`_meta`) sem bump de versão — mitigado pelo fallback do front; bump recomendado (R4).
+- `buildingPayload` ausente para efficiency/medalists/athlete-summary → building genérico sem shape pode quebrar abas no primeiro run.
+- Fallback `hasReadModelCacheSupport()`/`*Legacy` não previsto na Spec — declarar como assunção ou remover.
+- `listClubAthletes` agora retorna `club` reduzido `{id,name,normalizedName}` (antes: row completa) — confirmar consumo no front e declarar.
+- Regex de placeholder ampliada com `-` (ex.: `V1-Silva`) muda agenda legacy — direção correta, declarar.
+- Prewarm: `jobId` com bucket por minuto pode descartar um prewarm `replace` se um `compare` foi enfileirado no mesmo minuto.
