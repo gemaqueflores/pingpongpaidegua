@@ -441,6 +441,10 @@ export class ScrapeProcessor {
           () => this.clearEventData(eventId),
           "event.clearData",
         );
+        await this.withDbRetry(
+          () => this.clearEventReadModelCaches(eventId),
+          "readModelCache.deleteMany:stage1",
+        );
 
         await this.withDbRetry(
           () =>
@@ -2696,6 +2700,12 @@ export class ScrapeProcessor {
         rawCaptures: deletedRawCaptures.count,
         orphanClubs,
       };
+    });
+  }
+
+  private async clearEventReadModelCaches(eventId: number): Promise<unknown> {
+    return prisma.readModelCache.deleteMany({
+      where: { eventId },
     });
   }
 

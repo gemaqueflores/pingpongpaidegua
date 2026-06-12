@@ -12,6 +12,7 @@ type ScrapeJobData = {
   reason?: string;
   dryRun?: boolean;
   sourceScrapeJobId?: string;
+  publishMode?: "compare" | "replace";
 };
 
 async function autoConcludeExpiredEvents(): Promise<number> {
@@ -253,12 +254,14 @@ async function bootstrap(): Promise<void> {
         const isStage1 = reason.includes("stage-1");
         if (config.readModelPrewarmEnabled && !isStage1) {
           const prewarmBucket = Math.floor(Date.now() / 60000);
+          const publishMode = reason.startsWith("scrape-now-force") ? "replace" : "compare";
           await queue.add(
             "refresh-read-model-cache",
             {
               eventId: job.data.eventId,
               reason: "post-scrape-prewarm",
               sourceScrapeJobId: String(job.id ?? ""),
+              publishMode,
             },
             {
               jobId: `prewarm-event-${job.data.eventId}-${prewarmBucket}`,
@@ -276,7 +279,10 @@ async function bootstrap(): Promise<void> {
       }
 
       if (job.name === "refresh-read-model-cache" && job.data.eventId) {
-        await prewarmService.prewarmEvent(job.data.eventId);
+        await prewarmService.prewarmEvent(
+          job.data.eventId,
+          job.data.publishMode === "replace" ? "replace" : "compare",
+        );
       }
     },
     {

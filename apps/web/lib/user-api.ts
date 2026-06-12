@@ -27,6 +27,12 @@ export interface UserEventRow {
   dataFim: string | null;
   concluido: boolean;
   lastScrapeAt: string | null;
+  publishedAt?: string | null;
+  _meta?: {
+    building?: boolean;
+    publishDecision?: string;
+    publishedAt?: string;
+  };
   situacaoComputada: EventSituation;
   totalCategorias: number;
   totalInscritos: number;
