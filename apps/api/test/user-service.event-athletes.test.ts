@@ -288,6 +288,36 @@ test("T-U-05 listEventSchedule retorna partidas agrupadas por categoria com sufi
             category: { id: 300, eventId: 53, name: "DUPLA MISTA", cbtmCategoryId: "300" },
             participants: [],
           },
+          {
+            id: 5,
+            eventId: 53,
+            categoryId: 300,
+            round: "Final",
+            tableNumber: "5",
+            matchDatetime: new Date("2026-06-14T15:00:00.000Z"),
+            scoreRaw: null,
+            scorePlayers: [
+              { name: "V1", athleteId: null },
+              { name: "V2", athleteId: null },
+            ],
+            category: { id: 300, eventId: 53, name: "DUPLA MISTA", cbtmCategoryId: "300" },
+            participants: [],
+          },
+          {
+            id: 6,
+            eventId: 53,
+            categoryId: 300,
+            round: "Final",
+            tableNumber: "6",
+            matchDatetime: new Date("2026-06-14T16:00:00.000Z"),
+            scoreRaw: null,
+            scorePlayers: [
+              { name: "VENCEDOR DE GRUPO A", athleteId: null },
+              { name: "V1 - Silva B", athleteId: null },
+            ],
+            category: { id: 300, eventId: 53, name: "DUPLA MISTA", cbtmCategoryId: "300" },
+            participants: [],
+          },
         ];
       },
     },
@@ -316,6 +346,8 @@ test("T-U-05 listEventSchedule retorna partidas agrupadas por categoria com sufi
   assert.equal(result.categories[0]?.matches[0]?.playerA?.name, "SILVA A # SILVA B");
   assert.ok(result.categories.every((category) => category.matches.every((match) => match.playerA && match.playerB)));
   assert.ok(!result.categories.some((category) => category.matches.some((match) => match.id === 4)));
+  assert.ok(!result.categories.some((category) => category.matches.some((match) => match.id === 5)));
+  assert.ok(!result.categories.some((category) => category.matches.some((match) => match.id === 6)));
 });
 
 test("T-U-06 listEventSchedule ignora categorias sem partidas e categorias ignoradas", async () => {

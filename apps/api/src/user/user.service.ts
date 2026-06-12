@@ -2213,6 +2213,16 @@ export class UserService {
             clubName: player.club?.name ?? null,
           }
         : null;
+    const isResolvedSchedulePlayer = (player: ReturnType<typeof toSchedulePlayer>) => {
+      if (!player) {
+        return false;
+      }
+      if (player.id !== null) {
+        return true;
+      }
+      const normalizedName = normalizeAthleteName(player.name).toUpperCase();
+      return !/^V\d+(?:$|\s)/.test(normalizedName) && !normalizedName.startsWith("VENCEDOR ");
+    };
 
     for (const match of orderedMatches) {
       const categoryName =
@@ -2233,7 +2243,7 @@ export class UserService {
       );
       const playerA = toSchedulePlayer(ordered.players[0]);
       const playerB = toSchedulePlayer(ordered.players[1]);
-      if (!playerA || !playerB) {
+      if (!isResolvedSchedulePlayer(playerA) || !isResolvedSchedulePlayer(playerB)) {
         continue;
       }
 
