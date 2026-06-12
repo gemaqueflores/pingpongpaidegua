@@ -41,6 +41,20 @@ test("T-U-09 comparador preserva partida ausente e adota placar novo", () => {
   assert.equal(matches.find((match) => match.matchKey === "Z")?.preservedFromPublishedAt, "2026-06-12T09:00:00.000Z");
 });
 
+test("CB-2 comparador casa partida por matchKey estavel mesmo quando id muda", () => {
+  const result = publishReadModelPayload({
+    kind: "event-schedule",
+    current: schedulePayload([{ id: 100, matchKey: "stable-final", scoreRaw: "3-2" }]),
+    candidate: schedulePayload([{ id: 999, matchKey: "stable-final", scoreRaw: "3-2" }]),
+  });
+
+  const matches = result.payload.categories[0].matches;
+  assert.equal(result.decision, "published_n1");
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].id, 999);
+  assert.equal(matches[0].matchKey, "stable-final");
+});
+
 test("T-U-10 comparador preserva conteudo quando adversario ou placar regridem", () => {
   for (const name of ["V1", "VENCEDOR DE GRUPO A", "V1 - Silva B"]) {
     assert.equal(isResolvedSchedulePlayer({ id: null, name }), false);
@@ -72,6 +86,36 @@ test("T-U-10 comparador preserva conteudo quando adversario ou placar regridem",
   assert.equal(result.decision, "merged");
   assert.equal(match.scoreRaw, "3-2");
   assert.equal(match.playerA?.name, "Silva A");
+});
+
+test("CB-3 comparador all-or-nothing protege efficiency e medalists", () => {
+  const efficiency = publishReadModelPayload({
+    kind: "event-efficiency",
+    current: { eventId: 1, ranking: Array.from({ length: 150 }, (_, id) => ({ id })) },
+    candidate: { eventId: 1, ranking: Array.from({ length: 90 }, (_, id) => ({ id })) },
+  });
+  const medalists = publishReadModelPayload({
+    kind: "event-medalists",
+    current: {
+      eventId: 1,
+      categories: Array.from({ length: 40 }, (_, id) => ({
+        categoryId: id,
+        medalists: [{ athleteId: id }],
+      })),
+    },
+    candidate: {
+      eventId: 1,
+      categories: Array.from({ length: 20 }, (_, id) => ({
+        categoryId: id,
+        medalists: [{ athleteId: id }],
+      })),
+    },
+  });
+
+  assert.equal(efficiency.decision, "kept_n");
+  assert.equal(efficiency.payload.ranking.length, 150);
+  assert.equal(medalists.decision, "kept_n");
+  assert.equal(medalists.payload.categories.length, 40);
 });
 
 test("T-U-11 comparador all-or-nothing mantem N em queda brusca", () => {

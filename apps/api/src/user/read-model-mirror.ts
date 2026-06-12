@@ -144,7 +144,7 @@ function hasAllOrNothingRegression(kind: string, current: JsonObject, candidate:
   if (kind === "event-clubs") {
     return dropsBelowThreshold(readNestedCount(current, "clubs"), readNestedCount(candidate, "clubs"), ATHLETE_REGRESSION_MIN_BASE, ATHLETE_REGRESSION_RATIO);
   }
-  if (kind === "event-summary" || kind === "event-efficiency" || kind === "event-medalists") {
+  if (kind === "event-summary") {
     return (
       dropsBelowThreshold(readNumeric(current.totalInscritos), readNumeric(candidate.totalInscritos), ATHLETE_REGRESSION_MIN_BASE, ATHLETE_REGRESSION_RATIO) ||
       dropsBelowThreshold(readNumeric(current.totalCategorias), readNumeric(candidate.totalCategorias), CATEGORY_REGRESSION_MIN_BASE, CATEGORY_REGRESSION_RATIO) ||
@@ -153,6 +153,20 @@ function hasAllOrNothingRegression(kind: string, current: JsonObject, candidate:
         readNumeric(candidate.totalPartidasPublicadas ?? candidate.totalPartidas),
         MATCH_REGRESSION_MIN_BASE,
         MATCH_REGRESSION_RATIO,
+      )
+    );
+  }
+  if (kind === "event-efficiency") {
+    return dropsBelowThreshold(readCount(current, "ranking"), readCount(candidate, "ranking"), ATHLETE_REGRESSION_MIN_BASE, ATHLETE_REGRESSION_RATIO);
+  }
+  if (kind === "event-medalists") {
+    return (
+      dropsBelowThreshold(readCount(current, "categories"), readCount(candidate, "categories"), CATEGORY_REGRESSION_MIN_BASE, CATEGORY_REGRESSION_RATIO) ||
+      dropsBelowThreshold(
+        readNestedCount(current, "categories", "medalists"),
+        readNestedCount(candidate, "categories", "medalists"),
+        ATHLETE_REGRESSION_MIN_BASE,
+        ATHLETE_REGRESSION_RATIO,
       )
     );
   }
@@ -284,7 +298,7 @@ function readCount(payload: JsonObject, key: string): number {
   return Array.isArray(value) ? value.length : 0;
 }
 
-function readNestedCount(payload: JsonObject, key: string): number {
+function readNestedCount(payload: JsonObject, key: string, nestedKey = "athletes"): number {
   const value = payload[key];
   if (!Array.isArray(value)) {
     return 0;
@@ -293,8 +307,8 @@ function readNestedCount(payload: JsonObject, key: string): number {
     if (!isObject(item)) {
       return total;
     }
-    const athletes = item.athletes;
-    return total + (Array.isArray(athletes) ? athletes.length : 0);
+    const nested = item[nestedKey];
+    return total + (Array.isArray(nested) ? nested.length : 0);
   }, 0);
 }
 

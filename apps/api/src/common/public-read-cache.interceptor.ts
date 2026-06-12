@@ -33,9 +33,7 @@ export class PublicReadCacheInterceptor implements NestInterceptor {
     const ttlFromClass = Reflect.getMetadata(PUBLIC_CACHE_TTL_KEY, cls) as number | undefined;
     const ttl = ttlFromHandler ?? ttlFromClass ?? 60;
 
-    const publishMode = normalizeReadModelPublishMode(
-      request?.headers?.["x-read-model-publish-mode"] ?? request?.query?.publishMode,
-    );
+    const publishMode = this.resolveInternalPublishMode(request?.headers);
 
     return runWithReadModelPublishMode(publishMode, () =>
       next.handle().pipe(
@@ -48,4 +46,17 @@ export class PublicReadCacheInterceptor implements NestInterceptor {
       ),
     );
   }
+
+  private resolveInternalPublishMode(headers: Record<string, string | string[] | undefined> | undefined) {
+    const configuredToken = process.env.READ_MODEL_PREWARM_TOKEN?.trim();
+    const requestToken = firstHeaderValue(headers?.["x-internal-prewarm-token"])?.trim();
+    if (!configuredToken || requestToken !== configuredToken) {
+      return "compare";
+    }
+    return normalizeReadModelPublishMode(headers?.["x-read-model-publish-mode"]);
+  }
+}
+
+function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }

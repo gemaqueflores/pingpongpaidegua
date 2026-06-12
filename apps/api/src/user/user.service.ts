@@ -1582,6 +1582,7 @@ export class UserService {
       cacheKey,
       kind: "event-summary",
       eventId: scope.canonicalEventId,
+      scopeEventIds: scope.allEventIds,
       latestReliableRunId,
       buildingPayload: {
         id: event.id,
@@ -1696,6 +1697,7 @@ export class UserService {
       cacheKey: this.buildReadModelKey("event-athletes-v1", scope.canonicalEventId),
       kind: "event-athletes",
       eventId: scope.canonicalEventId,
+      scopeEventIds: scope.allEventIds,
       latestReliableRunId,
       buildingPayload: { eventId: scope.canonicalEventId, items: [], _meta: { building: true } },
       compute: () => this.buildEventAthletesSnapshot(scope),
@@ -1865,11 +1867,12 @@ export class UserService {
       cacheKey: this.buildReadModelKey("event-clubs-v1", scope.canonicalEventId),
       kind: "event-clubs",
       eventId: scope.canonicalEventId,
+      scopeEventIds: scope.allEventIds,
       latestReliableRunId,
       buildingPayload: { eventId: scope.canonicalEventId, clubs: [], _meta: { building: true } },
       compute: () => this.buildEventClubsSnapshot(scope),
     });
-    return this.selectClubsFromSnapshot(snapshot, search, categoryId, pagination, false);
+    return this.selectClubsFromSnapshot(snapshot, search, categoryId, pagination, true);
   }
 
   private async buildEventClubsSnapshot(scope: EventScope): Promise<EventClubsSnapshot> {
@@ -2084,6 +2087,7 @@ export class UserService {
       cacheKey: this.buildReadModelKey("event-categories-v1", scope.canonicalEventId),
       kind: "event-categories",
       eventId: scope.canonicalEventId,
+      scopeEventIds: scope.allEventIds,
       latestReliableRunId,
       buildingPayload: { eventId: scope.canonicalEventId, items: [], _meta: { building: true } },
       compute: () => this.buildEventCategoriesSnapshot(scope),
@@ -2129,6 +2133,7 @@ export class UserService {
       cacheKey,
       kind: "event-efficiency",
       eventId: scope.canonicalEventId,
+      scopeEventIds: scope.allEventIds,
       latestReliableRunId,
       compute: async () => {
         const response = await this.computeEfficiencyRanking({ eventIds: scope.allEventIds });
@@ -2156,6 +2161,7 @@ export class UserService {
       cacheKey,
       kind: "event-medalists",
       eventId: scope.canonicalEventId,
+      scopeEventIds: scope.allEventIds,
       latestReliableRunId,
       compute: async () => {
         const categories = await this.prisma.category.findMany({
@@ -2486,6 +2492,7 @@ export class UserService {
       categoryName: string;
       matches: Array<{
         id: number;
+        matchKey: string;
         round: string | null;
         tableNumber: string | null;
         matchDatetime: string | null;
@@ -2503,6 +2510,7 @@ export class UserService {
       cacheKey: this.buildReadModelKey("event-schedule-v1", scope.canonicalEventId),
       kind: "event-schedule",
       eventId: scope.canonicalEventId,
+      scopeEventIds: scope.allEventIds,
       latestReliableRunId,
       buildingPayload: { eventId: scope.canonicalEventId, categories: [], _meta: { building: true } },
       compute: () => this.buildEventScheduleSnapshot(scope),
@@ -2888,11 +2896,15 @@ export class UserService {
 
   private buildScheduleMatchKey(match: {
     id: number;
+    matchKey?: string | null;
     round: string | null;
     tableNumber: string | null;
     matchDatetime: Date | null;
     scorePlayers: unknown;
   }): string {
+    if (typeof match.matchKey === "string" && match.matchKey.trim()) {
+      return match.matchKey;
+    }
     return [
       match.id,
       match.round ?? "",
@@ -4315,6 +4327,7 @@ export class UserService {
       cacheKey: this.buildReadModelKey("event-clubs-v1", scope.canonicalEventId),
       kind: "event-clubs",
       eventId: scope.canonicalEventId,
+      scopeEventIds: scope.allEventIds,
       latestReliableRunId,
       buildingPayload: { eventId: scope.canonicalEventId, clubs: [], _meta: { building: true } },
       compute: () => this.buildEventClubsSnapshot(scope),
@@ -4343,6 +4356,7 @@ export class UserService {
       kind: "athlete-summary",
       eventId: scope.canonicalEventId,
       athleteId: routeAthleteId,
+      scopeEventIds: scope.allEventIds,
       latestReliableRunId,
       compute: async () => {
       const athlete = await this.prisma.athlete.findFirst({
@@ -6697,6 +6711,7 @@ export class UserService {
     cacheKey: string;
     kind: string;
     eventId: number;
+    scopeEventIds?: number[];
     athleteId?: number;
     latestReliableRunId: number | null;
     buildingPayload?: T;
@@ -6706,7 +6721,7 @@ export class UserService {
     const readCache = this.getReadModelCacheReader();
     const writeCache = this.getReadModelCacheWriter();
     const cached = await this.loadReadModelCachePayload<T>(readCache, input.cacheKey);
-    const runActive = this.isEventScrapeLockActive(input.event.scrapeLockedAt ?? null);
+    const runActive = await this.isScopeScrapeLockActive(input.scopeEventIds ?? [input.eventId], input.event.scrapeLockedAt ?? null);
 
     if (runActive) {
       if (cached?.payload) {
@@ -6755,6 +6770,26 @@ export class UserService {
       return false;
     }
     return Date.now() - scrapeLockedAt.getTime() <= SCRAPE_LOCK_STALE_MS;
+  }
+
+  private async isScopeScrapeLockActive(eventIds: number[], fallbackScrapeLockedAt: Date | null): Promise<boolean> {
+    if (this.isEventScrapeLockActive(fallbackScrapeLockedAt)) {
+      return true;
+    }
+    const uniqueEventIds = [...new Set(eventIds.filter((eventId) => Number.isFinite(eventId)))];
+    if (uniqueEventIds.length <= 1 || !("event" in this.prisma) || !this.prisma.event) {
+      return false;
+    }
+    const lockedEvents = await this.prisma.event.findMany({
+      where: {
+        id: { in: uniqueEventIds },
+        scrapeLockedAt: { not: null },
+      },
+      select: {
+        scrapeLockedAt: true,
+      },
+    });
+    return lockedEvents.some((event) => this.isEventScrapeLockActive(event.scrapeLockedAt ?? null));
   }
 
   private isReadCacheFresh(

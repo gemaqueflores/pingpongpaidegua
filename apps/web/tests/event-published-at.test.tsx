@@ -1,31 +1,35 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { EmptyState } from "../components/ui/EmptyState";
+import { EventBuildingState } from "../components/user/EventBuildingState";
+import { resolveEventPublishedAt, shouldReloadPublishedTabs } from "../lib/event-published-at";
 
 (globalThis as typeof globalThis & { React: typeof React }).React = React;
 
 test("T-C-01 pagina de evento usa publishedAt no badge e deps de reload", () => {
-  const source = readFileSync(new URL("../app/user/events/[id]/page.tsx", import.meta.url), "utf8");
+  const previous = {
+    publishedAt: "2026-06-12T09:00:00.000Z",
+    lastScrapeAt: "2026-06-12T09:10:00.000Z",
+  };
+  const samePublication = {
+    publishedAt: "2026-06-12T09:00:00.000Z",
+    lastScrapeAt: "2026-06-12T09:30:00.000Z",
+  };
+  const nextPublication = {
+    publishedAt: "2026-06-12T10:00:00.000Z",
+    lastScrapeAt: "2026-06-12T10:00:00.000Z",
+  };
 
-  assert.match(source, /const eventPublishedAt = event\?\.publishedAt \?\? event\?\._meta\?\.publishedAt \?\? event\?\.lastScrapeAt/);
-  assert.match(source, /formatDateTime\(eventPublishedAt\)/);
-  assert.doesNotMatch(source, /\[activeTab, eventId, event\?\.lastScrapeAt\]/);
+  assert.equal(resolveEventPublishedAt(previous), "2026-06-12T09:00:00.000Z");
+  assert.equal(shouldReloadPublishedTabs(previous, samePublication), false);
+  assert.equal(shouldReloadPublishedTabs(previous, nextPublication), true);
 });
 
-test("T-C-02 pagina de evento renderiza estado building sem contadores zerados", () => {
-  const source = readFileSync(new URL("../app/user/events/[id]/page.tsx", import.meta.url), "utf8");
-  const html = renderToStaticMarkup(
-    <EmptyState
-      title="Preparando dados"
-      description="Os dados do evento estão sendo preparados. As abas serão atualizadas quando o primeiro espelho estiver publicado."
-    />,
-  );
+test("T-C-02 pagina de evento renderiza estado building real sem contadores zerados", () => {
+  const html = renderToStaticMarkup(<EventBuildingState />);
 
-  assert.match(source, /eventBuilding/);
-  assert.match(source, /Preparando dados/);
-  assert.match(source, /!eventBuilding \? <div className="event-metrics">/);
   assert.match(html, /Preparando dados/);
+  assert.match(html, /Os dados do evento/);
+  assert.doesNotMatch(html, /event-metric-card/);
 });

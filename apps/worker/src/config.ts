@@ -59,6 +59,7 @@ export const config = {
   readModelPrewarmAthleteLimit: Number(process.env.READ_MODEL_PREWARM_ATHLETE_LIMIT ?? "120"),
   readModelPrewarmConcurrency: Number(process.env.READ_MODEL_PREWARM_CONCURRENCY ?? "3"),
   readModelPrewarmTimeoutMs: Number(process.env.READ_MODEL_PREWARM_TIMEOUT_MS ?? "10000"),
+  readModelPrewarmToken: process.env.READ_MODEL_PREWARM_TOKEN?.trim() ?? "",
   registrationCancelledCategoryMaxEntrants: Number(
     process.env.REGISTRATION_CANCELLED_CATEGORY_MAX_ENTRANTS ?? "2",
   ),

@@ -9,14 +9,13 @@ export class ReadModelPrewarmService {
     }
 
     const baseUrl = config.readModelPrewarmApiBaseUrl.replace(/\/$/, "");
-    const modeSuffix = `publishMode=${encodeURIComponent(publishMode)}`;
-    const eventUrl = `${baseUrl}/events/${eventId}?${modeSuffix}`;
-    const athletesUrl = `${baseUrl}/events/${eventId}/athletes?pageSize=2000&${modeSuffix}`;
-    const clubsUrl = `${baseUrl}/events/${eventId}/clubs?pageSize=2000&${modeSuffix}`;
-    const categoriesUrl = `${baseUrl}/events/${eventId}/categories?${modeSuffix}`;
-    const scheduleUrl = `${baseUrl}/events/${eventId}/schedule?${modeSuffix}`;
-    const efficiencyUrl = `${baseUrl}/events/${eventId}/efficiency?${modeSuffix}`;
-    const medalistsUrl = `${baseUrl}/events/${eventId}/medalists?${modeSuffix}`;
+    const eventUrl = `${baseUrl}/events/${eventId}`;
+    const athletesUrl = `${baseUrl}/events/${eventId}/athletes?pageSize=2000`;
+    const clubsUrl = `${baseUrl}/events/${eventId}/clubs?pageSize=2000`;
+    const categoriesUrl = `${baseUrl}/events/${eventId}/categories`;
+    const scheduleUrl = `${baseUrl}/events/${eventId}/schedule`;
+    const efficiencyUrl = `${baseUrl}/events/${eventId}/efficiency`;
+    const medalistsUrl = `${baseUrl}/events/${eventId}/medalists`;
 
     try {
       await this.fetchWithTimeout(eventUrl, config.readModelPrewarmTimeoutMs, publishMode);
@@ -87,7 +86,7 @@ export class ReadModelPrewarmService {
         const index = cursor;
         cursor += 1;
         const athleteId = athleteIds[index];
-        const summaryUrl = `${baseUrl}/events/${eventId}/athletes/${athleteId}/summary?orderBy=phase_hierarchy_datetime&${modeSuffix}`;
+        const summaryUrl = `${baseUrl}/events/${eventId}/athletes/${athleteId}/summary?orderBy=phase_hierarchy_datetime`;
         try {
           await this.fetchWithTimeout(summaryUrl, config.readModelPrewarmTimeoutMs, publishMode);
         } catch (error) {
@@ -122,12 +121,16 @@ export class ReadModelPrewarmService {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
+      const headers: Record<string, string> = {
+        "x-prewarm": "1",
+      };
+      if (config.readModelPrewarmToken) {
+        headers["x-internal-prewarm-token"] = config.readModelPrewarmToken;
+        headers["x-read-model-publish-mode"] = publishMode;
+      }
       const response = await fetch(url, {
         method: "GET",
-        headers: {
-          "x-prewarm": "1",
-          "x-read-model-publish-mode": publishMode,
-        },
+        headers,
         signal: controller.signal,
       });
       if (!response.ok && response.status !== 304) {

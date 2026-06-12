@@ -25,6 +25,8 @@ import { SearchInput } from "../../../../components/ui/SearchInput";
 import { SegmentedControl } from "../../../../components/ui/SegmentedControl";
 import { EmptyState } from "../../../../components/ui/EmptyState";
 import { DataTableResponsive } from "../../../../components/ui/DataTableResponsive";
+import { EventBuildingState } from "../../../../components/user/EventBuildingState";
+import { resolveEventPublishedAt } from "../../../../lib/event-published-at";
 
 type EventRow = UserEventRow;
 type EventTab = "grupos" | "confrontos" | "clubes" | "atletas" | "eficiencia";
@@ -225,7 +227,7 @@ export default function EventDetailPage() {
   const [scheduleData, setScheduleData] = useState<EventScheduleResponse | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [efficiencyMode, setEfficiencyMode] = useState<EfficiencyViewMode>("pontuacao");
-  const eventPublishedAt = event?.publishedAt ?? event?._meta?.publishedAt ?? event?.lastScrapeAt ?? null;
+  const eventPublishedAt = resolveEventPublishedAt(event);
   const eventBuilding = Boolean(event?._meta?.building);
 
   useEffect(() => {
@@ -525,12 +527,7 @@ export default function EventDetailPage() {
           <div className="row event-last-update-row">
             <Badge tone="default">Última atualização: {formatDateTime(eventPublishedAt)}</Badge>
           </div>
-          {eventBuilding ? (
-            <EmptyState
-              title="Preparando dados"
-              description="Os dados do evento estão sendo preparados. As abas serão atualizadas quando o primeiro espelho estiver publicado."
-            />
-          ) : null}
+          {eventBuilding ? <EventBuildingState /> : null}
           {!eventBuilding ? <div className="event-metrics">
             <span className="event-metric-card"><small>Atletas</small><strong>{String(event?.totalInscritos ?? 0)}</strong></span>
             <span className="event-metric-card"><small>Categorias</small><strong>{String(event?.totalCategorias ?? 0)}</strong></span>
