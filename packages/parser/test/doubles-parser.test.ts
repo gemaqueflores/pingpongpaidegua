@@ -104,4 +104,29 @@ describe("parser de jogos de duplas", () => {
     expect(result.matches.every((match) => match.athleteBName.includes("#"))).toBe(true);
     expect(result.warnings).toHaveLength(0);
   });
+
+  it("T-U-05 preserva matriz individual com quatro atletas", () => {
+    const html = `
+<div class="dxcvBreakpointsCard_MaterialCompact">
+  <div>ABSOLUTO MAS - Grupo 01</div>
+  <div>ATLETA UM</div>
+  <div>ATLETA DOIS</div>
+  <div>ATLETA TRES</div>
+  <div>ATLETA QUATRO</div>
+  <div>3 x 0</div>
+  <div>3 x 1</div>
+  <div>3 x 2</div>
+  <div>0 x 3</div>
+  <div>1 x 3</div>
+  <div>2 x 3</div>
+</div>`;
+
+    const result = __testables.parseGroupMatches(5680, html, "999", resolveHints);
+
+    expect(result.matches).toHaveLength(6);
+    expect(result.matches.some((match) => match.athleteAName.includes("#") || match.athleteBName.includes("#"))).toBe(
+      false,
+    );
+    expect(result.warnings).toHaveLength(0);
+  });
 });
