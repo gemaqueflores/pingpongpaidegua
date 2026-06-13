@@ -1168,6 +1168,7 @@ function parseGroupMatches(
       continue;
     }
     const categoryName = compactWhitespace(title.split(" - ")[0] ?? "");
+    const isDoubles = isDoublesLikeLabel(categoryName);
     const roundRaw = title.includes(" - ") ? compactWhitespace(title.split(" - ").slice(1).join(" - ")) : "Grupo";
     const round = normalizeRoundLabel(roundRaw) ?? "Grupo";
 
@@ -1180,10 +1181,26 @@ function parseGroupMatches(
       continue;
     }
 
+    const competitiveEntries = isDoubles
+      ? uniquePlayers
+          .reduce<string[]>((entries, player, index) => {
+            if (index % 2 === 0 && uniquePlayers[index + 1]) {
+              entries.push(composeDoublesPairName(player, uniquePlayers[index + 1]));
+            }
+            return entries;
+          }, [])
+          .slice(0, 4)
+      : uniquePlayers;
+
+    if (competitiveEntries.length < 2) {
+      warnings.push(`Grupos sem matriz completa para '${title}'.`);
+      continue;
+    }
+
     const pairs: Array<[string, string]> = [];
-    for (let i = 0; i < uniquePlayers.length; i += 1) {
-      for (let j = i + 1; j < uniquePlayers.length; j += 1) {
-        pairs.push([uniquePlayers[i], uniquePlayers[j]]);
+    for (let i = 0; i < competitiveEntries.length; i += 1) {
+      for (let j = i + 1; j < competitiveEntries.length; j += 1) {
+        pairs.push([competitiveEntries[i], competitiveEntries[j]]);
       }
     }
 
