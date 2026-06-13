@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -31,6 +31,10 @@ import { resolveEventPublishedAt } from "../../../../lib/event-published-at";
 type EventRow = UserEventRow;
 type EventTab = "grupos" | "confrontos" | "clubes" | "atletas" | "eficiencia";
 type EfficiencyViewMode = "quantidade" | "pontuacao";
+type ScheduleViewMode = "categoria" | "horario";
+type ScheduleCategory = EventScheduleResponse["categories"][number];
+type ScheduleMatch = ScheduleCategory["matches"][number];
+type ScheduleMatchWithCategory = ScheduleMatch & { categoryId: number; categoryName: string };
 
 type ClubRow = {
   id: number;
@@ -123,6 +127,29 @@ function formatDateTime(value: string | null): string {
 
 function formatScheduleName(value: string | null | undefined): string {
   return (value ?? "-").replace(/\s*#\s*/g, " / ");
+}
+
+function scheduleMatchTimestamp(match: ScheduleMatch): number {
+  if (!match.matchDatetime) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const timestamp = new Date(match.matchDatetime).getTime();
+  return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+}
+
+function compareScheduleMatches(left: ScheduleMatch, right: ScheduleMatch): number {
+  const timeCompare = scheduleMatchTimestamp(left) - scheduleMatchTimestamp(right);
+  if (timeCompare !== 0) {
+    return timeCompare;
+  }
+  const tableCompare = (left.tableNumber ?? "").localeCompare(right.tableNumber ?? "", "pt-BR", {
+    numeric: true,
+    sensitivity: "base",
+  });
+  if (tableCompare !== 0) {
+    return tableCompare;
+  }
+  return left.id - right.id;
 }
 
 function inferEventType(name: string): "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN" {
@@ -226,6 +253,8 @@ export default function EventDetailPage() {
   const [medalistsVisible, setMedalistsVisible] = useState(MEDALISTS_PAGE_SIZE);
   const [scheduleData, setScheduleData] = useState<EventScheduleResponse | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleCategoryFilter, setScheduleCategoryFilter] = useState<number | null>(null);
+  const [scheduleViewMode, setScheduleViewMode] = useState<ScheduleViewMode>("categoria");
   const [efficiencyMode, setEfficiencyMode] = useState<EfficiencyViewMode>("pontuacao");
   const eventPublishedAt = resolveEventPublishedAt(event);
   const eventBuilding = Boolean(event?._meta?.building);
@@ -304,6 +333,16 @@ export default function EventDetailPage() {
   useEffect(() => {
     setMedalistsVisible(MEDALISTS_PAGE_SIZE);
   }, [eventId, activeTab, medalistsData?.categories?.length]);
+
+  useEffect(() => {
+    if (scheduleCategoryFilter === null) {
+      return;
+    }
+    const categoryExists = scheduleData?.categories.some((category) => category.categoryId === scheduleCategoryFilter);
+    if (!categoryExists) {
+      setScheduleCategoryFilter(null);
+    }
+  }, [scheduleCategoryFilter, scheduleData?.categories]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -431,6 +470,31 @@ export default function EventDetailPage() {
   }, [athletes]);
   const visibleAthletes = useMemo(() => sortedAthletes.slice(0, athletesVisible), [sortedAthletes, athletesVisible]);
 
+  const filteredScheduleCategories = useMemo(() => {
+    const categories = scheduleData?.categories ?? [];
+    if (scheduleCategoryFilter === null) {
+      return categories;
+    }
+    return categories.filter((category) => category.categoryId === scheduleCategoryFilter);
+  }, [scheduleCategoryFilter, scheduleData?.categories]);
+
+  const flatScheduleMatches = useMemo<ScheduleMatchWithCategory[]>(() => {
+    return filteredScheduleCategories
+      .flatMap((category) =>
+        category.matches.map((match) => ({
+          ...match,
+          categoryId: category.categoryId,
+          categoryName: category.categoryName,
+        })),
+      )
+      .sort(compareScheduleMatches);
+  }, [filteredScheduleCategories]);
+
+  const filteredScheduleMatchCount = filteredScheduleCategories.reduce(
+    (sum, category) => sum + category.matches.length,
+    0,
+  );
+
   const rankedEfficiencyRows = useMemo(() => {
     const rows = [...(efficiencyData?.ranking ?? [])];
     rows.sort((left, right) => {
@@ -483,6 +547,33 @@ export default function EventDetailPage() {
     if (index === 0) return "🥇 1º lugar";
     if (index === 1) return "🥈 2º lugar";
     return "🥉 3º lugar";
+  }
+
+  function renderScheduleMatch(match: ScheduleMatch, categoryName?: string) {
+    return (
+      <article key={match.id} className="event-schedule-match">
+        <div className="row" style={{ justifyContent: "space-between", gap: "10px" }}>
+          <strong>{formatDateTime(match.matchDatetime)}</strong>
+          <span className="arena-muted">
+            {match.tableNumber ? `Mesa ${match.tableNumber}` : "Mesa -"}
+            {match.round ? ` | ${match.round}` : ""}
+          </span>
+        </div>
+        {categoryName ? <Badge tone="default">{categoryName}</Badge> : null}
+        <div className="row" style={{ justifyContent: "space-between", gap: "12px" }}>
+          <span className="athlete-name-clamp">
+            {formatScheduleName(match.playerA?.name)}
+            {match.playerA?.clubName ? ` · ${match.playerA.clubName}` : ""}
+          </span>
+          <strong>vs</strong>
+          <span className="athlete-name-clamp">
+            {formatScheduleName(match.playerB?.name)}
+            {match.playerB?.clubName ? ` · ${match.playerB.clubName}` : ""}
+          </span>
+        </div>
+        {match.scoreRaw ? <Badge tone="default">Placar: {match.scoreRaw}</Badge> : null}
+      </article>
+    );
   }
 
   return (
@@ -592,9 +683,39 @@ export default function EventDetailPage() {
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
             <h2>Confrontos</h2>
             <Badge tone="default">
-              {String(scheduleData?.categories.reduce((sum, category) => sum + category.matches.length, 0) ?? 0)} partidas
+              {String(filteredScheduleMatchCount)} partidas
             </Badge>
           </div>
+          {!scheduleLoading && scheduleData?.categories.length ? (
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
+              <label className="grid" style={{ gap: "4px", minWidth: "220px" }}>
+                <span className="arena-muted">Categoria</span>
+                <select
+                  value={scheduleCategoryFilter ?? ""}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setScheduleCategoryFilter(value ? Number(value) : null);
+                  }}
+                >
+                  <option value="">Todas as categorias</option>
+                  {scheduleData.categories.map((category) => (
+                    <option key={category.categoryId} value={category.categoryId}>
+                      {category.categoryName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <SegmentedControl<ScheduleViewMode>
+                label="Modo de visualização dos confrontos"
+                value={scheduleViewMode}
+                onChange={setScheduleViewMode}
+                items={[
+                  { value: "categoria", label: "Por categoria" },
+                  { value: "horario", label: "Por horário" },
+                ]}
+              />
+            </div>
+          ) : null}
           {scheduleLoading ? (
             <div className="grid">
               <Skeleton height="64px" />
@@ -608,41 +729,27 @@ export default function EventDetailPage() {
               description="Os confrontos serão exibidos quando houver partidas publicadas para este evento."
             />
           ) : null}
-          {!scheduleLoading && scheduleData?.categories.length ? (
+          {!scheduleLoading && (scheduleData?.categories.length ?? 0) > 0 && filteredScheduleMatchCount === 0 ? (
+            <EmptyState
+              title="Nenhum confronto nesta categoria"
+              description="Selecione outra categoria ou volte para todas as categorias."
+            />
+          ) : null}
+          {!scheduleLoading && scheduleData?.categories.length && filteredScheduleMatchCount > 0 ? (
             <div className="grid" style={{ gap: "12px" }}>
-              {scheduleData.categories.map((category, index) => (
-                <details key={category.categoryId} className="athlete-list-card" open={index === 0}>
-                  <summary className="row" style={{ justifyContent: "space-between", cursor: "pointer" }}>
-                    <strong>{category.categoryName}</strong>
-                    <span className="arena-muted">{category.matches.length} partidas</span>
-                  </summary>
-                  <div className="grid" style={{ gap: "8px", marginTop: "10px" }}>
-                    {category.matches.map((match) => (
-                      <article key={match.id} className="event-schedule-match">
-                        <div className="row" style={{ justifyContent: "space-between", gap: "10px" }}>
-                          <strong>{formatDateTime(match.matchDatetime)}</strong>
-                          <span className="arena-muted">
-                            {match.tableNumber ? `Mesa ${match.tableNumber}` : "Mesa -"}
-                            {match.round ? ` | ${match.round}` : ""}
-                          </span>
-                        </div>
-                        <div className="row" style={{ justifyContent: "space-between", gap: "12px" }}>
-                          <span>
-                            {formatScheduleName(match.playerA?.name)}
-                            {match.playerA?.clubName ? ` · ${match.playerA.clubName}` : ""}
-                          </span>
-                          <strong>vs</strong>
-                          <span>
-                            {formatScheduleName(match.playerB?.name)}
-                            {match.playerB?.clubName ? ` · ${match.playerB.clubName}` : ""}
-                          </span>
-                        </div>
-                        {match.scoreRaw ? <Badge tone="default">Placar: {match.scoreRaw}</Badge> : null}
-                      </article>
-                    ))}
-                  </div>
-                </details>
-              ))}
+              {scheduleViewMode === "categoria"
+                ? filteredScheduleCategories.map((category, index) => (
+                    <details key={category.categoryId} className="athlete-list-card" open={index === 0}>
+                      <summary className="row" style={{ justifyContent: "space-between", cursor: "pointer" }}>
+                        <strong>{category.categoryName}</strong>
+                        <span className="arena-muted">{category.matches.length} partidas</span>
+                      </summary>
+                      <div className="grid" style={{ gap: "8px", marginTop: "10px" }}>
+                        {[...category.matches].sort(compareScheduleMatches).map((match) => renderScheduleMatch(match))}
+                      </div>
+                    </details>
+                  ))
+                : flatScheduleMatches.map((match) => renderScheduleMatch(match, match.categoryName))}
             </div>
           ) : null}
         </Card>

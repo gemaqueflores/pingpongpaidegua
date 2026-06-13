@@ -38,7 +38,7 @@ Codex não emite parecer de revisão. Se receber pedido de aprovação ou análi
 ```powershell
 git config user.email   # deve retornar gemaqueflores@gmail.com
 # Se errado: git config user.email "gemaqueflores@gmail.com" — NUNCA --global
-$env:GH_TOKEN = "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"
+$env:GH_TOKEN = $env:GITHUB_TOKEN
 ```
 
 ---
@@ -61,7 +61,7 @@ Nunca mergear antes do ✅ do Claude em Tipo B.
 
 ### Ao iniciar implementação
 
-1. Verificar email e token
+1. Verificar email e token via ambiente (`$env:GITHUB_TOKEN` ou `$env:GH_TOKEN`)
 2. Partir da branch base indicada na orientação
 3. Criar branch: `<prefixo>/<contexto-em-kebab-case>`
 4. Implementar → validar → reportar
@@ -191,6 +191,10 @@ Reportar: branch, commit hash, PR URL, assunções feitas, arquivos deixados for
 - Build API: `npm run build --workspace apps-api`
 - Build Worker: `npm run build --workspace apps-worker`
 - Build Web: `npm run build --workspace apps-web`
+- Validação por arquivos alterados: `npm run verify:changed`
+- Listar validação por arquivos alterados sem executar: `npm run verify:changed:list`
+- Encoding/segredos em arquivos alterados: `npm run verify:encoding`
+- Segurança em arquivos alterados: `npm run verify:security`
 - Testes API: `npm run test --workspace apps-api`
 - Testes Worker: `npm run test --workspace apps-worker`
 - Cerca crítica: `npm run test:regression:critical`
@@ -218,6 +222,7 @@ Reportar: branch, commit hash, PR URL, assunções feitas, arquivos deixados for
 - Confirmar que mudanças de contrato de API foram refletidas nos consumidores
 - Verificar que não há dados fictícios, prints de debug ou regras inventadas
 - Verificar encoding PT-BR nos arquivos tocados
+- Rodar `npm run verify:security` quando houver superfície de auth, API, SQL/ORM, segredo, infra, shell, integração externa ou frontend com input de usuário
 
 ---
 
