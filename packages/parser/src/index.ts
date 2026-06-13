@@ -866,7 +866,11 @@ function parseSetScoresFromCardHtml(cardHtml: string, isDoubles = false): {
   }
 
   const athleteA = players[0];
-  const athleteB = isDoubles && players.length >= 4 ? players[2] : players[1];
+  const athleteB = isDoubles && players.length >= 3 ? players[2] : players[1];
+  const athleteAName =
+    isDoubles && players.length >= 3 ? composeDoublesPairName(players[0].name, players[1].name) : athleteA.name;
+  const athleteBName =
+    isDoubles && players.length >= 4 ? composeDoublesPairName(players[2].name, players[3].name) : athleteB.name;
   const p1Sets = athleteA.scores[0];
   const p2Sets = athleteB.scores[0];
   const p1PerSet = athleteA.scores.slice(1);
@@ -899,10 +903,8 @@ function parseSetScoresFromCardHtml(cardHtml: string, isDoubles = false): {
       : null;
 
   return {
-    athleteAName:
-      isDoubles && players.length >= 4 ? composeDoublesPairName(players[0].name, players[1].name) : athleteA.name,
-    athleteBName:
-      isDoubles && players.length >= 4 ? composeDoublesPairName(players[2].name, players[3].name) : athleteB.name,
+    athleteAName,
+    athleteBName,
     sets,
     setsResultFromTokens,
   };
