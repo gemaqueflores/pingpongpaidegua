@@ -11,6 +11,7 @@ import {
   compactWhitespace,
   computeMatchKey,
   getRoundSemanticOrder,
+  isDoublesLikeLabel,
   isLikelyAthleteName,
   normalizeDoublesPairName,
   normalizeText,
@@ -824,7 +825,11 @@ function parseNumericCardCellValue(input: string): number | null {
   return parsed;
 }
 
-function parseSetScoresFromCardHtml(cardHtml: string): {
+function composeDoublesPairName(left: string, right: string): string {
+  return normalizeDoublesPairName(`${left} - ${right}`);
+}
+
+function parseSetScoresFromCardHtml(cardHtml: string, isDoubles = false): {
   athleteAName: string;
   athleteBName: string;
   sets: ParsedMatchSet[];
@@ -849,7 +854,7 @@ function parseSetScoresFromCardHtml(cardHtml: string): {
       scores.push(parseNumericCardCellValue($(cells[index]).text()));
     }
 
-    if (scores.every((value) => value === null)) {
+    if (!isDoubles && scores.every((value) => value === null)) {
       return;
     }
 
@@ -861,7 +866,7 @@ function parseSetScoresFromCardHtml(cardHtml: string): {
   }
 
   const athleteA = players[0];
-  const athleteB = players[1];
+  const athleteB = isDoubles && players.length >= 4 ? players[2] : players[1];
   const p1Sets = athleteA.scores[0];
   const p2Sets = athleteB.scores[0];
   const p1PerSet = athleteA.scores.slice(1);
@@ -894,8 +899,10 @@ function parseSetScoresFromCardHtml(cardHtml: string): {
       : null;
 
   return {
-    athleteAName: athleteA.name,
-    athleteBName: athleteB.name,
+    athleteAName:
+      isDoubles && players.length >= 4 ? composeDoublesPairName(players[0].name, players[1].name) : athleteA.name,
+    athleteBName:
+      isDoubles && players.length >= 4 ? composeDoublesPairName(players[2].name, players[3].name) : athleteB.name,
     sets,
     setsResultFromTokens,
   };
@@ -998,11 +1005,12 @@ function parseCardBasedMatches(
       continue;
     }
 
-    const cardScoreData = parseSetScoresFromCardHtml(card.html);
     const title = lines[0] ?? "";
     const metaLine = lines.find((line) => /jogo\s*\d+/i.test(line)) ?? "";
     const dateLine = lines.find((line) => /^\d{2}\/\d{2}\/\d{4}$/.test(line)) ?? "";
     const categoryName = cleanCategoryDisplayName(compactWhitespace(title.split(" - ")[0] ?? ""));
+    const isDoubles = isDoublesLikeLabel(categoryName);
+    const cardScoreData = parseSetScoresFromCardHtml(card.html, isDoubles);
     const roundRaw = title.includes(" - ") ? compactWhitespace(title.split(" - ").slice(1).join(" - ")) : null;
     const round = normalizeRoundLabel(roundRaw);
     const resolvedPhase = phase;
