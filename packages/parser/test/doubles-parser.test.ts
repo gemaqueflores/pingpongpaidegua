@@ -129,4 +129,30 @@ describe("parser de jogos de duplas", () => {
     );
     expect(result.warnings).toHaveLength(0);
   });
+
+  it("T-U-06 trata tabela de duplas com tres linhas sem trocar o lado B pelo parceiro do lado A", () => {
+    const cardHtml = `
+<div class="dxcvBreakpointsCard_MaterialCompact">
+  DUPLA MISTA - SUB-15 - Final
+  2-0
+  Jogo 001 - Mesa 1 - 14:00
+  13/06/2026
+  <table>
+    <tr><td>ATLETA A</td><td>2</td><td>11</td><td>11</td></tr>
+    <tr><td>PARCEIRO A</td><td></td><td></td><td></td></tr>
+    <tr><td>ATLETA B</td><td>0</td><td>6</td><td>8</td></tr>
+  </table>
+</div>`;
+
+    const dataset = parseResultsText(5691, buildSyntheticPayload("Resultados", cardHtml));
+    const match = dataset.matches[0];
+
+    expect(match.athleteAName).toBe("ATLETA A # PARCEIRO A");
+    expect(match.athleteBName).toBe("ATLETA B");
+    expect(match.setsResult).toEqual({ p1Sets: 2, p2Sets: 0 });
+    expect(match.sets).toEqual([
+      { p1: 11, p2: 6 },
+      { p1: 11, p2: 8 },
+    ]);
+  });
 });
