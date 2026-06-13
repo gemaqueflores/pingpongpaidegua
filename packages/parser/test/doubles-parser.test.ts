@@ -38,4 +38,23 @@ describe("parser de jogos de duplas", () => {
       { p1: 11, p2: 7 },
     ]);
   });
+
+  it("T-U-02 agrupa nomes filtrados no fallback de card textual de duplas", () => {
+    const cardHtml = `
+<div class="dxcvBreakpointsCard_MaterialCompact">
+  DUPLA MISTA - SUB-15 - Semifinal
+  Jogo 001 - Mesa 1 - 14:00
+  13/06/2026
+  CLAYTON FILHO
+  ESTER YOSHIDA
+  ANA PEREIRA
+  MISAEL TAVARES
+</div>`;
+
+    const dataset = parseResultsText(5691, buildSyntheticPayload("Resultados", cardHtml));
+    const match = dataset.matches[0];
+
+    expect(match.athleteAName).toBe("CLAYTON FILHO # ESTER YOSHIDA");
+    expect(match.athleteBName).toBe("ANA PEREIRA # MISAEL TAVARES");
+  });
 });
