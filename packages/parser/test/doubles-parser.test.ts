@@ -57,4 +57,26 @@ describe("parser de jogos de duplas", () => {
     expect(match.athleteAName).toBe("CLAYTON FILHO # ESTER YOSHIDA");
     expect(match.athleteBName).toBe("ANA PEREIRA # MISAEL TAVARES");
   });
+
+  it("T-U-03 preserva nomes individuais em card sem indicador de dupla", () => {
+    const cardHtml = `
+<div class="dxcvBreakpointsCard_MaterialCompact">
+  ABSOLUTO MAS - Final
+  3-1
+  Jogo 001 - Mesa 1 - 14:00
+  13/06/2026
+  <table>
+    <tr><td>ATLETA UM</td><td>3</td><td>11</td><td>9</td><td>11</td><td>11</td></tr>
+    <tr><td>ATLETA DOIS</td><td>1</td><td>7</td><td>11</td><td>6</td><td>8</td></tr>
+  </table>
+</div>`;
+
+    const dataset = parseResultsText(5680, buildSyntheticPayload("Resultados", cardHtml));
+    const match = dataset.matches[0];
+
+    expect(match.athleteAName).toBe("ATLETA UM");
+    expect(match.athleteBName).toBe("ATLETA DOIS");
+    expect(match.athleteAName).not.toContain("#");
+    expect(match.athleteBName).not.toContain("#");
+  });
 });
