@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { parseResultsText } from "../src/index";
+import { __testables, parseResultsText } from "../src/index";
+
+const resolveHints = () => null;
 
 function buildSyntheticPayload(tab: "Resultados" | "Grupos", cardHtml: string): string {
   const tabId = tab === "Resultados" ? "EventoTabPage_Resultados" : "EventoTabPage_Grupos";
@@ -78,5 +80,28 @@ describe("parser de jogos de duplas", () => {
     expect(match.athleteBName).toBe("ATLETA DOIS");
     expect(match.athleteAName).not.toContain("#");
     expect(match.athleteBName).not.toContain("#");
+  });
+
+  it("T-U-04 gera confrontos entre duplas em matriz de grupo de duplas", () => {
+    const html = `
+<div class="dxcvBreakpointsCard_MaterialCompact">
+  <div>DUPLA MISTA - SUB-15 FEM - Grupo 01</div>
+  <div>ANA PEREIRA</div>
+  <div>MISAEL TAVARES</div>
+  <div>CLAYTON FILHO</div>
+  <div>ESTER YOSHIDA</div>
+  <div>DEBORA FLORES</div>
+  <div>REBECA FLORES</div>
+  <div>2 x 0</div>
+  <div>2 x 1</div>
+  <div>0 x 2</div>
+</div>`;
+
+    const result = __testables.parseGroupMatches(5691, html, "999", resolveHints);
+
+    expect(result.matches).toHaveLength(3);
+    expect(result.matches.every((match) => match.athleteAName.includes("#"))).toBe(true);
+    expect(result.matches.every((match) => match.athleteBName.includes("#"))).toBe(true);
+    expect(result.warnings).toHaveLength(0);
   });
 });
