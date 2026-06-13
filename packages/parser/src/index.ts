@@ -1038,8 +1038,18 @@ function parseCardBasedMatches(
       return isBracketReferenceToken(line);
     });
 
-    const athleteANameRaw = cardScoreData?.athleteAName ?? filteredNames[0] ?? bracketReferenceCandidates[0];
-    const athleteBNameRaw = cardScoreData?.athleteBName ?? filteredNames[1] ?? bracketReferenceCandidates[1];
+    const athleteANameRaw =
+      cardScoreData?.athleteAName ??
+      (isDoubles && filteredNames.length >= 4
+        ? composeDoublesPairName(filteredNames[0], filteredNames[1])
+        : filteredNames[0]) ??
+      bracketReferenceCandidates[0];
+    const athleteBNameRaw =
+      cardScoreData?.athleteBName ??
+      (isDoubles && filteredNames.length >= 4
+        ? composeDoublesPairName(filteredNames[2], filteredNames[3])
+        : filteredNames[1]) ??
+      bracketReferenceCandidates[1];
     if (!athleteANameRaw || !athleteBNameRaw || !categoryName) {
       continue;
     }
