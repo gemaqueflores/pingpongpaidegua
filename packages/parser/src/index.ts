@@ -11,6 +11,7 @@ import {
   compactWhitespace,
   computeMatchKey,
   getRoundSemanticOrder,
+  isDoublesLikeLabel,
   isLikelyAthleteName,
   normalizeDoublesPairName,
   normalizeText,
@@ -824,7 +825,11 @@ function parseNumericCardCellValue(input: string): number | null {
   return parsed;
 }
 
-function parseSetScoresFromCardHtml(cardHtml: string): {
+function composeDoublesPairName(left: string, right: string): string {
+  return normalizeDoublesPairName(`${left} - ${right}`);
+}
+
+function parseSetScoresFromCardHtml(cardHtml: string, isDoubles = false): {
   athleteAName: string;
   athleteBName: string;
   sets: ParsedMatchSet[];
@@ -849,7 +854,7 @@ function parseSetScoresFromCardHtml(cardHtml: string): {
       scores.push(parseNumericCardCellValue($(cells[index]).text()));
     }
 
-    if (scores.every((value) => value === null)) {
+    if (!isDoubles && scores.every((value) => value === null)) {
       return;
     }
 
@@ -861,7 +866,11 @@ function parseSetScoresFromCardHtml(cardHtml: string): {
   }
 
   const athleteA = players[0];
-  const athleteB = players[1];
+  const athleteB = isDoubles && players.length >= 3 ? players[2] : players[1];
+  const athleteAName =
+    isDoubles && players.length >= 3 ? composeDoublesPairName(players[0].name, players[1].name) : athleteA.name;
+  const athleteBName =
+    isDoubles && players.length >= 4 ? composeDoublesPairName(players[2].name, players[3].name) : athleteB.name;
   const p1Sets = athleteA.scores[0];
   const p2Sets = athleteB.scores[0];
   const p1PerSet = athleteA.scores.slice(1);
@@ -894,8 +903,8 @@ function parseSetScoresFromCardHtml(cardHtml: string): {
       : null;
 
   return {
-    athleteAName: athleteA.name,
-    athleteBName: athleteB.name,
+    athleteAName,
+    athleteBName,
     sets,
     setsResultFromTokens,
   };
@@ -998,11 +1007,12 @@ function parseCardBasedMatches(
       continue;
     }
 
-    const cardScoreData = parseSetScoresFromCardHtml(card.html);
     const title = lines[0] ?? "";
     const metaLine = lines.find((line) => /jogo\s*\d+/i.test(line)) ?? "";
     const dateLine = lines.find((line) => /^\d{2}\/\d{2}\/\d{4}$/.test(line)) ?? "";
     const categoryName = cleanCategoryDisplayName(compactWhitespace(title.split(" - ")[0] ?? ""));
+    const isDoubles = isDoublesLikeLabel(categoryName);
+    const cardScoreData = parseSetScoresFromCardHtml(card.html, isDoubles);
     const roundRaw = title.includes(" - ") ? compactWhitespace(title.split(" - ").slice(1).join(" - ")) : null;
     const round = normalizeRoundLabel(roundRaw);
     const resolvedPhase = phase;
@@ -1030,8 +1040,18 @@ function parseCardBasedMatches(
       return isBracketReferenceToken(line);
     });
 
-    const athleteANameRaw = cardScoreData?.athleteAName ?? filteredNames[0] ?? bracketReferenceCandidates[0];
-    const athleteBNameRaw = cardScoreData?.athleteBName ?? filteredNames[1] ?? bracketReferenceCandidates[1];
+    const athleteANameRaw =
+      cardScoreData?.athleteAName ??
+      (isDoubles && filteredNames.length >= 4
+        ? composeDoublesPairName(filteredNames[0], filteredNames[1])
+        : filteredNames[0]) ??
+      bracketReferenceCandidates[0];
+    const athleteBNameRaw =
+      cardScoreData?.athleteBName ??
+      (isDoubles && filteredNames.length >= 4
+        ? composeDoublesPairName(filteredNames[2], filteredNames[3])
+        : filteredNames[1]) ??
+      bracketReferenceCandidates[1];
     if (!athleteANameRaw || !athleteBNameRaw || !categoryName) {
       continue;
     }
@@ -1150,6 +1170,7 @@ function parseGroupMatches(
       continue;
     }
     const categoryName = compactWhitespace(title.split(" - ")[0] ?? "");
+    const isDoubles = isDoublesLikeLabel(categoryName);
     const roundRaw = title.includes(" - ") ? compactWhitespace(title.split(" - ").slice(1).join(" - ")) : "Grupo";
     const round = normalizeRoundLabel(roundRaw) ?? "Grupo";
 
@@ -1162,10 +1183,26 @@ function parseGroupMatches(
       continue;
     }
 
+    const competitiveEntries = isDoubles
+      ? uniquePlayers
+          .reduce<string[]>((entries, player, index) => {
+            if (index % 2 === 0 && uniquePlayers[index + 1]) {
+              entries.push(composeDoublesPairName(player, uniquePlayers[index + 1]));
+            }
+            return entries;
+          }, [])
+          .slice(0, 4)
+      : uniquePlayers;
+
+    if (competitiveEntries.length < 2) {
+      warnings.push(`Grupos sem matriz completa para '${title}'.`);
+      continue;
+    }
+
     const pairs: Array<[string, string]> = [];
-    for (let i = 0; i < uniquePlayers.length; i += 1) {
-      for (let j = i + 1; j < uniquePlayers.length; j += 1) {
-        pairs.push([uniquePlayers[i], uniquePlayers[j]]);
+    for (let i = 0; i < competitiveEntries.length; i += 1) {
+      for (let j = i + 1; j < competitiveEntries.length; j += 1) {
+        pairs.push([competitiveEntries[i], competitiveEntries[j]]);
       }
     }
 
