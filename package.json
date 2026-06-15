@@ -17,7 +17,7 @@
     "verify:changed:list": "tsx scripts/verify-changed.ts --list",
     "verify:encoding": "tsx scripts/check-encoding.ts",
     "verify:encoding:all": "tsx scripts/check-encoding.ts --all",
-    "verify:security": "python %USERPROFILE%/.codex/skills/security-review-agent/scripts/security_scan.py",
+    "verify:security": "tsx scripts/security-scan.ts",
     "verify:api": "npm run test --workspace apps-api && npm run build --workspace apps-api",
     "verify:worker": "npm run test --workspace apps-worker && npm run build --workspace apps-worker",
     "verify:web": "npm run test --workspace apps-web && npm run build --workspace apps-web",
