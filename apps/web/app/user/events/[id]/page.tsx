@@ -1055,6 +1055,8 @@ export default function EventDetailPage() {
   );
 }
 
-export const __testables = { compareScheduleMatches, renderScheduleMatch };
+const __testables = { compareScheduleMatches, renderScheduleMatch };
+
+(EventDetailPage as typeof EventDetailPage & { __testables: typeof __testables }).__testables = __testables;
 
 

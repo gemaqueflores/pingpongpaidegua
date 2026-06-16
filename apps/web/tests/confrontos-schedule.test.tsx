@@ -3,8 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { __testables } from "../app/user/events/[id]/page";
+import EventDetailPage from "../app/user/events/[id]/page";
 
+const { __testables } = EventDetailPage as typeof EventDetailPage & {
+  __testables: {
+    compareScheduleMatches: (left: never, right: never) => number;
+    renderScheduleMatch: (match: never, categoryName?: string) => React.ReactElement;
+  };
+};
 const { compareScheduleMatches, renderScheduleMatch } = __testables;
 
 (globalThis as typeof globalThis & { React: typeof React }).React = React;
