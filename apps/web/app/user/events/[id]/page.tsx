@@ -152,6 +152,33 @@ function compareScheduleMatches(left: ScheduleMatch, right: ScheduleMatch): numb
   return left.id - right.id;
 }
 
+function renderScheduleMatch(match: ScheduleMatch, categoryName?: string) {
+  return (
+    <article key={match.id} className="event-schedule-match">
+      <div className="row" style={{ justifyContent: "space-between", gap: "10px" }}>
+        <strong>{formatDateTime(match.matchDatetime)}</strong>
+        <span className="arena-muted">
+          {match.tableNumber ? `Mesa ${match.tableNumber}` : "Mesa -"}
+          {match.round ? ` | ${match.round}` : ""}
+        </span>
+      </div>
+      {categoryName ? <Badge tone="default">{categoryName}</Badge> : null}
+      <div className="row" style={{ justifyContent: "space-between", gap: "12px" }}>
+        <span className="athlete-name-clamp">
+          {formatScheduleName(match.playerA?.name)}
+          {match.playerA?.clubName ? ` · ${match.playerA.clubName}` : ""}
+        </span>
+        <strong>vs</strong>
+        <span className="athlete-name-clamp">
+          {formatScheduleName(match.playerB?.name)}
+          {match.playerB?.clubName ? ` · ${match.playerB.clubName}` : ""}
+        </span>
+      </div>
+      {match.scoreRaw ? <Badge tone="default">Placar: {match.scoreRaw}</Badge> : null}
+    </article>
+  );
+}
+
 function inferEventType(name: string): "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN" {
   const normalized = name
     .normalize("NFD")
@@ -547,33 +574,6 @@ export default function EventDetailPage() {
     if (index === 0) return "🥇 1º lugar";
     if (index === 1) return "🥈 2º lugar";
     return "🥉 3º lugar";
-  }
-
-  function renderScheduleMatch(match: ScheduleMatch, categoryName?: string) {
-    return (
-      <article key={match.id} className="event-schedule-match">
-        <div className="row" style={{ justifyContent: "space-between", gap: "10px" }}>
-          <strong>{formatDateTime(match.matchDatetime)}</strong>
-          <span className="arena-muted">
-            {match.tableNumber ? `Mesa ${match.tableNumber}` : "Mesa -"}
-            {match.round ? ` | ${match.round}` : ""}
-          </span>
-        </div>
-        {categoryName ? <Badge tone="default">{categoryName}</Badge> : null}
-        <div className="row" style={{ justifyContent: "space-between", gap: "12px" }}>
-          <span className="athlete-name-clamp">
-            {formatScheduleName(match.playerA?.name)}
-            {match.playerA?.clubName ? ` · ${match.playerA.clubName}` : ""}
-          </span>
-          <strong>vs</strong>
-          <span className="athlete-name-clamp">
-            {formatScheduleName(match.playerB?.name)}
-            {match.playerB?.clubName ? ` · ${match.playerB.clubName}` : ""}
-          </span>
-        </div>
-        {match.scoreRaw ? <Badge tone="default">Placar: {match.scoreRaw}</Badge> : null}
-      </article>
-    );
   }
 
   return (
@@ -1054,5 +1054,9 @@ export default function EventDetailPage() {
     </main>
   );
 }
+
+const __testables = { compareScheduleMatches, renderScheduleMatch };
+
+(EventDetailPage as typeof EventDetailPage & { __testables: typeof __testables }).__testables = __testables;
 
 
