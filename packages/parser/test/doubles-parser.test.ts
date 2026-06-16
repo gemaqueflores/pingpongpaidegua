@@ -102,6 +102,9 @@ describe("parser de jogos de duplas", () => {
     expect(result.matches).toHaveLength(3);
     expect(result.matches.every((match) => match.athleteAName.includes("#"))).toBe(true);
     expect(result.matches.every((match) => match.athleteBName.includes("#"))).toBe(true);
+    expect(result.matches[0].setsResult).toEqual({ p1Sets: 2, p2Sets: 0 });
+    expect(result.matches[1].setsResult).toEqual({ p1Sets: 2, p2Sets: 1 });
+    expect(result.matches[2].setsResult).toEqual({ p1Sets: 0, p2Sets: 2 });
     expect(result.warnings).toHaveLength(0);
   });
 
