@@ -23,6 +23,22 @@ export type FailedReasonPattern =
 
 export type FailedReasonSummary = Record<FailedReasonPattern, number>;
 
+type FailedQueueJob = {
+  timestamp?: number;
+  failedReason?: string | null;
+  remove(): Promise<void>;
+};
+
+type FailedQueueReader = {
+  getFailed(start: number, end: number): Promise<FailedQueueJob[]>;
+};
+
+export type FailedQueueCleanupResult = {
+  total: number;
+  porPadrao: FailedReasonSummary;
+  removidos: number;
+};
+
 export function classifyFailedReasons(failedReasons: Array<string | null | undefined>): FailedReasonSummary {
   const summary: FailedReasonSummary = {
     GetItemsRangeForLoad: 0,
@@ -48,6 +64,38 @@ export function classifyFailedReasons(failedReasons: Array<string | null | undef
   }
 
   return summary;
+}
+
+export async function cleanupFailedQueue(
+  queue: FailedQueueReader,
+  options: {
+    now?: number;
+    retentionDays?: number;
+  } = {},
+): Promise<FailedQueueCleanupResult> {
+  const now = options.now ?? Date.now();
+  const retentionDays = options.retentionDays ?? config.failedQueueRetentionDays;
+  const cutoff = now - retentionDays * 86400 * 1000;
+  const failedJobs = await queue.getFailed(0, 500);
+  const porPadrao = classifyFailedReasons(failedJobs.map((job) => job.failedReason));
+  let removidos = 0;
+
+  for (const job of failedJobs) {
+    const timestamp = Number(job.timestamp ?? 0);
+    if (Number.isFinite(timestamp) && timestamp > 0 && timestamp < cutoff) {
+      await job.remove();
+      removidos += 1;
+    }
+  }
+
+  const result = {
+    total: failedJobs.length,
+    porPadrao,
+    removidos,
+  };
+
+  log("info", "Cleanup fila failed", result);
+  return result;
 }
 
 async function autoConcludeExpiredEvents(): Promise<number> {
@@ -119,6 +167,23 @@ async function bootstrap(): Promise<void> {
         removeOnComplete: {
           age: 24 * 3600,
           count: 30,
+        },
+      },
+    );
+  }
+
+  if (config.failedQueueCleanupEnabled) {
+    await queue.add(
+      "cleanup-failed-queue",
+      { reason: "scheduled-daily-cleanup" },
+      {
+        jobId: "cleanup-failed-queue-repeat",
+        repeat: {
+          every: config.failedQueueCleanupEveryMs,
+        },
+        removeOnComplete: {
+          age: 24 * 3600,
+          count: 10,
         },
       },
     );
@@ -287,6 +352,11 @@ async function bootstrap(): Promise<void> {
         return;
       }
 
+      if (job.name === "cleanup-failed-queue") {
+        await cleanupFailedQueue(queue);
+        return;
+      }
+
       if (job.name === "scrape-event" && job.data.eventId) {
         await processor.processEventJob(job.data.eventId, job.data.reason);
         const reason = String(job.data.reason ?? "").toLowerCase();
@@ -371,6 +441,8 @@ async function bootstrap(): Promise<void> {
     scrapeIntervalBySituationMs: config.scrapeIntervalBySituationMs,
     rawCaptureCleanupEnabled: config.rawCaptureCleanupEnabled,
     rawCaptureCleanupEveryMs: config.rawCaptureCleanupEveryMs,
+    failedQueueCleanupEnabled: config.failedQueueCleanupEnabled,
+    failedQueueCleanupEveryMs: config.failedQueueCleanupEveryMs,
   });
 }
 
