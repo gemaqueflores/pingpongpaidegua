@@ -583,8 +583,12 @@ export class CaptureService {
             continue;
           }
 
-          const requested = await this.paginateCardView(page, tab.controlVar);
-          paginationRequests += requested;
+          const pagination = await this.paginateCardView(page, tab.controlVar, {
+            categoryId: category.categoryId,
+            tabLabel: tab.tabLabel,
+          });
+          paginationRequests += pagination.requests;
+          warnings.push(...pagination.warnings);
           activeTabLabel = null;
         }
 
@@ -1004,11 +1008,16 @@ export class CaptureService {
     return true;
   }
 
-  private async paginateCardView(page: import("playwright").Page, controlVar: string): Promise<number> {
+  private async paginateCardView(
+    page: import("playwright").Page,
+    controlVar: string,
+    context?: { categoryId: string; tabLabel: string },
+  ): Promise<{ requests: number; warnings: string[] }> {
     const state = await page.evaluate((targetControl) => {
       const control = (window as any)[targetControl];
       if (!control) {
         return {
+          available: false,
           pageCount: 1,
           currentPageIndex: 0,
         };
@@ -1024,13 +1033,23 @@ export class CaptureService {
           : Number(control.pageIndex ?? 0);
 
       return {
+        available: true,
         pageCount: Number.isFinite(fromMethod) && fromMethod > 0 ? fromMethod : 1,
         currentPageIndex: Number.isFinite(currentFromMethod) ? currentFromMethod : 0,
       };
     }, controlVar);
 
+    if (!state.available) {
+      return {
+        requests: 0,
+        warnings: [
+          `Controle de paginacao indisponivel - categoria registrada sem dados de paginacao (categoria=${context?.categoryId ?? "desconhecida"}, aba=${context?.tabLabel ?? "desconhecida"}).`,
+        ],
+      };
+    }
+
     if (state.currentPageIndex === -1) {
-      return 0;
+      return { requests: 0, warnings: [] };
     }
 
     let requests = 0;
@@ -1079,6 +1098,6 @@ export class CaptureService {
       }
     }
 
-    return requests;
+    return { requests, warnings: [] };
   }
 }
