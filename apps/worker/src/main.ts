@@ -220,6 +220,10 @@ async function bootstrap(): Promise<void> {
             },
             {
               jobId: `event-${candidate.id}-scheduled-${scheduledBucket}`,
+              removeOnFail: {
+                age: config.failedQueueRetentionDays * 86400,
+                count: 200,
+              },
             },
           );
         }
