@@ -3,6 +3,21 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { __testables } from "../app/user/events/[id]/page";
 
+const { compareScheduleMatches } = __testables;
+
+function buildScheduleMatch(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    matchDatetime: "2026-06-10T09:00:00Z",
+    tableNumber: "1",
+    round: "Grupo",
+    playerA: { name: "ATLETA A", clubName: "CLUBE A" },
+    playerB: { name: "ATLETA B", clubName: "CLUBE B" },
+    scoreRaw: null,
+    ...overrides,
+  } as never;
+}
+
 test("PP-009 T-U-01 aba Confrontos preserva invariantes de filtro e toggle", () => {
   const source = readFileSync(new URL("../app/user/events/[id]/page.tsx", import.meta.url), "utf8");
 
@@ -14,4 +29,32 @@ test("PP-009 T-U-01 aba Confrontos preserva invariantes de filtro e toggle", () 
   assert.match(source, /compareScheduleMatches/);
   assert.match(source, /renderScheduleMatch/);
   assert.match(source, /setScheduleCategoryFilter\(null\)/);
+});
+
+test("PP-009 T-U-02 compareScheduleMatches ordena por datetime crescente", () => {
+  const matchA = buildScheduleMatch({ id: 1, matchDatetime: "2026-06-10T10:00:00Z" });
+  const matchB = buildScheduleMatch({ id: 2, matchDatetime: "2026-06-10T09:00:00Z" });
+
+  assert.ok(compareScheduleMatches(matchA, matchB) > 0);
+});
+
+test("PP-009 T-U-03 compareScheduleMatches envia datetime null para o final", () => {
+  const matchA = buildScheduleMatch({ id: 1, matchDatetime: null });
+  const matchB = buildScheduleMatch({ id: 2, matchDatetime: "2026-06-10T09:00:00Z" });
+
+  assert.ok(compareScheduleMatches(matchA, matchB) > 0);
+});
+
+test("PP-009 T-U-04 compareScheduleMatches desempata por tableNumber numerico", () => {
+  const matchA = buildScheduleMatch({ id: 1, tableNumber: "10" });
+  const matchB = buildScheduleMatch({ id: 2, tableNumber: "9" });
+
+  assert.ok(compareScheduleMatches(matchA, matchB) > 0);
+});
+
+test("PP-009 T-U-05 compareScheduleMatches desempata por id", () => {
+  const matchA = buildScheduleMatch({ id: 20 });
+  const matchB = buildScheduleMatch({ id: 10 });
+
+  assert.ok(compareScheduleMatches(matchA, matchB) > 0);
 });
