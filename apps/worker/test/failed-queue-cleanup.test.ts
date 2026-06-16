@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { classifyFailedReasons } from "../src/main";
+import { classifyFailedReasons, cleanupFailedQueue } from "../src/main";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const mainSourcePath = path.resolve(currentDir, "../src/main.ts");
@@ -31,4 +31,44 @@ test("T-U-02 classifica failedReason por padroes operacionais conhecidos", () =>
       other: 1,
     },
   );
+});
+
+test("T-U-03 cleanup remove apenas jobs failed mais antigos que a retencao", async () => {
+  const removedJobIds: string[] = [];
+  const now = Date.UTC(2026, 5, 16, 12, 0, 0);
+  const oldJob = {
+    id: "old",
+    timestamp: now - 31 * 86400 * 1000,
+    failedReason: "GetItemsRangeForLoad",
+    remove: async () => {
+      removedJobIds.push("old");
+    },
+  };
+  const recentJob = {
+    id: "recent",
+    timestamp: now - 2 * 86400 * 1000,
+    failedReason: "browser fallback",
+    remove: async () => {
+      removedJobIds.push("recent");
+    },
+  };
+  const queue = {
+    getFailed: async (start: number, end: number) => {
+      assert.equal(start, 0);
+      assert.equal(end, 500);
+      return [oldJob, recentJob];
+    },
+  };
+
+  const result = await cleanupFailedQueue(queue, { now, retentionDays: 30 });
+
+  assert.deepEqual(removedJobIds, ["old"]);
+  assert.equal(result.total, 2);
+  assert.equal(result.removidos, 1);
+  assert.deepEqual(result.porPadrao, {
+    GetItemsRangeForLoad: 1,
+    browser_fallback: 1,
+    browser_context_closed: 0,
+    other: 0,
+  });
 });
