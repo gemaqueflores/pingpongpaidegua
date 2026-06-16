@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { __testables } from "../app/user/events/[id]/page";
 
-const { compareScheduleMatches } = __testables;
+const { compareScheduleMatches, renderScheduleMatch } = __testables;
+
+(globalThis as typeof globalThis & { React: typeof React }).React = React;
 
 function buildScheduleMatch(overrides: Record<string, unknown> = {}) {
   return {
@@ -57,4 +61,16 @@ test("PP-009 T-U-05 compareScheduleMatches desempata por id", () => {
   const matchB = buildScheduleMatch({ id: 10 });
 
   assert.ok(compareScheduleMatches(matchA, matchB) > 0);
+});
+
+test("PP-009 T-U-06 renderScheduleMatch com categoryName exibe badge de categoria", () => {
+  const html = renderToStaticMarkup(renderScheduleMatch(buildScheduleMatch(), "DUPLA MISTA - SUB-15"));
+
+  assert.match(html, /DUPLA MISTA - SUB-15/);
+});
+
+test("PP-009 T-U-07 renderScheduleMatch sem categoryName nao exibe badge de categoria", () => {
+  const html = renderToStaticMarkup(renderScheduleMatch(buildScheduleMatch()));
+
+  assert.doesNotMatch(html, /DUPLA MISTA - SUB-15/);
 });
