@@ -15,6 +15,41 @@ type ScrapeJobData = {
   publishMode?: "compare" | "replace";
 };
 
+export type FailedReasonPattern =
+  | "GetItemsRangeForLoad"
+  | "browser_fallback"
+  | "browser_context_closed"
+  | "other";
+
+export type FailedReasonSummary = Record<FailedReasonPattern, number>;
+
+export function classifyFailedReasons(failedReasons: Array<string | null | undefined>): FailedReasonSummary {
+  const summary: FailedReasonSummary = {
+    GetItemsRangeForLoad: 0,
+    browser_fallback: 0,
+    browser_context_closed: 0,
+    other: 0,
+  };
+
+  for (const failedReason of failedReasons) {
+    const normalized = String(failedReason ?? "").toLowerCase();
+    if (normalized.includes("getitemsrangeforload")) {
+      summary.GetItemsRangeForLoad += 1;
+    } else if (normalized.includes("browser fallback")) {
+      summary.browser_fallback += 1;
+    } else if (
+      normalized.includes("browsercontext.close") ||
+      normalized.includes("target page, context or browser has been closed")
+    ) {
+      summary.browser_context_closed += 1;
+    } else {
+      summary.other += 1;
+    }
+  }
+
+  return summary;
+}
+
 async function autoConcludeExpiredEvents(): Promise<number> {
   const now = new Date();
   const updated = await prisma.event.updateMany({
@@ -339,8 +374,10 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-bootstrap().catch(async (error) => {
-  log("error", "Falha ao iniciar worker", { error: String(error) });
-  await prisma.$disconnect();
-  process.exit(1);
-});
+if (require.main === module) {
+  bootstrap().catch(async (error) => {
+    log("error", "Falha ao iniciar worker", { error: String(error) });
+    await prisma.$disconnect();
+    process.exit(1);
+  });
+}
