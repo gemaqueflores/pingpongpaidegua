@@ -102,6 +102,9 @@ describe("parser de jogos de duplas", () => {
     expect(result.matches).toHaveLength(3);
     expect(result.matches.every((match) => match.athleteAName.includes("#"))).toBe(true);
     expect(result.matches.every((match) => match.athleteBName.includes("#"))).toBe(true);
+    expect(result.matches[0].setsResult).toEqual({ p1Sets: 2, p2Sets: 0 });
+    expect(result.matches[1].setsResult).toEqual({ p1Sets: 2, p2Sets: 1 });
+    expect(result.matches[2].setsResult).toEqual({ p1Sets: 0, p2Sets: 2 });
     expect(result.warnings).toHaveLength(0);
   });
 
@@ -154,5 +157,39 @@ describe("parser de jogos de duplas", () => {
       { p1: 11, p2: 6 },
       { p1: 11, p2: 8 },
     ]);
+  });
+
+  it("T-U-07 gera todos os confrontos em grupo com cinco duplas", () => {
+    const html = `
+<div class="dxcvBreakpointsCard_MaterialCompact">
+  <div>DUPLA MISTA - SUB-15 FEM - Grupo 02</div>
+  <div>ANA PEREIRA</div>
+  <div>MISAEL TAVARES</div>
+  <div>CLAYTON FILHO</div>
+  <div>ESTER YOSHIDA</div>
+  <div>DEBORA FLORES</div>
+  <div>REBECA FLORES</div>
+  <div>KAYLANNE DEUS</div>
+  <div>MARIANNY MORAES</div>
+  <div>LUCAS SOUZA</div>
+  <div>MATEUS LIMA</div>
+  <div>2 x 0</div>
+  <div>2 x 1</div>
+  <div>0 x 2</div>
+  <div>2 x 0</div>
+  <div>1 x 2</div>
+  <div>2 x 1</div>
+  <div>0 x 2</div>
+  <div>2 x 0</div>
+  <div>2 x 1</div>
+  <div>0 x 2</div>
+</div>`;
+
+    const result = __testables.parseGroupMatches(5691, html, "999", resolveHints);
+
+    expect(result.matches).toHaveLength(10);
+    expect(result.matches.every((match) => match.athleteAName.includes("#"))).toBe(true);
+    expect(result.matches.every((match) => match.athleteBName.includes("#"))).toBe(true);
+    expect(result.warnings).toHaveLength(0);
   });
 });
