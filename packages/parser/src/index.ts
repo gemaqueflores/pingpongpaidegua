@@ -1175,7 +1175,7 @@ function parseGroupMatches(
     const round = normalizeRoundLabel(roundRaw) ?? "Grupo";
 
     const players = lines.filter((line) => isLikelyAthleteName(line) && !line.includes(" - ") && !/classificado/i.test(line));
-    const uniquePlayers = [...new Set(players)].slice(0, 8);
+    const uniquePlayers = [...new Set(players)];
     const scoreTokens = lines.filter((line) => /^\d+\s*[xX]\s*\d+$/.test(line));
 
     if (uniquePlayers.length < 2) {
@@ -1191,7 +1191,6 @@ function parseGroupMatches(
             }
             return entries;
           }, [])
-          .slice(0, 4)
       : uniquePlayers;
 
     if (competitiveEntries.length < 2) {
