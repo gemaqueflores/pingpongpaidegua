@@ -18,7 +18,7 @@ Monorepo: `apps/api/`, `apps/web/`, `apps/worker/`, `packages/`.
 |---|---|---|---|
 | DEC-CBTM-001 | TLS renovado via Certbot no nginx da VM Oracle. | Certificado expirado em produção; renovação manual documentada. | 2026-05-21 |
 | DEC-CBTM-002 | CORS configurado na API NestJS, não no nginx. | O nginx fazia double-CORS; CORS foi centralizado na API. | 2026-05-21 |
-| DEC-CBTM-003 | Pre-commit hook versionado em `.githooks/pre-commit`; ativado com `git config core.hooksPath .githooks`. | Garante hook versionado e portátil; `--no-verify` é proibido. | 2026-06-10 |
+| DEC-CBTM-003 | Pre-commit hook versionado em `.githooks/pre-commit`; ativado com `git config core.hooksPath .githooks`. | Garante hook versionado e portátil; `--no-verify` é proibido, exceto em commit RED de Red-Green quando o hook executa a suite que deve falhar por design. | 2026-06-10 |
 | DEC-CBTM-004 | O filtro `nameDisplay: { not: { contains: '#' } }` pertence apenas ao diretório global de atletas (`listAthleteDirectory`), nunca às listagens por evento. | Pares de duplas usam `nameDisplay = "A # B"`; filtrar `#` em contexto de evento exclui duplas por erro. | 2026-06-10 |
 | DEC-CBTM-005 | `TECHNICIAN_CATEGORY_ID = "88888888"` (TÉCNICOS) e `GENERAL_TOTALIZER_CATEGORY_ID = "99999999"` (Totalizador Geral); ambos seguem em `IGNORED_CATEGORY_IDS` por enquanto. | IDs estavam invertidos no código e foram corrigidos na PP-005. Futuramente `88888888` será usado para listar técnicos separadamente. | 2026-06-10 |
 
@@ -41,13 +41,15 @@ O hook em `.githooks/pre-commit` executa:
 
 `--no-verify` é proibido. Se o hook bloquear, corrigir a causa.
 
+Exceção única: em ciclo Red-Green formal, um commit RED pode usar `--no-verify` quando o próprio hook executa a suite que deve falhar por design. O commit deve ser declarado como RED, seguido imediatamente por commit GREEN com hook normal, e o relatório deve registrar o hash RED e a justificativa.
+
 ---
 
 ## DoD Mínimo
 
 - Suite API verde: `npm --prefix apps/api test`.
 - Builds verdes: `npm run build --workspace apps-api` e `npm run build --workspace apps-web`.
-- Hook ativo e commits sem `--no-verify`.
+- Hook ativo e commits sem `--no-verify`, salvo a exceção formal de commit RED descrita acima.
 - Encoding PT-BR UTF-8 nos arquivos tocados.
 
 ---
