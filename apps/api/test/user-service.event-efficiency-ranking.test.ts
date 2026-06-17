@@ -351,3 +351,25 @@ test("PP-015 T-U-02 usa registro mais antigo como fallback retroativo", () => {
 
   assert.deepEqual(result, { pesoOuro: 140, pesoPrata: 90, pesoBronze: 55 });
 });
+
+test("PP-015 T-U-03 getEfficiencyWeights retorna default quando versoes estao vazias", async () => {
+  const prisma = {
+    efficiencyConfigVersion: {
+      async findMany() {
+        return [];
+      },
+    },
+    efficiencyConfig: {
+      async findUnique() {
+        return { pesoOuro: 999, pesoPrata: 888, pesoBronze: 777 };
+      },
+    },
+  };
+  const service = new UserService(prisma as never, prisma as never) as UserService & {
+    getEfficiencyWeights(referenceDate?: Date): Promise<{ pesoOuro: number; pesoPrata: number; pesoBronze: number }>;
+  };
+
+  const result = await service.getEfficiencyWeights(new Date("2026-01-01T00:00:00.000Z"));
+
+  assert.deepEqual(result, { pesoOuro: 130, pesoPrata: 80, pesoBronze: 50 });
+});
