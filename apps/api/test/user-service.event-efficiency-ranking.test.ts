@@ -373,3 +373,104 @@ test("PP-015 T-U-03 getEfficiencyWeights retorna default quando versoes estao va
 
   assert.deepEqual(result, { pesoOuro: 130, pesoPrata: 80, pesoBronze: 50 });
 });
+
+test("PP-015 T-I-01 ranking global filtra eventos pelo ano de dataInicio", async () => {
+  const categoryFilters: unknown[] = [];
+  let eventFindManyCalls = 0;
+  const prisma = {
+    club: {
+      async findMany() {
+        return [
+          {
+            id: 1,
+            name: "CLUBE 2025",
+            athletes: [{ id: 10, nameDisplay: "ATLETA 2025", clubId: 1 }],
+          },
+        ];
+      },
+    },
+    athlete: {
+      async findMany() {
+        return [{ clubId: 1, nameNormalized: "atleta 2025" }];
+      },
+    },
+    category: {
+      async findMany(args: { where: unknown }) {
+        categoryFilters.push(args.where);
+        return [{ id: 100, name: "RATING A", eventId: 2025, cbtmCategoryId: "100" }];
+      },
+    },
+    event: {
+      async findMany() {
+        eventFindManyCalls += 1;
+        if (eventFindManyCalls === 1) {
+          return [{ id: 2025, dataInicio: new Date("2025-06-01T00:00:00.000Z") }];
+        }
+        return [{ id: 2025, nivel: "ESTADUAL", nome: "Evento 2025", dataInicio: new Date("2025-06-01T00:00:00.000Z") }];
+      },
+    },
+    efficiencyConfigVersion: {
+      async findMany() {
+        return [
+          {
+            dataInicioVigencia: new Date("2020-01-01T00:00:00.000Z"),
+            dataFimVigencia: null,
+            pesoOuro: 10,
+            pesoPrata: 5,
+            pesoBronze: 2,
+          },
+        ];
+      },
+    },
+    athleteCategory: {
+      async findMany() {
+        return [
+          {
+            categoryId: 100,
+            athlete: { id: 10, nameDisplay: "ATLETA 2025", clubId: 1 },
+          },
+        ];
+      },
+    },
+    match: {
+      async findMany() {
+        return [
+          {
+            id: 1,
+            categoryId: 100,
+            participants: [{ athlete: { id: 10, clubId: 1, nameDisplay: "ATLETA 2025", club: { name: "CLUBE 2025" } } }],
+          },
+        ];
+      },
+    },
+  };
+  const service = new UserService(prisma as never, prisma as never) as UserService & {
+    getStateCircuitEligibleClubIds(): Promise<Set<number>>;
+    computeEfficiencyRanking(input: { year?: number }): Promise<{
+      ranking: Array<{ clubId: number; ouro: number; totalPontuacao: number }>;
+    }>;
+    buildCategoryAnalyticsMatchFromRaw(match: unknown): unknown;
+    computeCategoryPositionByAthleteId(): Map<number, number | null>;
+  };
+  service.getStateCircuitEligibleClubIds = async () => new Set([1]);
+  service.buildCategoryAnalyticsMatchFromRaw = () => ({
+    categoryName: "RATING A",
+    players: [{ athleteId: 10, name: "ATLETA 2025" }],
+    winnerIndex: 0,
+    scoreRaw: "3-0",
+    scoreFinal: { setsA: 3, setsB: 0 },
+    scoreSets: [],
+    sets: [],
+    phase: "RESULTADOS",
+  });
+  service.computeCategoryPositionByAthleteId = () => new Map([[10, 1]]);
+
+  const result = await service.computeEfficiencyRanking({ year: 2025 });
+
+  assert.deepEqual(categoryFilters[0], {
+    eventId: { in: [2025] },
+    OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: ["88888888", "99999999"] } }],
+  });
+  assert.equal(result.ranking[0]?.ouro, 1);
+  assert.equal(result.ranking[0]?.totalPontuacao, 30);
+});
