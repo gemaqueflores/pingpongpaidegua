@@ -6523,12 +6523,15 @@ export class UserService {
     versions: EfficiencyConfigVersionLike[],
     referenceDate: Date,
   ): EfficiencyWeights {
+    const sortedVersions = [...versions].sort(
+      (left, right) => left.dataInicioVigencia.getTime() - right.dataInicioVigencia.getTime(),
+    );
     const referenceTime = referenceDate.getTime();
-    const matchingVersion = versions.find((version) => {
+    const matchingVersion = sortedVersions.find((version) => {
       const startsBeforeReference = version.dataInicioVigencia.getTime() <= referenceTime;
       const endsAfterReference = !version.dataFimVigencia || version.dataFimVigencia.getTime() >= referenceTime;
       return startsBeforeReference && endsAfterReference;
-    });
+    }) ?? sortedVersions[0] ?? null;
 
     if (matchingVersion) {
       return {
