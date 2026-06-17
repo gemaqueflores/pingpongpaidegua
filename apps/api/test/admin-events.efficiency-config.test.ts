@@ -66,7 +66,14 @@ test("PP-015 T-U-04 updateEfficiencyConfig fecha vigencia anterior em transacao"
 
 test("PP-015 T-I-04 updateEfficiencyConfig invalida cache global de eficiencia", async () => {
   let computeCalls = 0;
-  const userService = new UserService({} as never, {} as never) as UserService & {
+  const userPrisma = {
+    event: {
+      async findMany() {
+        return [];
+      },
+    },
+  };
+  const userService = new UserService(userPrisma as never, {} as never) as UserService & {
     computeEfficiencyRanking(input: Record<string, never>): Promise<{
       weights: { pesoOuro: number; pesoPrata: number; pesoBronze: number };
       ranking: Array<{ clubId: number; totalPontuacao: number }>;
