@@ -3017,7 +3017,7 @@ export class UserService {
     const scopedEventIds = typeof input.year === "number"
       ? await this.listEfficiencyEventIdsForYear(input.year, input.eventIds)
       : input.eventIds;
-    if (typeof input.year === "number" && scopedEventIds.length === 0) {
+    if (typeof input.year === "number" && (scopedEventIds?.length ?? 0) === 0) {
       return { weights: await this.getEfficiencyWeights(), ranking: [] as ClubEfficiencyRow[] };
     }
 
