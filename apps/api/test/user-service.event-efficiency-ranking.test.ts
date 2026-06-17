@@ -321,3 +321,33 @@ test("PP-015 T-U-01 resolve pesos pela vigencia da data exata", () => {
     pesoBronze: 50,
   });
 });
+
+test("PP-015 T-U-02 usa registro mais antigo como fallback retroativo", () => {
+  const service = new UserService({} as never, {} as never) as UserService & {
+    resolveEfficiencyWeightsForDate: (
+      versions: Array<{
+        dataInicioVigencia: Date;
+        dataFimVigencia: Date | null;
+        pesoOuro: number;
+        pesoPrata: number;
+        pesoBronze: number;
+      }>,
+      referenceDate: Date,
+    ) => { pesoOuro: number; pesoPrata: number; pesoBronze: number };
+  };
+
+  const result = service.resolveEfficiencyWeightsForDate(
+    [
+      {
+        dataInicioVigencia: new Date("2026-01-01T00:00:00.000Z"),
+        dataFimVigencia: null,
+        pesoOuro: 140,
+        pesoPrata: 90,
+        pesoBronze: 55,
+      },
+    ],
+    new Date("2018-03-01T00:00:00.000Z"),
+  );
+
+  assert.deepEqual(result, { pesoOuro: 140, pesoPrata: 90, pesoBronze: 55 });
+});
