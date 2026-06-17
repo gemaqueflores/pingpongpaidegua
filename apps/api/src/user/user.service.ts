@@ -3019,8 +3019,9 @@ export class UserService {
             OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
           };
 
-    const [weights, clubs, registeredAthletesByClub, categories] = await Promise.all([
+    const [weights, efficiencyWeightVersions, clubs, registeredAthletesByClub, categories] = await Promise.all([
       this.getEfficiencyWeights(),
+      this.loadEfficiencyConfigVersions(),
       this.prisma.club.findMany({
         where: {
           id: { in: [...eligibleClubIds] },
@@ -3334,6 +3335,12 @@ export class UserService {
       for (const [eventId, medalists] of eventsForClub.entries()) {
         const event = eventsById.get(eventId);
         const eventWeight = this.resolveEfficiencyEventWeight(event?.nivel ?? null, event?.nome ?? null);
+        const eventMedalWeights = efficiencyWeightVersions
+          ? this.resolveEfficiencyWeightsForDate(
+              efficiencyWeightVersions,
+              event?.dataInicio ?? this.resolveOldestEfficiencyVersionDate(efficiencyWeightVersions) ?? new Date(),
+            )
+          : weights;
         const dedupedMedalists = this.dedupeEfficiencyMedalistsByEvent(
           event?.nome ?? "",
           officialCategoryNamesByEvent.get(eventId) ?? new Set<string>(),
@@ -3341,7 +3348,7 @@ export class UserService {
         );
         for (const medalist of dedupedMedalists) {
           row[medalist.medalha] += 1;
-          row.pontuacao[medalist.medalha] += this.getEfficiencyMedalWeight(medalist.medalha, weights) * eventWeight;
+          row.pontuacao[medalist.medalha] += this.getEfficiencyMedalWeight(medalist.medalha, eventMedalWeights) * eventWeight;
         }
       }
     }
@@ -6584,30 +6591,7 @@ export class UserService {
       | null = null;
 
     try {
-      const prismaWithEfficiencyVersion = this.prisma as unknown as {
-        efficiencyConfigVersion?: {
-          findMany?: (args: {
-            orderBy: { dataInicioVigencia: "asc" };
-            select: {
-              dataInicioVigencia: boolean;
-              dataFimVigencia: boolean;
-              pesoOuro: boolean;
-              pesoPrata: boolean;
-              pesoBronze: boolean;
-            };
-          }) => Promise<EfficiencyConfigVersionLike[]>;
-        };
-      };
-      const versions = await prismaWithEfficiencyVersion.efficiencyConfigVersion?.findMany?.({
-        orderBy: { dataInicioVigencia: "asc" },
-        select: {
-          dataInicioVigencia: true,
-          dataFimVigencia: true,
-          pesoOuro: true,
-          pesoPrata: true,
-          pesoBronze: true,
-        },
-      });
+      const versions = await this.loadEfficiencyConfigVersions();
       if (versions) {
         if (versions.length === 0) {
           return DEFAULT_EFFICIENCY_WEIGHTS;
@@ -6657,6 +6641,42 @@ export class UserService {
       pesoPrata: config.pesoPrata,
       pesoBronze: config.pesoBronze,
     };
+  }
+
+  private async loadEfficiencyConfigVersions(): Promise<EfficiencyConfigVersionLike[] | null> {
+    const prismaWithEfficiencyVersion = this.prisma as unknown as {
+      efficiencyConfigVersion?: {
+        findMany?: (args: {
+          orderBy: { dataInicioVigencia: "asc" };
+          select: {
+            dataInicioVigencia: boolean;
+            dataFimVigencia: boolean;
+            pesoOuro: boolean;
+            pesoPrata: boolean;
+            pesoBronze: boolean;
+          };
+        }) => Promise<EfficiencyConfigVersionLike[]>;
+      };
+    };
+    return await prismaWithEfficiencyVersion.efficiencyConfigVersion?.findMany?.({
+      orderBy: { dataInicioVigencia: "asc" },
+      select: {
+        dataInicioVigencia: true,
+        dataFimVigencia: true,
+        pesoOuro: true,
+        pesoPrata: true,
+        pesoBronze: true,
+      },
+    }) ?? null;
+  }
+
+  private resolveOldestEfficiencyVersionDate(versions: EfficiencyConfigVersionLike[]): Date | null {
+    return versions.reduce<Date | null>((oldest, version) => {
+      if (!oldest || version.dataInicioVigencia.getTime() < oldest.getTime()) {
+        return version.dataInicioVigencia;
+      }
+      return oldest;
+    }, null);
   }
 
   private getEfficiencyMedalWeight(
