@@ -8,6 +8,7 @@ import { CreateAdminEventDto } from "./dto/create-admin-event.dto";
 import { UpdateAdminEventDto } from "./dto/update-admin-event.dto";
 import { CreateEventMergeDto } from "./dto/create-event-merge.dto";
 import { RawCaptureRetentionService } from "./raw-capture-retention.service";
+import { UserService } from "../user/user.service";
 
 type DateBoundary = "start" | "end";
 const EVENT_TZ_OFFSET_MINUTES = -3 * 60;
@@ -239,7 +240,7 @@ export class AdminEventsService {
       $transaction<T>(callback: (client: PrismaWithEfficiencyVersion) => Promise<T>): Promise<T>;
     };
 
-    return prismaWithTransaction.$transaction(async (client) => {
+    const saved = await prismaWithTransaction.$transaction(async (client) => {
       const versionDelegate = client.efficiencyConfigVersion;
       if (!versionDelegate) {
         return this.prisma.efficiencyConfig.upsert({
@@ -282,6 +283,8 @@ export class AdminEventsService {
         },
       });
     });
+    UserService.invalidateEfficiencyMemoryCaches();
+    return saved;
   }
 
   async listEventMerges() {

@@ -948,18 +948,22 @@ function resolvePaginationWindow(pageRaw?: string, pageSizeRaw?: string): Pagina
 export class UserService {
   private readonly prisma: PrismaReadService;
   private readonly prismaWrite: PrismaService;
-  private globalEfficiencyCache:
-    | {
-        expiresAt: number;
-        data: {
-          weights: { pesoOuro: number; pesoPrata: number; pesoBronze: number };
-          ranking: ClubEfficiencyRow[];
-        };
-      }
-    | null = null;
+  private globalEfficiencyCache = new Map<
+    string,
+    {
+      cacheVersion: number;
+      expiresAt: number;
+      data: {
+        weights: { pesoOuro: number; pesoPrata: number; pesoBronze: number };
+        ranking: ClubEfficiencyRow[];
+        availableYears?: number[];
+      };
+    }
+  >();
   private readonly clubEfficiencyCache = new Map<
     number,
     {
+      cacheVersion: number;
       expiresAt: number;
       data: unknown;
     }
@@ -977,6 +981,11 @@ export class UserService {
       }
     | null = null;
   private static readonly EFFICIENCY_CACHE_TTL_MS = 60_000;
+  private static efficiencyCacheVersion = 0;
+
+  static invalidateEfficiencyMemoryCaches(): void {
+    UserService.efficiencyCacheVersion += 1;
+  }
 
   constructor(
     @Inject(PrismaReadService) prisma: PrismaReadService,
@@ -2974,17 +2983,24 @@ export class UserService {
     ].join("|");
   }
 
-  async listGlobalEfficiency() {
+  async listGlobalEfficiency(year?: number) {
     const now = Date.now();
-    if (this.globalEfficiencyCache && this.globalEfficiencyCache.expiresAt > now) {
-      return this.globalEfficiencyCache.data;
+    const cacheKey = typeof year === "number" ? `year:${year}` : "all";
+    const cacheHit = this.globalEfficiencyCache.get(cacheKey);
+    if (
+      cacheHit &&
+      cacheHit.cacheVersion === UserService.efficiencyCacheVersion &&
+      cacheHit.expiresAt > now
+    ) {
+      return cacheHit.data;
     }
 
-    const data = await this.computeEfficiencyRanking({});
-    this.globalEfficiencyCache = {
+    const data = await this.computeEfficiencyRanking({ year });
+    this.globalEfficiencyCache.set(cacheKey, {
+      cacheVersion: UserService.efficiencyCacheVersion,
       expiresAt: now + UserService.EFFICIENCY_CACHE_TTL_MS,
       data,
-    };
+    });
     return data;
   }
 
@@ -3404,7 +3420,11 @@ export class UserService {
   async getClubEfficiencyCareer(clubId: number) {
     const now = Date.now();
     const cacheHit = this.clubEfficiencyCache.get(clubId);
-    if (cacheHit && cacheHit.expiresAt > now) {
+    if (
+      cacheHit &&
+      cacheHit.cacheVersion === UserService.efficiencyCacheVersion &&
+      cacheHit.expiresAt > now
+    ) {
       return cacheHit.data;
     }
 
@@ -4020,6 +4040,7 @@ export class UserService {
       athletesContribution,
     };
     this.clubEfficiencyCache.set(clubId, {
+      cacheVersion: UserService.efficiencyCacheVersion,
       expiresAt: now + UserService.EFFICIENCY_CACHE_TTL_MS,
       data: response,
     });
