@@ -586,3 +586,52 @@ test("PP-015 T-I-02 ranking global sem ano inclui dataInicio nulo e usa peso por
   assert.equal(result.ranking[0]?.ouro, 2);
   assert.equal(result.ranking[0]?.totalPontuacao, 60);
 });
+
+test("PP-015 T-I-05 carrega versoes de peso uma unica vez por ranking", async () => {
+  let versionFindManyCalls = 0;
+  const prisma = {
+    club: {
+      async findMany() {
+        return [{ id: 1, name: "CLUBE", athletes: [] }];
+      },
+    },
+    athlete: {
+      async findMany() {
+        return [];
+      },
+    },
+    category: {
+      async findMany() {
+        return [];
+      },
+    },
+    event: {
+      async findMany() {
+        return [];
+      },
+    },
+    efficiencyConfigVersion: {
+      async findMany() {
+        versionFindManyCalls += 1;
+        return [
+          {
+            dataInicioVigencia: new Date("2026-01-01T00:00:00.000Z"),
+            dataFimVigencia: null,
+            pesoOuro: 130,
+            pesoPrata: 80,
+            pesoBronze: 50,
+          },
+        ];
+      },
+    },
+  };
+  const service = new UserService(prisma as never, prisma as never) as UserService & {
+    getStateCircuitEligibleClubIds(): Promise<Set<number>>;
+    computeEfficiencyRanking(input: Record<string, never>): Promise<unknown>;
+  };
+  service.getStateCircuitEligibleClubIds = async () => new Set([1]);
+
+  await service.computeEfficiencyRanking({});
+
+  assert.equal(versionFindManyCalls, 1);
+});
