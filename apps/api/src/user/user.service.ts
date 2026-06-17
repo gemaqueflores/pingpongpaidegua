@@ -2988,14 +2988,21 @@ export class UserService {
     return data;
   }
 
-  private async computeEfficiencyRanking(input: { eventIds?: number[] }) {
+  private async computeEfficiencyRanking(input: { eventIds?: number[]; year?: number }) {
     const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
     if (eligibleClubIds.size === 0) {
       return { weights: await this.getEfficiencyWeights(), ranking: [] as ClubEfficiencyRow[] };
     }
 
-    const hasScopedEvents = Array.isArray(input.eventIds) && input.eventIds.length > 0;
-    const eventFilter = hasScopedEvents ? { eventId: { in: input.eventIds } } : {};
+    const scopedEventIds = typeof input.year === "number"
+      ? await this.listEfficiencyEventIdsForYear(input.year, input.eventIds)
+      : input.eventIds;
+    if (typeof input.year === "number" && scopedEventIds.length === 0) {
+      return { weights: await this.getEfficiencyWeights(), ranking: [] as ClubEfficiencyRow[] };
+    }
+
+    const hasScopedEvents = Array.isArray(scopedEventIds) && scopedEventIds.length > 0;
+    const eventFilter = hasScopedEvents ? { eventId: { in: scopedEventIds } } : {};
     const eligibleClubFilter = { clubId: { in: [...eligibleClubIds] } };
     const athleteFilter = {
       ...eventFilter,
@@ -3005,7 +3012,7 @@ export class UserService {
     const categoryFilter =
       hasScopedEvents
         ? {
-            eventId: { in: input.eventIds },
+            eventId: { in: scopedEventIds },
             OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
           }
         : {
@@ -3074,7 +3081,7 @@ export class UserService {
       (
         await this.prisma.event.findMany({
           where: { id: { in: eventIdsForWeights } },
-          select: { id: true, nivel: true, nome: true },
+          select: { id: true, nivel: true, nome: true, dataInicio: true },
         })
       ).map((event) => [event.id, event]),
     );
@@ -3362,6 +3369,29 @@ export class UserService {
     });
 
     return { weights, ranking };
+  }
+
+  private async listEfficiencyEventIdsForYear(year: number, baseEventIds?: number[]): Promise<number[]> {
+    const start = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0));
+    const end = new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0, 0));
+    const where: {
+      id?: { in: number[] };
+      dataInicio: { gte: Date; lt: Date };
+    } = {
+      dataInicio: {
+        gte: start,
+        lt: end,
+      },
+    };
+    if (Array.isArray(baseEventIds) && baseEventIds.length > 0) {
+      where.id = { in: baseEventIds };
+    }
+
+    const events = await this.prisma.event.findMany({
+      where,
+      select: { id: true, dataInicio: true },
+    });
+    return events.map((event) => event.id);
   }
 
   async getClubEfficiencyCareer(clubId: number) {
