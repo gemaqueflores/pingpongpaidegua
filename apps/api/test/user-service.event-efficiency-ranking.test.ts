@@ -278,3 +278,46 @@ test("event efficiency em escopo agregado deduplica atleta individual repetido e
   assert.ok(para);
   assert.equal(para?.athleteCount, 2);
 });
+
+test("PP-015 T-U-01 resolve pesos pela vigencia da data exata", () => {
+  const service = new UserService({} as never, {} as never) as UserService & {
+    resolveEfficiencyWeightsForDate: (
+      versions: Array<{
+        dataInicioVigencia: Date;
+        dataFimVigencia: Date | null;
+        pesoOuro: number;
+        pesoPrata: number;
+        pesoBronze: number;
+      }>,
+      referenceDate: Date,
+    ) => { pesoOuro: number; pesoPrata: number; pesoBronze: number };
+  };
+
+  const versions = [
+    {
+      dataInicioVigencia: new Date("2020-01-01T00:00:00.000Z"),
+      dataFimVigencia: new Date("2025-12-31T23:59:59.999Z"),
+      pesoOuro: 100,
+      pesoPrata: 60,
+      pesoBronze: 30,
+    },
+    {
+      dataInicioVigencia: new Date("2026-01-01T00:00:00.000Z"),
+      dataFimVigencia: null,
+      pesoOuro: 130,
+      pesoPrata: 80,
+      pesoBronze: 50,
+    },
+  ];
+
+  assert.deepEqual(service.resolveEfficiencyWeightsForDate(versions, new Date("2025-06-01T00:00:00.000Z")), {
+    pesoOuro: 100,
+    pesoPrata: 60,
+    pesoBronze: 30,
+  });
+  assert.deepEqual(service.resolveEfficiencyWeightsForDate(versions, new Date("2026-06-01T00:00:00.000Z")), {
+    pesoOuro: 130,
+    pesoPrata: 80,
+    pesoBronze: 50,
+  });
+});
