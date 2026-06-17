@@ -68,6 +68,8 @@ export interface EfficiencyConfig {
   pesoOuro: number;
   pesoPrata: number;
   pesoBronze: number;
+  dataInicioVigencia?: string;
+  dataFimVigencia?: string | null;
 }
 
 export interface AdminEventMergePayload {

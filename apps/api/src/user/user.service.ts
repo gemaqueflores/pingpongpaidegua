@@ -2995,7 +2995,11 @@ export class UserService {
       return cacheHit.data;
     }
 
-    const data = await this.computeEfficiencyRanking({ year });
+    const [rankingData, availableYears] = await Promise.all([
+      this.computeEfficiencyRanking({ year }),
+      this.listEfficiencyAvailableYears(),
+    ]);
+    const data = { ...rankingData, availableYears };
     this.globalEfficiencyCache.set(cacheKey, {
       cacheVersion: UserService.efficiencyCacheVersion,
       expiresAt: now + UserService.EFFICIENCY_CACHE_TTL_MS,
@@ -3416,6 +3420,24 @@ export class UserService {
       select: { id: true, dataInicio: true },
     });
     return events.map((event) => event.id);
+  }
+
+  private async listEfficiencyAvailableYears(): Promise<number[]> {
+    const events = await this.prisma.event.findMany({
+      where: {
+        dataInicio: {
+          not: null,
+        },
+      },
+      select: { dataInicio: true },
+    });
+    const years = new Set<number>();
+    for (const event of events) {
+      if (event.dataInicio) {
+        years.add(event.dataInicio.getUTCFullYear());
+      }
+    }
+    return [...years].sort((left, right) => right - left);
   }
 
   async getClubEfficiencyCareer(clubId: number) {
