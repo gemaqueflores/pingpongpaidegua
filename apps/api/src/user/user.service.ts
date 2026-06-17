@@ -6544,7 +6544,7 @@ export class UserService {
     return DEFAULT_EFFICIENCY_WEIGHTS;
   }
 
-  private async getEfficiencyWeights() {
+  private async getEfficiencyWeights(referenceDate?: Date) {
     let config:
       | {
           pesoOuro: number;
@@ -6552,6 +6552,41 @@ export class UserService {
           pesoBronze: number;
         }
       | null = null;
+
+    try {
+      const prismaWithEfficiencyVersion = this.prisma as unknown as {
+        efficiencyConfigVersion?: {
+          findMany?: (args: {
+            orderBy: { dataInicioVigencia: "asc" };
+            select: {
+              dataInicioVigencia: boolean;
+              dataFimVigencia: boolean;
+              pesoOuro: boolean;
+              pesoPrata: boolean;
+              pesoBronze: boolean;
+            };
+          }) => Promise<EfficiencyConfigVersionLike[]>;
+        };
+      };
+      const versions = await prismaWithEfficiencyVersion.efficiencyConfigVersion?.findMany?.({
+        orderBy: { dataInicioVigencia: "asc" },
+        select: {
+          dataInicioVigencia: true,
+          dataFimVigencia: true,
+          pesoOuro: true,
+          pesoPrata: true,
+          pesoBronze: true,
+        },
+      });
+      if (versions) {
+        if (versions.length === 0) {
+          return DEFAULT_EFFICIENCY_WEIGHTS;
+        }
+        return this.resolveEfficiencyWeightsForDate(versions, referenceDate ?? new Date());
+      }
+    } catch {
+      config = null;
+    }
 
     try {
       const prismaWithEfficiency = this.prisma as unknown as {
