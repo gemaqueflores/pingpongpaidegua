@@ -3035,8 +3035,7 @@ export class UserService {
             OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
           };
 
-    const [weights, efficiencyWeightVersions, clubs, registeredAthletesByClub, categories] = await Promise.all([
-      this.getEfficiencyWeights(),
+    const [efficiencyWeightVersions, clubs, registeredAthletesByClub, categories] = await Promise.all([
       this.loadEfficiencyConfigVersions(),
       this.prisma.club.findMany({
         where: {
@@ -3092,6 +3091,8 @@ export class UserService {
         },
       }),
     ]);
+    const weights = this.resolveEfficiencyWeightsFromLoadedVersions(efficiencyWeightVersions, new Date())
+      ?? await this.getEfficiencyWeights();
 
     const eventIdsForWeights = [...new Set(categories.map((category) => category.eventId))];
     const eventsById = new Map(
@@ -6689,6 +6690,19 @@ export class UserService {
         pesoBronze: true,
       },
     }) ?? null;
+  }
+
+  private resolveEfficiencyWeightsFromLoadedVersions(
+    versions: EfficiencyConfigVersionLike[] | null,
+    referenceDate: Date,
+  ): EfficiencyWeights | null {
+    if (!versions) {
+      return null;
+    }
+    if (versions.length === 0) {
+      return DEFAULT_EFFICIENCY_WEIGHTS;
+    }
+    return this.resolveEfficiencyWeightsForDate(versions, referenceDate);
   }
 
   private resolveOldestEfficiencyVersionDate(versions: EfficiencyConfigVersionLike[]): Date | null {
