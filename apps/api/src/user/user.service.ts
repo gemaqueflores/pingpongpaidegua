@@ -277,6 +277,17 @@ type EfficiencyHistoryMedalist = {
 
 type EfficiencyEventMedalist = EfficiencyHistoryMedalist;
 
+type EfficiencyWeights = {
+  pesoOuro: number;
+  pesoPrata: number;
+  pesoBronze: number;
+};
+
+type EfficiencyConfigVersionLike = EfficiencyWeights & {
+  dataInicioVigencia: Date;
+  dataFimVigencia: Date | null;
+};
+
 type EfficiencyEventLevel = "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN" | null;
 
 type EventCategoryMedalist = {
@@ -6506,6 +6517,28 @@ export class UserService {
       hasPublishedMatches: Boolean(publishedMatch),
       hasPublishedResults: Boolean(publishedResult),
     };
+  }
+
+  private resolveEfficiencyWeightsForDate(
+    versions: EfficiencyConfigVersionLike[],
+    referenceDate: Date,
+  ): EfficiencyWeights {
+    const referenceTime = referenceDate.getTime();
+    const matchingVersion = versions.find((version) => {
+      const startsBeforeReference = version.dataInicioVigencia.getTime() <= referenceTime;
+      const endsAfterReference = !version.dataFimVigencia || version.dataFimVigencia.getTime() >= referenceTime;
+      return startsBeforeReference && endsAfterReference;
+    });
+
+    if (matchingVersion) {
+      return {
+        pesoOuro: matchingVersion.pesoOuro,
+        pesoPrata: matchingVersion.pesoPrata,
+        pesoBronze: matchingVersion.pesoBronze,
+      };
+    }
+
+    return DEFAULT_EFFICIENCY_WEIGHTS;
   }
 
   private async getEfficiencyWeights() {
