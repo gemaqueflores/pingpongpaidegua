@@ -372,6 +372,7 @@ type ScopedEventSummaryMetrics = {
   publishedResultsByEventMap: Map<number, boolean>;
   effectiveCategoryCountByEvent: Map<number, number>;
   metricsByEventId: Map<number, { published: number; calculated: number; wo: number; played: number }>;
+  calibratedByEventId: Map<number, boolean>;
   officialTotalsByEvent: Map<number, OfficialRegistrationTotals>;
   lastScrapeByEventId: Map<number, Date>;
 };
@@ -388,6 +389,7 @@ type ScopedEventSummaryAggregate = {
   groupsDefined: boolean;
   totalPartidasPublicadas: number;
   totalPartidasPrevistas: number;
+  totalPartidasPrevistasFonte: "observada" | "estimada";
   totalPartidasCalculadas: number;
   totalPartidasWo: number;
   totalPartidasJogadas: number;
@@ -740,7 +742,7 @@ function toNonNegativeInt(value: number | null | undefined): number {
   return Math.trunc(parsed);
 }
 
-function computeCategoryMatchMetrics(input: {
+export function computeCategoryMatchMetrics(input: {
   publishedMatchesCount: number | null | undefined;
   calculatedMatchesCount: number | null | undefined;
   walkoverMatchesCount: number | null | undefined;
@@ -751,7 +753,7 @@ function computeCategoryMatchMetrics(input: {
   playedMatchesCount: number;
 } {
   const publishedMatchesCount = toNonNegativeInt(input.publishedMatchesCount);
-  const calculatedMatchesCount = toNonNegativeInt(input.calculatedMatchesCount);
+  const calculatedMatchesCount = Math.max(toNonNegativeInt(input.calculatedMatchesCount), publishedMatchesCount);
   // WO e contabilizado apenas sobre partidas publicadas na categoria.
   const walkoverMatchesCount = Math.min(toNonNegativeInt(input.walkoverMatchesCount), publishedMatchesCount);
   const playedMatchesCount =
@@ -1334,6 +1336,7 @@ export class UserService {
 
     const walkoversByCategoryId = await this.countWalkoversByCategoryIds(allEventIds, categoryIdsForAudit);
     const metricsByEventId = new Map<number, { published: number; calculated: number; wo: number; played: number }>();
+    const calibratedByEventId = new Map<number, boolean>();
     for (const category of categoriesForAudit) {
       const rules = eventRulesByEventId.get(category.eventId) ?? {
         startDate: null,
@@ -1346,8 +1349,12 @@ export class UserService {
         eventStartDate: rules.startDate,
         ratingMatchFormat: rules.ratingMatchFormat,
       });
+      const publishedMatchesCount = publishedByCategoryId.get(category.id) ?? 0;
+      if (publishedMatchesCount > calculatedMatchesCount) {
+        calibratedByEventId.set(category.eventId, true);
+      }
       const categoryMetrics = computeCategoryMatchMetrics({
-        publishedMatchesCount: publishedByCategoryId.get(category.id) ?? 0,
+        publishedMatchesCount,
         calculatedMatchesCount,
         walkoverMatchesCount: walkoversByCategoryId.get(category.id) ?? 0,
       });
@@ -1374,6 +1381,7 @@ export class UserService {
       publishedResultsByEventMap,
       effectiveCategoryCountByEvent,
       metricsByEventId,
+      calibratedByEventId,
       officialTotalsByEvent,
       lastScrapeByEventId,
     };
@@ -1425,6 +1433,11 @@ export class UserService {
       (sum, currentEventId) => sum + (metrics.metricsByEventId.get(currentEventId)?.calculated ?? 0),
       0,
     );
+    const totalPartidasPrevistasFonte: "observada" | "estimada" = allEventIds.some(
+      (currentEventId) => metrics.calibratedByEventId.get(currentEventId) ?? false,
+    )
+      ? "observada"
+      : "estimada";
     const totalPartidasCalculadas = totalPartidasPrevistas;
     const totalPartidasWo = allEventIds.reduce(
       (sum, currentEventId) => sum + (metrics.metricsByEventId.get(currentEventId)?.wo ?? 0),
@@ -1457,6 +1470,7 @@ export class UserService {
       groupsDefined,
       totalPartidasPublicadas,
       totalPartidasPrevistas,
+      totalPartidasPrevistasFonte,
       totalPartidasCalculadas,
       totalPartidasWo,
       totalPartidasJogadas,
@@ -1542,6 +1556,7 @@ export class UserService {
         totalInscritos: aggregate.totalInscritos,
         totalPartidasPublicadas: aggregate.totalPartidasPublicadas,
         totalPartidasPrevistas: aggregate.totalPartidasPrevistas,
+        totalPartidasPrevistasFonte: aggregate.totalPartidasPrevistasFonte,
         totalPartidas: aggregate.totalPartidas,
         totalPartidasCalculadas: aggregate.totalPartidasCalculadas,
         totalPartidasWo: aggregate.totalPartidasWo,
@@ -1576,7 +1591,7 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
-    const cacheKey = this.buildReadModelKey("event-summary-v12", scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey("event-summary-v13", scope.canonicalEventId);
     return this.resolveEventReadModelCache({
       event,
       cacheKey,
@@ -1603,6 +1618,7 @@ export class UserService {
         totalInscritos: 0,
         totalPartidasPublicadas: 0,
         totalPartidasPrevistas: 0,
+        totalPartidasPrevistasFonte: "estimada",
         totalPartidas: 0,
         totalPartidasCalculadas: 0,
         totalPartidasWo: 0,
@@ -1660,6 +1676,7 @@ export class UserService {
           totalInscritos: aggregate.totalInscritos,
           totalPartidasPublicadas: aggregate.totalPartidasPublicadas,
           totalPartidasPrevistas: aggregate.totalPartidasPrevistas,
+          totalPartidasPrevistasFonte: aggregate.totalPartidasPrevistasFonte,
           totalPartidas: aggregate.totalPartidas,
           totalPartidasCalculadas: aggregate.totalPartidasCalculadas,
           totalPartidasWo: aggregate.totalPartidasWo,

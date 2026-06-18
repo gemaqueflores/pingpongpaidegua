@@ -179,6 +179,25 @@ function renderScheduleMatch(match: ScheduleMatch, categoryName?: string) {
   );
 }
 
+function renderExpectedMatchesMetric(
+  event: Pick<EventRow, "totalPartidasPrevistas" | "totalPartidasCalculadas" | "totalPartidas" | "totalPartidasPrevistasFonte"> | null,
+) {
+  const expectedMatches = String(event?.totalPartidasPrevistas ?? event?.totalPartidasCalculadas ?? event?.totalPartidas ?? 0);
+  const isObserved = event?.totalPartidasPrevistasFonte === "observada";
+
+  return (
+    <span className="event-metric-card">
+      <small>
+        Partidas Previstas
+        {isObserved ? (
+          <span title="Valor calibrado por resultados publicados"> calibrado por resultados publicados</span>
+        ) : null}
+      </small>
+      <strong>{expectedMatches}</strong>
+    </span>
+  );
+}
+
 function inferEventType(name: string): "ESTADUAL" | "COPA" | "BRASILEIRAO" | "OPEN" {
   const normalized = name
     .normalize("NFD")
@@ -623,7 +642,7 @@ export default function EventDetailPage() {
             <span className="event-metric-card"><small>Atletas</small><strong>{String(event?.totalInscritos ?? 0)}</strong></span>
             <span className="event-metric-card"><small>Categorias</small><strong>{String(event?.totalCategorias ?? 0)}</strong></span>
             <span className="event-metric-card"><small>Inscrições</small><strong>{String(event?.associacoesAtletaCategoria ?? event?.inscricoesTotaisOficiais ?? event?.totalInscritos ?? 0)}</strong></span>
-            <span className="event-metric-card"><small>Partidas Previstas</small><strong>{String(event?.totalPartidasPrevistas ?? event?.totalPartidasCalculadas ?? event?.totalPartidas ?? 0)}</strong></span>
+            {renderExpectedMatchesMetric(event)}
             <span className="event-metric-card"><small>Partidas</small><strong>{String(event?.totalPartidasJogadas ?? event?.totalPartidas ?? 0)}</strong></span>
             <span className="event-metric-card"><small>WO</small><strong>{String(event?.totalPartidasWo ?? 0)}</strong></span>
           </div> : null}
@@ -1055,7 +1074,7 @@ export default function EventDetailPage() {
   );
 }
 
-const __testables = { compareScheduleMatches, renderScheduleMatch };
+const __testables = { compareScheduleMatches, renderScheduleMatch, renderExpectedMatchesMetric };
 
 (EventDetailPage as typeof EventDetailPage & { __testables: typeof __testables }).__testables = __testables;
 
