@@ -28,11 +28,6 @@ jobs:
   deploy-backend:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      DEPLOY_SERVICE: ${{ inputs.service }}
-      DEPLOY_EVENT_ID: ${{ inputs.event_id }}
-      DEPLOY_REF: ${{ github.ref_name }}
-      DEPLOY_SHA: ${{ github.sha }}
 
     steps:
       - name: Validar secrets de SSH e inputs
@@ -44,6 +39,10 @@ jobs:
           ORACLE_SSH_PORT: ${{ secrets.ORACLE_SSH_PORT }}
         run: |
           set -euo pipefail
+          DEPLOY_SERVICE="${{ inputs.service }}"
+          DEPLOY_EVENT_ID="${{ inputs.event_id }}"
+          DEPLOY_REF="${{ github.ref_name }}"
+          DEPLOY_SHA="${{ github.sha }}"
           missing=()
 
           [ -n "$ORACLE_SSH_HOST" ] || missing+=("ORACLE_SSH_HOST")
@@ -81,11 +80,6 @@ jobs:
 
       - name: Deploy remoto na VM Oracle
         uses: appleboy/ssh-action@v1.2.0
-        env:
-          DEPLOY_SERVICE: ${{ env.DEPLOY_SERVICE }}
-          DEPLOY_EVENT_ID: ${{ env.DEPLOY_EVENT_ID }}
-          DEPLOY_REF: ${{ env.DEPLOY_REF }}
-          DEPLOY_SHA: ${{ env.DEPLOY_SHA }}
         with:
           host: ${{ secrets.ORACLE_SSH_HOST }}
           username: ${{ secrets.ORACLE_SSH_USER }}
@@ -93,9 +87,12 @@ jobs:
           port: ${{ secrets.ORACLE_SSH_PORT || 22 }}
           command_timeout: 60m
           script_stop: true
-          envs: DEPLOY_SERVICE,DEPLOY_EVENT_ID,DEPLOY_REF,DEPLOY_SHA
           script: |
             set -eo pipefail
+            DEPLOY_SERVICE="${{ inputs.service }}"
+            DEPLOY_EVENT_ID="${{ inputs.event_id }}"
+            DEPLOY_REF="${{ github.ref_name }}"
+            DEPLOY_SHA="${{ github.sha }}"
             APP_DIR="${{ secrets.ORACLE_APP_DIR }}"
             if [ -z "$APP_DIR" ]; then
               APP_DIR="$HOME/pingpongpaidegua"
