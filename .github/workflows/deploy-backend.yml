@@ -33,7 +33,6 @@ jobs:
       DEPLOY_EVENT_ID: ${{ inputs.event_id }}
       DEPLOY_REF: ${{ github.ref_name }}
       DEPLOY_SHA: ${{ github.sha }}
-      DEPLOY_GITHUB_TOKEN: ${{ github.token }}
 
     steps:
       - name: Validar secrets de SSH e inputs
@@ -87,7 +86,6 @@ jobs:
           DEPLOY_EVENT_ID: ${{ env.DEPLOY_EVENT_ID }}
           DEPLOY_REF: ${{ env.DEPLOY_REF }}
           DEPLOY_SHA: ${{ env.DEPLOY_SHA }}
-          DEPLOY_GITHUB_TOKEN: ${{ env.DEPLOY_GITHUB_TOKEN }}
         with:
           host: ${{ secrets.ORACLE_SSH_HOST }}
           username: ${{ secrets.ORACLE_SSH_USER }}
@@ -95,7 +93,7 @@ jobs:
           port: ${{ secrets.ORACLE_SSH_PORT || 22 }}
           command_timeout: 60m
           script_stop: true
-          envs: DEPLOY_SERVICE,DEPLOY_EVENT_ID,DEPLOY_REF,DEPLOY_SHA,DEPLOY_GITHUB_TOKEN
+          envs: DEPLOY_SERVICE,DEPLOY_EVENT_ID,DEPLOY_REF,DEPLOY_SHA
           script: |
             set -eo pipefail
             APP_DIR="${{ secrets.ORACLE_APP_DIR }}"
@@ -153,7 +151,7 @@ jobs:
             fi
 
             git remote set-url origin https://github.com/gemaqueflores/pingpongpaidegua.git
-            auth_header="$(printf 'x-access-token:%s' "$DEPLOY_GITHUB_TOKEN" | base64 | tr -d '\n')"
+            auth_header="$(printf 'x-access-token:%s' '${{ github.token }}' | base64 | tr -d '\n')"
             git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" fetch origin "$DEPLOY_REF"
             git checkout -B "$DEPLOY_REF" FETCH_HEAD
 
