@@ -751,7 +751,7 @@ export function computeCategoryMatchMetrics(input: {
   playedMatchesCount: number;
 } {
   const publishedMatchesCount = toNonNegativeInt(input.publishedMatchesCount);
-  const calculatedMatchesCount = toNonNegativeInt(input.calculatedMatchesCount);
+  const calculatedMatchesCount = Math.max(toNonNegativeInt(input.calculatedMatchesCount), publishedMatchesCount);
   // WO e contabilizado apenas sobre partidas publicadas na categoria.
   const walkoverMatchesCount = Math.min(toNonNegativeInt(input.walkoverMatchesCount), publishedMatchesCount);
   const playedMatchesCount =
