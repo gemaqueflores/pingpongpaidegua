@@ -78,6 +78,160 @@ jobs:
 
           echo "Pre-check OK para service=$DEPLOY_SERVICE event_id=$DEPLOY_EVENT_ID ref=$DEPLOY_REF sha=$DEPLOY_SHA."
 
+      - name: Preparar script remoto
+        id: remote_script
+        env:
+          DEPLOY_SERVICE: ${{ inputs.service }}
+          DEPLOY_EVENT_ID: ${{ inputs.event_id }}
+          DEPLOY_REF: ${{ github.ref_name }}
+          DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_GITHUB_TOKEN: ${{ github.token }}
+          ORACLE_APP_DIR: ${{ secrets.ORACLE_APP_DIR }}
+        run: |
+          set -euo pipefail
+          remote_script="$RUNNER_TEMP/deploy-backend-remote.sh"
+          cat > "$remote_script" <<'REMOTE_SCRIPT'
+          set -eo pipefail
+          DEPLOY_SERVICE=__DEPLOY_SERVICE_SH__
+          DEPLOY_EVENT_ID=__DEPLOY_EVENT_ID_SH__
+          DEPLOY_REF=__DEPLOY_REF_SH__
+          DEPLOY_SHA=__DEPLOY_SHA_SH__
+          APP_DIR=__ORACLE_APP_DIR_SH__
+          if [ -z "$APP_DIR" ]; then
+            APP_DIR="$HOME/pingpongpaidegua"
+          fi
+          export COMPOSE_PROJECT_NAME="pingpongpaidegua"
+
+          case "$DEPLOY_SERVICE" in
+            api)
+              SERVICES="api"
+              UNSELECTED_SERVICE="worker"
+              ;;
+            worker)
+              SERVICES="worker"
+              UNSELECTED_SERVICE="api"
+              ;;
+            both)
+              SERVICES="api worker"
+              UNSELECTED_SERVICE=""
+              ;;
+            *)
+              echo "Input service invalido: $DEPLOY_SERVICE"
+              exit 1
+              ;;
+          esac
+
+          if ! echo "$DEPLOY_EVENT_ID" | grep -Eq '^[0-9]+$'; then
+            echo "Input event_id deve conter apenas digitos."
+            exit 1
+          fi
+
+          cd "$APP_DIR"
+          echo "Diretorio da aplicacao: $APP_DIR"
+          echo "Deploy solicitado: service=$DEPLOY_SERVICE ref=$DEPLOY_REF sha=$DEPLOY_SHA event_id=$DEPLOY_EVENT_ID"
+
+          if command -v docker >/dev/null 2>&1; then
+            if command -v docker-compose >/dev/null 2>&1; then
+              COMPOSE_BIN="docker-compose -p $COMPOSE_PROJECT_NAME"
+            elif docker compose version >/dev/null 2>&1; then
+              COMPOSE_BIN="docker compose -p $COMPOSE_PROJECT_NAME"
+            else
+              echo "Docker Compose nao encontrado na VM."
+              exit 1
+            fi
+          else
+            echo "Docker nao encontrado na VM."
+            exit 1
+          fi
+
+          if ! git diff --quiet || ! git diff --cached --quiet; then
+            echo "Working tree da VM contem alteracoes locais; deploy bloqueado para evitar sobrescrita."
+            git status --short
+            exit 1
+          fi
+
+          git remote set-url origin https://github.com/gemaqueflores/pingpongpaidegua.git
+          auth_header="$(printf 'x-access-token:%s' __DEPLOY_GITHUB_TOKEN_SH__ | base64 | tr -d '\n')"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" fetch origin "$DEPLOY_REF"
+          git checkout -B "$DEPLOY_REF" FETCH_HEAD
+
+          current_sha="$(git rev-parse HEAD)"
+          echo "Commit na VM apos fetch: $current_sha"
+          if [ "$current_sha" != "$DEPLOY_SHA" ]; then
+            echo "Commit da VM ($current_sha) difere do commit esperado ($DEPLOY_SHA)."
+            exit 1
+          fi
+
+          api_before="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME}-api-1" 2>/dev/null || true)"
+          worker_before="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME}-worker-1" 2>/dev/null || true)"
+          echo "Container antes: api=${api_before:-absent} worker=${worker_before:-absent}"
+
+          $COMPOSE_BIN build $SERVICES
+          $COMPOSE_BIN up -d --no-deps $SERVICES
+
+          wait_service() {
+            service_name="$1"
+            container_name="${COMPOSE_PROJECT_NAME}-${service_name}-1"
+            attempts=45
+            attempt=1
+            while [ "$attempt" -le "$attempts" ]; do
+              health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_name" 2>/dev/null || true)"
+              echo "Status $service_name tentativa $attempt/$attempts: ${health:-indisponivel}"
+              if [ "$health" = "healthy" ] || { [ "$service_name" = "worker" ] && [ "$health" = "running" ]; }; then
+                return 0
+              fi
+              sleep 2
+              attempt=$((attempt + 1))
+            done
+            echo "Servico $service_name nao ficou saudavel/em execucao no tempo esperado."
+            return 1
+          }
+
+          for service_name in $SERVICES; do
+            wait_service "$service_name"
+          done
+
+          api_after="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME}-api-1" 2>/dev/null || true)"
+          worker_after="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME}-worker-1" 2>/dev/null || true)"
+          echo "Container depois: api=${api_after:-absent} worker=${worker_after:-absent}"
+          if [ "$UNSELECTED_SERVICE" = "api" ] && [ "$api_before" != "$api_after" ]; then
+            echo "Servico api nao selecionado foi recriado."
+            exit 1
+          fi
+          if [ "$UNSELECTED_SERVICE" = "worker" ] && [ "$worker_before" != "$worker_after" ]; then
+            echo "Servico worker nao selecionado foi recriado."
+            exit 1
+          fi
+
+          $COMPOSE_BIN ps
+          curl -fsS http://localhost:4000/ >/dev/null
+          curl -fsS "http://localhost:4000/events/$DEPLOY_EVENT_ID" | python3 -m json.tool >/dev/null
+          echo "Smoke check OK: commit=$current_sha service=$DEPLOY_SERVICE event_id=$DEPLOY_EVENT_ID"
+          REMOTE_SCRIPT
+
+          python3 - <<'PY'
+          import os
+          import shlex
+          from pathlib import Path
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "deploy-backend-remote.sh"
+          content = path.read_text(encoding="utf-8")
+          replacements = {
+              "__DEPLOY_SERVICE_SH__": shlex.quote(os.environ["DEPLOY_SERVICE"]),
+              "__DEPLOY_EVENT_ID_SH__": shlex.quote(os.environ["DEPLOY_EVENT_ID"]),
+              "__DEPLOY_REF_SH__": shlex.quote(os.environ["DEPLOY_REF"]),
+              "__DEPLOY_SHA_SH__": shlex.quote(os.environ["DEPLOY_SHA"]),
+              "__DEPLOY_GITHUB_TOKEN_SH__": shlex.quote(os.environ["DEPLOY_GITHUB_TOKEN"]),
+              "__ORACLE_APP_DIR_SH__": shlex.quote(os.environ.get("ORACLE_APP_DIR", "")),
+          }
+          for placeholder, value in replacements.items():
+              content = content.replace(placeholder, value)
+          path.write_text(content, encoding="utf-8")
+          PY
+
+          payload="$(base64 -w0 "$remote_script")"
+          printf 'payload=%s\n' "$payload" >> "$GITHUB_OUTPUT"
+
       - name: Deploy remoto na VM Oracle
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -88,119 +242,4 @@ jobs:
           command_timeout: 60m
           script_stop: true
           script: |
-            set -eo pipefail
-            DEPLOY_SERVICE="${{ inputs.service }}"
-            DEPLOY_EVENT_ID="${{ inputs.event_id }}"
-            DEPLOY_REF="${{ github.ref_name }}"
-            DEPLOY_SHA="${{ github.sha }}"
-            APP_DIR="${{ secrets.ORACLE_APP_DIR }}"
-            if [ -z "$APP_DIR" ]; then
-              APP_DIR="$HOME/pingpongpaidegua"
-            fi
-            export COMPOSE_PROJECT_NAME="pingpongpaidegua"
-
-            case "$DEPLOY_SERVICE" in
-              api)
-                SERVICES="api"
-                UNSELECTED_SERVICE="worker"
-                ;;
-              worker)
-                SERVICES="worker"
-                UNSELECTED_SERVICE="api"
-                ;;
-              both)
-                SERVICES="api worker"
-                UNSELECTED_SERVICE=""
-                ;;
-              *)
-                echo "Input service invalido: $DEPLOY_SERVICE"
-                exit 1
-                ;;
-            esac
-
-            if ! echo "$DEPLOY_EVENT_ID" | grep -Eq '^[0-9]+$'; then
-              echo "Input event_id deve conter apenas digitos."
-              exit 1
-            fi
-
-            cd "$APP_DIR"
-            echo "Diretorio da aplicacao: $APP_DIR"
-            echo "Deploy solicitado: service=$DEPLOY_SERVICE ref=$DEPLOY_REF sha=$DEPLOY_SHA event_id=$DEPLOY_EVENT_ID"
-
-            if command -v docker >/dev/null 2>&1; then
-              if command -v docker-compose >/dev/null 2>&1; then
-                COMPOSE_BIN="docker-compose -p $COMPOSE_PROJECT_NAME"
-              elif docker compose version >/dev/null 2>&1; then
-                COMPOSE_BIN="docker compose -p $COMPOSE_PROJECT_NAME"
-              else
-                echo "Docker Compose nao encontrado na VM."
-                exit 1
-              fi
-            else
-              echo "Docker nao encontrado na VM."
-              exit 1
-            fi
-
-            if ! git diff --quiet || ! git diff --cached --quiet; then
-              echo "Working tree da VM contem alteracoes locais; deploy bloqueado para evitar sobrescrita."
-              git status --short
-              exit 1
-            fi
-
-            git remote set-url origin https://github.com/gemaqueflores/pingpongpaidegua.git
-            auth_header="$(printf 'x-access-token:%s' '${{ github.token }}' | base64 | tr -d '\n')"
-            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" fetch origin "$DEPLOY_REF"
-            git checkout -B "$DEPLOY_REF" FETCH_HEAD
-
-            current_sha="$(git rev-parse HEAD)"
-            echo "Commit na VM apos fetch: $current_sha"
-            if [ "$current_sha" != "$DEPLOY_SHA" ]; then
-              echo "Commit da VM ($current_sha) difere do commit esperado ($DEPLOY_SHA)."
-              exit 1
-            fi
-
-            api_before="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME}-api-1" 2>/dev/null || true)"
-            worker_before="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME}-worker-1" 2>/dev/null || true)"
-            echo "Container antes: api=${api_before:-absent} worker=${worker_before:-absent}"
-
-            $COMPOSE_BIN build $SERVICES
-            $COMPOSE_BIN up -d --no-deps $SERVICES
-
-            wait_service() {
-              service_name="$1"
-              container_name="${COMPOSE_PROJECT_NAME}-${service_name}-1"
-              attempts=45
-              attempt=1
-              while [ "$attempt" -le "$attempts" ]; do
-                health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_name" 2>/dev/null || true)"
-                echo "Status $service_name tentativa $attempt/$attempts: ${health:-indisponivel}"
-                if [ "$health" = "healthy" ] || { [ "$service_name" = "worker" ] && [ "$health" = "running" ]; }; then
-                  return 0
-                fi
-                sleep 2
-                attempt=$((attempt + 1))
-              done
-              echo "Servico $service_name nao ficou saudavel/em execucao no tempo esperado."
-              return 1
-            }
-
-            for service_name in $SERVICES; do
-              wait_service "$service_name"
-            done
-
-            api_after="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME}-api-1" 2>/dev/null || true)"
-            worker_after="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME}-worker-1" 2>/dev/null || true)"
-            echo "Container depois: api=${api_after:-absent} worker=${worker_after:-absent}"
-            if [ "$UNSELECTED_SERVICE" = "api" ] && [ "$api_before" != "$api_after" ]; then
-              echo "Servico api nao selecionado foi recriado."
-              exit 1
-            fi
-            if [ "$UNSELECTED_SERVICE" = "worker" ] && [ "$worker_before" != "$worker_after" ]; then
-              echo "Servico worker nao selecionado foi recriado."
-              exit 1
-            fi
-
-            $COMPOSE_BIN ps
-            curl -fsS http://localhost:4000/ >/dev/null
-            curl -fsS "http://localhost:4000/events/$DEPLOY_EVENT_ID" | python3 -m json.tool >/dev/null
-            echo "Smoke check OK: commit=$current_sha service=$DEPLOY_SERVICE event_id=$DEPLOY_EVENT_ID"
+            remote_script_path="/tmp/deploy-backend-${{ github.run_id }}.sh"; printf '%s' '${{ steps.remote_script.outputs.payload }}' | base64 -d > "$remote_script_path"; chmod 700 "$remote_script_path"; bash "$remote_script_path"; status="$?"; rm -f "$remote_script_path"; exit "$status"
