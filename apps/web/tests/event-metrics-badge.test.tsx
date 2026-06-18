@@ -28,3 +28,20 @@ test("PP-016 T-U-04 badge de partidas previstas exibe indicador quando fonte e o
   assert.match(html, /Partidas Previstas/);
   assert.match(html, /calibrado por resultados publicados/);
 });
+
+test("PP-016 T-U-05 badge de partidas previstas omite indicador quando fonte e estimada ou ausente", () => {
+  const estimatedHtml = renderToStaticMarkup(
+    __testables.renderExpectedMatchesMetric({
+      totalPartidasPrevistas: 6,
+      totalPartidasPrevistasFonte: "estimada",
+    }),
+  );
+  const missingSourceHtml = renderToStaticMarkup(
+    __testables.renderExpectedMatchesMetric({
+      totalPartidasPrevistas: 6,
+    }),
+  );
+
+  assert.doesNotMatch(estimatedHtml, /calibrado por resultados publicados/);
+  assert.doesNotMatch(missingSourceHtml, /calibrado por resultados publicados/);
+});
