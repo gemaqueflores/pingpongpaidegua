@@ -388,6 +388,7 @@ type ScopedEventSummaryAggregate = {
   groupsDefined: boolean;
   totalPartidasPublicadas: number;
   totalPartidasPrevistas: number;
+  totalPartidasPrevistasFonte: "observada" | "estimada";
   totalPartidasCalculadas: number;
   totalPartidasWo: number;
   totalPartidasJogadas: number;
@@ -1425,6 +1426,7 @@ export class UserService {
       (sum, currentEventId) => sum + (metrics.metricsByEventId.get(currentEventId)?.calculated ?? 0),
       0,
     );
+    const totalPartidasPrevistasFonte: "observada" | "estimada" = "estimada";
     const totalPartidasCalculadas = totalPartidasPrevistas;
     const totalPartidasWo = allEventIds.reduce(
       (sum, currentEventId) => sum + (metrics.metricsByEventId.get(currentEventId)?.wo ?? 0),
@@ -1457,6 +1459,7 @@ export class UserService {
       groupsDefined,
       totalPartidasPublicadas,
       totalPartidasPrevistas,
+      totalPartidasPrevistasFonte,
       totalPartidasCalculadas,
       totalPartidasWo,
       totalPartidasJogadas,
@@ -1542,6 +1545,7 @@ export class UserService {
         totalInscritos: aggregate.totalInscritos,
         totalPartidasPublicadas: aggregate.totalPartidasPublicadas,
         totalPartidasPrevistas: aggregate.totalPartidasPrevistas,
+        totalPartidasPrevistasFonte: aggregate.totalPartidasPrevistasFonte,
         totalPartidas: aggregate.totalPartidas,
         totalPartidasCalculadas: aggregate.totalPartidasCalculadas,
         totalPartidasWo: aggregate.totalPartidasWo,
@@ -1603,6 +1607,7 @@ export class UserService {
         totalInscritos: 0,
         totalPartidasPublicadas: 0,
         totalPartidasPrevistas: 0,
+        totalPartidasPrevistasFonte: "estimada",
         totalPartidas: 0,
         totalPartidasCalculadas: 0,
         totalPartidasWo: 0,
@@ -1660,6 +1665,7 @@ export class UserService {
           totalInscritos: aggregate.totalInscritos,
           totalPartidasPublicadas: aggregate.totalPartidasPublicadas,
           totalPartidasPrevistas: aggregate.totalPartidasPrevistas,
+          totalPartidasPrevistasFonte: aggregate.totalPartidasPrevistasFonte,
           totalPartidas: aggregate.totalPartidas,
           totalPartidasCalculadas: aggregate.totalPartidasCalculadas,
           totalPartidasWo: aggregate.totalPartidasWo,
