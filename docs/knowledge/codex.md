@@ -2,7 +2,8 @@
 
 ## Padrões de falha
 
-_(nenhum registrado até o momento)_
+### 2026-06-15 — PR #12 — Token GitHub hardcoded em AGENTS.md
+`AGENTS.md` continha `ghp_[redacted]` literal — achado A02 OWASP (segredo em repositório versionado). Corrigido no próprio PR para `$env:GITHUB_TOKEN`. Padrão a vigiar: nunca incluir tokens/segredos em arquivos versionados, mesmo em AGENTS.md ou CLAUDE.md.
 
 ## Padrões de sucesso
 
@@ -53,6 +54,9 @@ Red-Green por T-* não executado: Codex entregou dois commits (`test:` + `fix:`)
 
 ### 2026-05-22 — PP-003 + PP-004 — Red-Green por commit único de spec (segundo caso)
 Codex entregou Red-Green em commit único por spec (`test: PP-003 PP-004 red` / `refactor: PP-003 PP-004 green`) em vez de um ciclo por T-*. Segundo caso consecutivo. Aceito sem bloqueio (padrão análogo ao PP-001/PP-002). **Padrão emergente:** Codex não executa ciclo T-* individual em refactors/extrações de código — agrupa todos os T-* no mesmo red/green. Candidato a nota no contrato se ocorrer terceira vez.
+
+### 2026-06-13 — PP-008 — entrega sem commits (implementação local não commitada) — CORRIGIDO
+Codex entregou parser com implementação funcionalmente correta e testes passando localmente (33 passed declarados), mas sem nenhum commit criado na branch `fix/pp-008-parser-duplas`. Ambos `packages/parser/src/index.ts` (modificado) e `packages/parser/test/doubles-parser.test.ts` (novo) estavam não-commitados. Segunda ocorrência de ausência de Red-Green em parser. Após ❌ do parecer, Codex recriou ciclo Red-Green completo (T-U-01 a T-U-06) com hashes separados por T-*, mais T-U-06 extra cobrindo edge de tabela com 3 linhas. PR #13 mergeado em 2026-06-15. **Padrão "implementa localmente sem commitar" ocorreu em 2 entregas de parser (PP-006 e PP-008 rodada 1). Candidato a Classe E se ocorrer terceira vez.**
 
 ### 2026-05-22 — PP-001 — T-U-01 e T-U-02 não implementados
 Tests unitários do CORS (`isOriginAllowed`) previstos na spec PP-001 não foram entregues. Verificação via curl (T-I-01) não foi documentada formalmente no relatório. Ponto de atenção para próximas specs de API: ser explícito sobre "arquivo de teste existente ou criar novo".

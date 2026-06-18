@@ -54,6 +54,21 @@ Exceção única: em ciclo Red-Green formal, um commit RED pode usar `--no-verif
 
 ---
 
+## Fonte de Verdade por Tipo de Evidência
+
+| Tipo de evidência | Fonte autoritativa | Nunca usar como fonte |
+|---|---|---|
+| Código de produção / histórico de PR | GitHub (`gemaqueflores/appcbtmeventos`, `mcp__github__*`) | Memória de sessão, declaração de implementação sem `Read` |
+| Estado do servidor de produção (nginx, certbot, containers) | SSH Oracle Cloud (`129.213.86.180`, MCP `ssh-oracle`) — Codex executa, Claude formula comandos | Suposição sobre config de produção sem comando executado |
+| Dados oficiais CBTM (categorias, regras, tabelas de torneio) | Site oficial CBTM / documento exportado fornecido por Leo | Inferência por analogia com outro evento ou regra "lembrada" |
+| Estado do banco (linhas, schema aplicado) | PostgreSQL/Prisma — query real (local ou produção conforme o que se está validando) | Schema do `.prisma` sem migration aplicada confirmada |
+| Dados extraídos por scraping (parser de duplas, resultados) | HTML bruto salvo/logado no momento da extração | Tela renderizada lembrada ou inferida sem o HTML de origem |
+
+Conflito entre fontes (ex.: Git diz uma coisa, Oracle Cloud mostra outra em produção): declarar o conflito a
+Leo antes de formar parecer ou Spec — não escolher uma fonte por suposição de qual está "mais atualizada".
+
+---
+
 ## Domínios E Arquivos-Chave
 
 | Domínio | Arquivo principal | Observação |

@@ -269,3 +269,25 @@ Ao final: npm run test --workspace @cbtm/parser (suite completa)
 - npm run build --workspace apps-api verde (parser é dependência)
 - npm run verify:encoding
 ```
+
+---
+
+## Correções obrigatórias — Parecer 2026-06-13
+
+### ❌ Q12 — Red-Green-Refactor não existe no Git
+
+**Estado atual:** worktree `fix/pp-008-parser-duplas` com `HEAD = f82d7ee` (base main). As modificações em `packages/parser/src/index.ts` estão unstaged e `packages/parser/test/doubles-parser.test.ts` está untracked. Nenhum commit foi criado.
+
+**Correção obrigatória:**
+1. Criar commits com ciclo Red-Green por T-*, nesta ordem para T-U-01 a T-U-05:
+   - `test(parser): T-U-0N red — <desc>` — apenas o teste; produção intacta; suite deve falhar com erro coerente (não SyntaxError)
+   - `fix(parser): T-U-0N green — <desc>` — código mínimo que faz o T-U-0N passar
+2. Confirmar que o pre-commit hook estava ativo em cada commit (sem `--no-verify`)
+3. Ao final: `npm run test --workspace @cbtm/parser` verde completo + log no relatório de entrega
+4. Abrir PR
+
+**Estratégia para recriar o ciclo:** como o código de produção já está implementado localmente, usar `git stash` para guardar o estado atual, criar commits Red por T-* (apenas testes), depois desempacotar stash progressivamente por T-* para os commits Green.
+
+### ❌ Q10 — Pre-commit hook não verificável
+
+Consequência direta do Q12: sem commits, o hook nunca foi exercido. Será resolvido automaticamente ao criar os commits acima.

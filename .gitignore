@@ -35,6 +35,10 @@ tmp_*.json
 tmp_*.html
 tmp_*.py
 tmp_*.txt
+tmp_*.png
+
+# Local MCP/browser artifacts
+.playwright-mcp/
 
 # Local private keys and secrets
 .local-secrets/
