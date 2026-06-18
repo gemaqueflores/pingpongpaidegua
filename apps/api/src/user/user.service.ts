@@ -740,7 +740,7 @@ function toNonNegativeInt(value: number | null | undefined): number {
   return Math.trunc(parsed);
 }
 
-function computeCategoryMatchMetrics(input: {
+export function computeCategoryMatchMetrics(input: {
   publishedMatchesCount: number | null | undefined;
   calculatedMatchesCount: number | null | undefined;
   walkoverMatchesCount: number | null | undefined;
