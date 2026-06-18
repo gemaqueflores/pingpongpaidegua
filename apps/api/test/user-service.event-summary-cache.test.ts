@@ -7,6 +7,12 @@ function createServiceHarness(
     publishedMatchesCount?: number;
     eventMetrics?: Array<{ eventId: number; categoryId: number; cbtmCategoryId: number; published: number }>;
     scopeEventIds?: number[];
+    cachedRecord?: {
+      key: string;
+      sourceScrapeRunId: number | null;
+      payload: unknown;
+      updatedAt: Date;
+    };
   } = {},
 ) {
   const eventMetrics = options.eventMetrics ?? [
@@ -25,7 +31,7 @@ function createServiceHarness(
         payload: unknown;
         updatedAt: Date;
       }
-    | null = null;
+    | null = options.cachedRecord ?? null;
   let categoryFindManyCalls = 0;
 
   const prismaRead = {
@@ -180,6 +186,7 @@ function createServiceHarness(
   return {
     service,
     getCategoryFindManyCalls: () => categoryFindManyCalls,
+    getCachedRecord: () => cachedRecord,
   };
 }
 
@@ -224,6 +231,22 @@ test("PP-016 T-I-03 event summary agregado usa fonte observada quando filho foi 
   const summary = await harness.service.getEventSummary(1);
 
   assert.equal(summary.totalPartidasPrevistasFonte, "observada");
+});
+
+test("PP-016 T-I-04 event summary usa cache v13 e ignora payload v12 sem fonte", async () => {
+  const harness = createServiceHarness({
+    cachedRecord: {
+      key: "event-summary-v12|event:1",
+      sourceScrapeRunId: 99,
+      payload: { id: 1, totalPartidasPrevistas: 6 },
+      updatedAt: new Date("2026-03-09T10:00:00.000Z"),
+    },
+  });
+
+  const summary = await harness.service.getEventSummary(1);
+
+  assert.equal(summary.totalPartidasPrevistasFonte, "estimada");
+  assert.equal(harness.getCachedRecord()?.key, "event-summary-v13|event:1");
 });
 
 test("event list e event summary usam a mesma agregacao para o mesmo evento", async () => {
