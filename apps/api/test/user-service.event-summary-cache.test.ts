@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { UserService } from "../src/user/user.service";
 
-function createServiceHarness() {
+function createServiceHarness(options: { publishedMatchesCount?: number } = {}) {
+  const publishedMatchesCount = options.publishedMatchesCount ?? 5;
   let cachedRecord:
     | {
         key: string;
@@ -35,16 +36,16 @@ function createServiceHarness() {
     match: {
       async groupBy(args: { by: string[]; where?: Record<string, unknown> }) {
         if (args.by[0] === "categoryId") {
-          return [{ categoryId: 10, _count: { _all: 5 } }];
+          return [{ categoryId: 10, _count: { _all: publishedMatchesCount } }];
         }
         const whereText = JSON.stringify(args.where ?? {});
         if (whereText.includes('"winnerIndex"') || whereText.includes('"p1Sets"') || whereText.includes('"p2Sets"')) {
-          return [{ eventId: 1, _count: { _all: 5 } }];
+          return [{ eventId: 1, _count: { _all: publishedMatchesCount } }];
         }
         if (whereText.toLowerCase().includes("grupo")) {
           return [{ eventId: 1, _count: { _all: 2 } }];
         }
-        return [{ eventId: 1, _count: { _all: 5 } }];
+        return [{ eventId: 1, _count: { _all: publishedMatchesCount } }];
       },
     },
     event: {
@@ -175,6 +176,15 @@ test("event summary persiste read model e reutiliza cache valido no mesmo scrape
   const second = await harness.service.getEventSummary(1);
   assert.deepEqual(second, first);
   assert.equal(harness.getCategoryFindManyCalls(), categoryCallsAfterFirst);
+});
+
+test("PP-016 T-I-02 event summary usa fonte observada quando publicado supera teorico", async () => {
+  const harness = createServiceHarness({ publishedMatchesCount: 9 });
+
+  const summary = await harness.service.getEventSummary(1);
+
+  assert.equal(summary.totalPartidasPrevistas, 9);
+  assert.equal(summary.totalPartidasPrevistasFonte, "observada");
 });
 
 test("event list e event summary usam a mesma agregacao para o mesmo evento", async () => {
