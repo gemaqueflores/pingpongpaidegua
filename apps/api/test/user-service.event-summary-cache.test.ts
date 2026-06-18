@@ -164,6 +164,7 @@ test("event summary persiste read model e reutiliza cache valido no mesmo scrape
   assert.equal(first.totalCategorias, 1);
   assert.equal(first.totalInscritos, 4);
   assert.equal(first.totalPartidasPrevistas, 6);
+  assert.equal(first.totalPartidasPrevistasFonte, "estimada");
   assert.equal(first.totalPartidasPublicadas, 5);
   assert.equal(first.totalPartidasWo, 1);
   assert.equal(first.totalPartidasJogadas, 4);
