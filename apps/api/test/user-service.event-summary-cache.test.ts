@@ -195,6 +195,72 @@ test("event list e event summary usam a mesma agregacao para o mesmo evento", as
   assert.equal(listEntry.participantesUnicos, summary.participantesUnicos);
 });
 
+test("escopo de evento agregado inclui filhos em vinculos encadeados", async () => {
+  const service = new UserService(
+    {
+      eventMerge: {
+        async findMany() {
+          return [
+            { id: 1, primaryEventId: 10, secondaryEventId: 11, categorySuffix: " - DUPLAS" },
+            { id: 2, primaryEventId: 11, secondaryEventId: 12, categorySuffix: " - DUPLAS MISTAS" },
+          ];
+        },
+      },
+    } as never,
+    {} as never,
+  ) as UserService & {
+    resolveEventScope(eventId: number): Promise<{
+      canonicalEventId: number;
+      allEventIds: number[];
+      childSuffixByEventId: Map<number, string>;
+    }>;
+    resolveEventScopeByCanonical(eventId: number): Promise<{
+      canonicalEventId: number;
+      allEventIds: number[];
+      childSuffixByEventId: Map<number, string>;
+    }>;
+  };
+
+  const fromRoot = await service.resolveEventScopeByCanonical(10);
+  assert.equal(fromRoot.canonicalEventId, 10);
+  assert.deepEqual(fromRoot.allEventIds, [10, 11, 12]);
+  assert.equal(fromRoot.childSuffixByEventId.get(11), " - DUPLAS");
+  assert.equal(fromRoot.childSuffixByEventId.get(12), " - DUPLAS MISTAS");
+
+  const fromGrandchild = await service.resolveEventScope(12);
+  assert.equal(fromGrandchild.canonicalEventId, 10);
+  assert.deepEqual(fromGrandchild.allEventIds, [10, 11, 12]);
+});
+
+test("escopo de evento agregado usa fallback deterministico em vinculo ciclico", async () => {
+  const service = new UserService(
+    {
+      eventMerge: {
+        async findMany() {
+          return [
+            { id: 1, primaryEventId: 11, secondaryEventId: 10, categorySuffix: " - A" },
+            { id: 2, primaryEventId: 10, secondaryEventId: 11, categorySuffix: " - B" },
+          ];
+        },
+      },
+    } as never,
+    {} as never,
+  ) as UserService & {
+    resolveEventScope(eventId: number): Promise<{
+      canonicalEventId: number;
+      allEventIds: number[];
+    }>;
+  };
+
+  const fromFirst = await service.resolveEventScope(10);
+  const fromSecond = await service.resolveEventScope(11);
+
+  assert.equal(fromFirst.canonicalEventId, 10);
+  assert.equal(fromSecond.canonicalEventId, 10);
+  assert.deepEqual(fromFirst.allEventIds, [10, 11]);
+  assert.deepEqual(fromSecond.allEventIds, [10, 11]);
+});
+
 test("official category audit seleciona o ultimo run com auditoria por evento sem depender do tamanho do lote", async () => {
   const service = new UserService(
     {
