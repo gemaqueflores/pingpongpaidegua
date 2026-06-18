@@ -372,6 +372,7 @@ type ScopedEventSummaryMetrics = {
   publishedResultsByEventMap: Map<number, boolean>;
   effectiveCategoryCountByEvent: Map<number, number>;
   metricsByEventId: Map<number, { published: number; calculated: number; wo: number; played: number }>;
+  calibratedByEventId: Map<number, boolean>;
   officialTotalsByEvent: Map<number, OfficialRegistrationTotals>;
   lastScrapeByEventId: Map<number, Date>;
 };
@@ -1335,6 +1336,7 @@ export class UserService {
 
     const walkoversByCategoryId = await this.countWalkoversByCategoryIds(allEventIds, categoryIdsForAudit);
     const metricsByEventId = new Map<number, { published: number; calculated: number; wo: number; played: number }>();
+    const calibratedByEventId = new Map<number, boolean>();
     for (const category of categoriesForAudit) {
       const rules = eventRulesByEventId.get(category.eventId) ?? {
         startDate: null,
@@ -1347,8 +1349,12 @@ export class UserService {
         eventStartDate: rules.startDate,
         ratingMatchFormat: rules.ratingMatchFormat,
       });
+      const publishedMatchesCount = publishedByCategoryId.get(category.id) ?? 0;
+      if (publishedMatchesCount > calculatedMatchesCount) {
+        calibratedByEventId.set(category.eventId, true);
+      }
       const categoryMetrics = computeCategoryMatchMetrics({
-        publishedMatchesCount: publishedByCategoryId.get(category.id) ?? 0,
+        publishedMatchesCount,
         calculatedMatchesCount,
         walkoverMatchesCount: walkoversByCategoryId.get(category.id) ?? 0,
       });
@@ -1375,6 +1381,7 @@ export class UserService {
       publishedResultsByEventMap,
       effectiveCategoryCountByEvent,
       metricsByEventId,
+      calibratedByEventId,
       officialTotalsByEvent,
       lastScrapeByEventId,
     };
@@ -1426,7 +1433,11 @@ export class UserService {
       (sum, currentEventId) => sum + (metrics.metricsByEventId.get(currentEventId)?.calculated ?? 0),
       0,
     );
-    const totalPartidasPrevistasFonte: "observada" | "estimada" = "estimada";
+    const totalPartidasPrevistasFonte: "observada" | "estimada" = allEventIds.some(
+      (currentEventId) => metrics.calibratedByEventId.get(currentEventId) ?? false,
+    )
+      ? "observada"
+      : "estimada";
     const totalPartidasCalculadas = totalPartidasPrevistas;
     const totalPartidasWo = allEventIds.reduce(
       (sum, currentEventId) => sum + (metrics.metricsByEventId.get(currentEventId)?.wo ?? 0),
