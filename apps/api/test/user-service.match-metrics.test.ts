@@ -22,3 +22,13 @@ test("PP-016 T-U-02 calibra partidas previstas para publicado maior que teorico"
   assert.equal(metrics.calculatedMatchesCount, 9);
   assert.equal(metrics.playedMatchesCount, 7);
 });
+
+test("PP-016 T-U-03 mantem fallback teorico quando nao ha partidas publicadas", () => {
+  const metrics = computeCategoryMatchMetrics({
+    calculatedMatchesCount: 6,
+    publishedMatchesCount: 0,
+    walkoverMatchesCount: 0,
+  });
+
+  assert.equal(metrics.calculatedMatchesCount, 6);
+});
