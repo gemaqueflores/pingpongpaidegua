@@ -38,6 +38,7 @@ export interface UserEventRow {
   totalInscritos: number;
   totalPartidasPublicadas?: number;
   totalPartidasPrevistas?: number;
+  totalPartidasPrevistasFonte?: "observada" | "estimada";
   totalPartidas?: number;
   totalPartidasCalculadas?: number;
   totalPartidasWo?: number;
