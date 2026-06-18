@@ -1,0 +1,211 @@
+name: Deploy Backend To VM
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scrape-on-vm
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Servico a rebuildar"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - api
+          - worker
+          - both
+      event_id:
+        description: "ID interno do evento para smoke check"
+        required: true
+        default: "51"
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DEPLOY_SERVICE: ${{ inputs.service }}
+      DEPLOY_EVENT_ID: ${{ inputs.event_id }}
+      DEPLOY_REF: ${{ github.ref_name }}
+      DEPLOY_SHA: ${{ github.sha }}
+      DEPLOY_GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Validar secrets de SSH e inputs
+        id: precheck
+        env:
+          ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
+          ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
+          ORACLE_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
+          ORACLE_SSH_PORT: ${{ secrets.ORACLE_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          missing=()
+
+          [ -n "$ORACLE_SSH_HOST" ] || missing+=("ORACLE_SSH_HOST")
+          [ -n "$ORACLE_SSH_USER" ] || missing+=("ORACLE_SSH_USER")
+          [ -n "$ORACLE_SSH_PRIVATE_KEY" ] || missing+=("ORACLE_SSH_PRIVATE_KEY")
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Secrets ausentes/vazios: ${missing[*]}"
+            exit 1
+          fi
+
+          case "$DEPLOY_SERVICE" in
+            api|worker|both) ;;
+            *)
+              echo "Input service invalido: $DEPLOY_SERVICE"
+              exit 1
+              ;;
+          esac
+
+          if ! [[ "$DEPLOY_EVENT_ID" =~ ^[0-9]+$ ]]; then
+            echo "Input event_id deve conter apenas digitos."
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$ORACLE_SSH_PRIVATE_KEY" > ~/.ssh/oracle_vm_key
+          chmod 600 ~/.ssh/oracle_vm_key
+          SSH_PORT="${ORACLE_SSH_PORT:-22}"
+          if ! ssh -i ~/.ssh/oracle_vm_key -p "$SSH_PORT" -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$ORACLE_SSH_USER@$ORACLE_SSH_HOST" "echo ok" >/dev/null 2>&1; then
+            echo "Falha de conectividade SSH com a VM."
+            exit 1
+          fi
+
+          echo "Pre-check OK para service=$DEPLOY_SERVICE event_id=$DEPLOY_EVENT_ID ref=$DEPLOY_REF sha=$DEPLOY_SHA."
+
+      - name: Deploy remoto na VM Oracle
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_SERVICE: ${{ env.DEPLOY_SERVICE }}
+          DEPLOY_EVENT_ID: ${{ env.DEPLOY_EVENT_ID }}
+          DEPLOY_REF: ${{ env.DEPLOY_REF }}
+          DEPLOY_SHA: ${{ env.DEPLOY_SHA }}
+          DEPLOY_GITHUB_TOKEN: ${{ env.DEPLOY_GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.ORACLE_SSH_HOST }}
+          username: ${{ secrets.ORACLE_SSH_USER }}
+          key: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.ORACLE_SSH_PORT || 22 }}
+          command_timeout: 60m
+          script_stop: true
+          envs: DEPLOY_SERVICE,DEPLOY_EVENT_ID,DEPLOY_REF,DEPLOY_SHA,DEPLOY_GITHUB_TOKEN
+          script: |
+            set -eo pipefail
+            APP_DIR="${{ secrets.ORACLE_APP_DIR }}"
+            if [ -z "$APP_DIR" ]; then
+              APP_DIR="$HOME/pingpongpaidegua"
+            fi
+            export COMPOSE_PROJECT_NAME="pingpongpaidegua"
+
+            case "$DEPLOY_SERVICE" in
+              api)
+                SERVICES="api"
+                UNSELECTED_SERVICE="worker"
+                ;;
+              worker)
+                SERVICES="worker"
+                UNSELECTED_SERVICE="api"
+                ;;
+              both)
+                SERVICES="api worker"
+                UNSELECTED_SERVICE=""
+                ;;
+              *)
+                echo "Input service invalido: $DEPLOY_SERVICE"
+                exit 1
+                ;;
+            esac
+
+            if ! echo "$DEPLOY_EVENT_ID" | grep -Eq '^[0-9]+$'; then
+              echo "Input event_id deve conter apenas digitos."
+              exit 1
+            fi
+
+            cd "$APP_DIR"
+            echo "Diretorio da aplicacao: $APP_DIR"
+            echo "Deploy solicitado: service=$DEPLOY_SERVICE ref=$DEPLOY_REF sha=$DEPLOY_SHA event_id=$DEPLOY_EVENT_ID"
+
+            if command -v docker >/dev/null 2>&1; then
+              if command -v docker-compose >/dev/null 2>&1; then
+                COMPOSE_BIN="docker-compose -p $COMPOSE_PROJECT_NAME"
+              elif docker compose version >/dev/null 2>&1; then
+                COMPOSE_BIN="docker compose -p $COMPOSE_PROJECT_NAME"
+              else
+                echo "Docker Compose nao encontrado na VM."
+                exit 1
+              fi
+            else
+              echo "Docker nao encontrado na VM."
+              exit 1
+            fi
+
+            if ! git diff --quiet || ! git diff --cached --quiet; then
+              echo "Working tree da VM contem alteracoes locais; deploy bloqueado para evitar sobrescrita."
+              git status --short
+              exit 1
+            fi
+
+            git remote set-url origin https://github.com/gemaqueflores/pingpongpaidegua.git
+            auth_header="$(printf 'x-access-token:%s' "$DEPLOY_GITHUB_TOKEN" | base64 | tr -d '\n')"
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" fetch origin "$DEPLOY_REF"
+            git checkout -B "$DEPLOY_REF" FETCH_HEAD
+
+            current_sha="$(git rev-parse HEAD)"
+            echo "Commit na VM apos fetch: $current_sha"
+            if [ "$current_sha" != "$DEPLOY_SHA" ]; then
+              echo "Commit da VM ($current_sha) difere do commit esperado ($DEPLOY_SHA)."
+              exit 1
+            fi
+
+            api_before="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME}-api-1" 2>/dev/null || true)"
+            worker_before="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME}-worker-1" 2>/dev/null || true)"
+            echo "Container antes: api=${api_before:-absent} worker=${worker_before:-absent}"
+
+            $COMPOSE_BIN build $SERVICES
+            $COMPOSE_BIN up -d --no-deps $SERVICES
+
+            wait_service() {
+              service_name="$1"
+              container_name="${COMPOSE_PROJECT_NAME}-${service_name}-1"
+              attempts=45
+              attempt=1
+              while [ "$attempt" -le "$attempts" ]; do
+                health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_name" 2>/dev/null || true)"
+                echo "Status $service_name tentativa $attempt/$attempts: ${health:-indisponivel}"
+                if [ "$health" = "healthy" ] || { [ "$service_name" = "worker" ] && [ "$health" = "running" ]; }; then
+                  return 0
+                fi
+                sleep 2
+                attempt=$((attempt + 1))
+              done
+              echo "Servico $service_name nao ficou saudavel/em execucao no tempo esperado."
+              return 1
+            }
+
+            for service_name in $SERVICES; do
+              wait_service "$service_name"
+            done
+
+            api_after="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME}-api-1" 2>/dev/null || true)"
+            worker_after="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME}-worker-1" 2>/dev/null || true)"
+            echo "Container depois: api=${api_after:-absent} worker=${worker_after:-absent}"
+            if [ "$UNSELECTED_SERVICE" = "api" ] && [ "$api_before" != "$api_after" ]; then
+              echo "Servico api nao selecionado foi recriado."
+              exit 1
+            fi
+            if [ "$UNSELECTED_SERVICE" = "worker" ] && [ "$worker_before" != "$worker_after" ]; then
+              echo "Servico worker nao selecionado foi recriado."
+              exit 1
+            fi
+
+            $COMPOSE_BIN ps
+            curl -fsS http://localhost:4000/ >/dev/null
+            curl -fsS "http://localhost:4000/events/$DEPLOY_EVENT_ID" | python3 -m json.tool >/dev/null
+            echo "Smoke check OK: commit=$current_sha service=$DEPLOY_SERVICE event_id=$DEPLOY_EVENT_ID"
