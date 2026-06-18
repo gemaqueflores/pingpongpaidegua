@@ -2,8 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { UserService } from "../src/user/user.service";
 
-function createServiceHarness(options: { publishedMatchesCount?: number } = {}) {
-  const publishedMatchesCount = options.publishedMatchesCount ?? 5;
+function createServiceHarness(
+  options: {
+    publishedMatchesCount?: number;
+    eventMetrics?: Array<{ eventId: number; categoryId: number; cbtmCategoryId: number; published: number }>;
+    scopeEventIds?: number[];
+  } = {},
+) {
+  const eventMetrics = options.eventMetrics ?? [
+    { eventId: 1, categoryId: 10, cbtmCategoryId: 111, published: options.publishedMatchesCount ?? 5 },
+  ];
+  const scopeEventIds = options.scopeEventIds ?? [1];
+  const eventMetricsByCategoryId = new Map(eventMetrics.map((item) => [item.categoryId, item]));
+  const publishedByEventId = new Map<number, number>();
+  for (const item of eventMetrics) {
+    publishedByEventId.set(item.eventId, (publishedByEventId.get(item.eventId) ?? 0) + item.published);
+  }
   let cachedRecord:
     | {
         key: string;
@@ -30,40 +44,43 @@ function createServiceHarness(options: { publishedMatchesCount?: number } = {}) 
     category: {
       async findMany() {
         categoryFindManyCalls += 1;
-        return [{ id: 10, eventId: 1, name: "ABSOLUTO E (MAS)", cbtmCategoryId: 111 }];
+        return eventMetrics.map((item) => ({
+          id: item.categoryId,
+          eventId: item.eventId,
+          name: "ABSOLUTO E (MAS)",
+          cbtmCategoryId: item.cbtmCategoryId,
+        }));
       },
     },
     match: {
       async groupBy(args: { by: string[]; where?: Record<string, unknown> }) {
         if (args.by[0] === "categoryId") {
-          return [{ categoryId: 10, _count: { _all: publishedMatchesCount } }];
+          return eventMetrics.map((item) => ({ categoryId: item.categoryId, _count: { _all: item.published } }));
         }
         const whereText = JSON.stringify(args.where ?? {});
         if (whereText.includes('"winnerIndex"') || whereText.includes('"p1Sets"') || whereText.includes('"p2Sets"')) {
-          return [{ eventId: 1, _count: { _all: publishedMatchesCount } }];
+          return [...publishedByEventId].map(([eventId, published]) => ({ eventId, _count: { _all: published } }));
         }
         if (whereText.toLowerCase().includes("grupo")) {
-          return [{ eventId: 1, _count: { _all: 2 } }];
+          return scopeEventIds.map((eventId) => ({ eventId, _count: { _all: 2 } }));
         }
-        return [{ eventId: 1, _count: { _all: publishedMatchesCount } }];
+        return [...publishedByEventId].map(([eventId, published]) => ({ eventId, _count: { _all: published } }));
       },
     },
     event: {
       async findMany() {
-        return [
-          {
-            id: 1,
+        return scopeEventIds.map((eventId) => ({
+            id: eventId,
             lastScrapeAt: new Date("2026-03-09T10:00:00.000Z"),
             dataInicio: new Date("2026-03-20T00:00:00.000Z"),
             inicioRealizacao: new Date("2026-03-20T00:00:00.000Z"),
             ratingMatchFormat: "RR_K1",
-          },
-        ];
+        }));
       },
     },
     athleteCategory: {
       async groupBy() {
-        return [{ categoryId: 10, _count: { _all: 4 } }];
+        return eventMetrics.map((item) => ({ categoryId: item.categoryId, _count: { _all: 4 } }));
       },
     },
   };
@@ -104,11 +121,11 @@ function createServiceHarness(options: { publishedMatchesCount?: number } = {}) 
 
   service.resolveEventScope = async (eventId: number) => ({
     canonicalEventId: eventId,
-    allEventIds: [eventId],
+    allEventIds: scopeEventIds,
   });
   service.resolveEventScopeByCanonical = async (eventId: number) => ({
     canonicalEventId: eventId,
-    allEventIds: [eventId],
+    allEventIds: scopeEventIds,
   });
   service.loadEventMerges = async () => [];
   service.ensureEvent = async (eventId: number) => ({
@@ -126,31 +143,39 @@ function createServiceHarness(options: { publishedMatchesCount?: number } = {}) 
   });
   service.getLatestReliableScrapeRunIdForScope = async () => 99;
   service.loadEventRegistrationMetrics = async () => ({
-    athleteCategoryAssociationsByEvent: new Map([[1, 4]]),
-    tecnicoClubAssociationsByEvent: new Map([[1, 0]]),
-    participantNamesByEvent: new Map([[1, new Set(["atleta a", "atleta b", "atleta c", "atleta d"])]]),
+    athleteCategoryAssociationsByEvent: new Map(scopeEventIds.map((eventId) => [eventId, 4])),
+    tecnicoClubAssociationsByEvent: new Map(scopeEventIds.map((eventId) => [eventId, 0])),
+    participantNamesByEvent: new Map(
+      scopeEventIds.map((eventId) => [
+        eventId,
+        new Set([`atleta a ${eventId}`, `atleta b ${eventId}`, `atleta c ${eventId}`, `atleta d ${eventId}`]),
+      ]),
+    ),
   });
   service.loadLatestOfficialCategoryAuditByEvent = async () =>
-    new Map([
-      [
-        1,
-        new Map([
-          [
-            "111",
-            {
-              categoryId: "111",
-              categoryName: "ABSOLUTO E (MAS)",
-              valid: true,
-              registeredCount: 4,
-              preRegisteredCount: 0,
-              totalListedCount: 4,
-              officialMatchesCount: 6,
-            },
-          ],
-        ]),
-      ],
-    ]);
-  service.countWalkoversByCategoryIds = async () => new Map([[10, 1]]);
+    new Map(
+      scopeEventIds.map((eventId) => [
+        eventId,
+        new Map(
+          eventMetrics
+            .filter((item) => item.eventId === eventId)
+            .map((item) => [
+              String(item.cbtmCategoryId),
+              {
+                categoryId: String(item.cbtmCategoryId),
+                categoryName: "ABSOLUTO E (MAS)",
+                valid: true,
+                registeredCount: 4,
+                preRegisteredCount: 0,
+                totalListedCount: 4,
+                officialMatchesCount: 6,
+              },
+            ]),
+        ),
+      ]),
+    );
+  service.countWalkoversByCategoryIds = async (_eventIds: number[], categoryIds: number[]) =>
+    new Map(categoryIds.map((categoryId) => [categoryId, eventMetricsByCategoryId.get(categoryId)?.published ? 1 : 0]));
 
   return {
     service,
@@ -184,6 +209,20 @@ test("PP-016 T-I-02 event summary usa fonte observada quando publicado supera te
   const summary = await harness.service.getEventSummary(1);
 
   assert.equal(summary.totalPartidasPrevistas, 9);
+  assert.equal(summary.totalPartidasPrevistasFonte, "observada");
+});
+
+test("PP-016 T-I-03 event summary agregado usa fonte observada quando filho foi calibrado", async () => {
+  const harness = createServiceHarness({
+    scopeEventIds: [1, 2],
+    eventMetrics: [
+      { eventId: 1, categoryId: 10, cbtmCategoryId: 111, published: 5 },
+      { eventId: 2, categoryId: 20, cbtmCategoryId: 222, published: 9 },
+    ],
+  });
+
+  const summary = await harness.service.getEventSummary(1);
+
   assert.equal(summary.totalPartidasPrevistasFonte, "observada");
 });
 
