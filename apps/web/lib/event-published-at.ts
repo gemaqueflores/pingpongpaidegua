@@ -1,6 +1,12 @@
 import type { UserEventRow } from "./user-api";
 
-export function resolveEventPublishedAt(event: Pick<UserEventRow, "publishedAt" | "lastScrapeAt" | "_meta"> | null): string | null {
+export function resolveEventPublishedAt(
+  event: Pick<UserEventRow, "publishedAt" | "lastScrapeAt" | "_meta"> | null,
+  concluido?: boolean,
+): string | null {
+  if (concluido === true) {
+    return event?.lastScrapeAt ?? event?.publishedAt ?? event?._meta?.publishedAt ?? null;
+  }
   return event?.publishedAt ?? event?._meta?.publishedAt ?? event?.lastScrapeAt ?? null;
 }
 

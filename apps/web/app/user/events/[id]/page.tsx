@@ -302,7 +302,7 @@ export default function EventDetailPage() {
   const [scheduleCategoryFilter, setScheduleCategoryFilter] = useState<number | null>(null);
   const [scheduleViewMode, setScheduleViewMode] = useState<ScheduleViewMode>("categoria");
   const [efficiencyMode, setEfficiencyMode] = useState<EfficiencyViewMode>("pontuacao");
-  const eventPublishedAt = resolveEventPublishedAt(event);
+  const eventPublishedAt = resolveEventPublishedAt(event, event?.concluido);
   const eventBuilding = Boolean(event?._meta?.building);
 
   useEffect(() => {
