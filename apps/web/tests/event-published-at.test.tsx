@@ -7,6 +7,16 @@ import { resolveEventPublishedAt, shouldReloadPublishedTabs } from "../lib/event
 
 (globalThis as typeof globalThis & { React: typeof React }).React = React;
 
+test("T-U-01 evento concluido prioriza lastScrapeAt sobre publishedAt", () => {
+  const event = {
+    concluido: true,
+    publishedAt: "2026-06-19T11:34:05.910Z",
+    lastScrapeAt: "2026-06-17T16:13:05.600Z",
+  };
+
+  assert.equal(resolveEventPublishedAt(event, event.concluido), "2026-06-17T16:13:05.600Z");
+});
+
 test("T-C-01 pagina de evento usa publishedAt no badge e deps de reload", () => {
   const previous = {
     publishedAt: "2026-06-12T09:00:00.000Z",
