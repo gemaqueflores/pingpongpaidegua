@@ -48,6 +48,15 @@ test("T-U-04 evento concluido sem timestamps retorna null", () => {
   assert.equal(resolveEventPublishedAt(event, event.concluido), null);
 });
 
+test("T-U-05 concluido ausente mantem prioridade publishedAt", () => {
+  const event = {
+    publishedAt: "2026-06-12T10:00:00.000Z",
+    lastScrapeAt: "2026-06-12T09:30:00.000Z",
+  };
+
+  assert.equal(resolveEventPublishedAt(event), "2026-06-12T10:00:00.000Z");
+});
+
 test("T-C-01 pagina de evento usa publishedAt no badge e deps de reload", () => {
   const previous = {
     publishedAt: "2026-06-12T09:00:00.000Z",
