@@ -57,6 +57,10 @@ test("T-U-05 concluido ausente mantem prioridade publishedAt", () => {
   assert.equal(resolveEventPublishedAt(event), "2026-06-12T10:00:00.000Z");
 });
 
+test("T-U-06 evento null retorna null", () => {
+  assert.equal(resolveEventPublishedAt(null), null);
+});
+
 test("T-C-01 pagina de evento usa publishedAt no badge e deps de reload", () => {
   const previous = {
     publishedAt: "2026-06-12T09:00:00.000Z",
