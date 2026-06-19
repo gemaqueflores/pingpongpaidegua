@@ -17,6 +17,16 @@ test("T-U-01 evento concluido prioriza lastScrapeAt sobre publishedAt", () => {
   assert.equal(resolveEventPublishedAt(event, event.concluido), "2026-06-17T16:13:05.600Z");
 });
 
+test("T-U-02 evento nao concluido mantem prioridade publishedAt", () => {
+  const event = {
+    concluido: false,
+    publishedAt: "2026-06-12T10:00:00.000Z",
+    lastScrapeAt: "2026-06-12T09:30:00.000Z",
+  };
+
+  assert.equal(resolveEventPublishedAt(event, event.concluido), "2026-06-12T10:00:00.000Z");
+});
+
 test("T-C-01 pagina de evento usa publishedAt no badge e deps de reload", () => {
   const previous = {
     publishedAt: "2026-06-12T09:00:00.000Z",
