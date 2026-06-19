@@ -5,7 +5,7 @@ export function resolveEventPublishedAt(
   concluido?: boolean,
 ): string | null {
   if (concluido === true) {
-    return event?.publishedAt && event.lastScrapeAt ? event.lastScrapeAt : "";
+    return event?.lastScrapeAt ?? "";
   }
 
   if (concluido === false) {
