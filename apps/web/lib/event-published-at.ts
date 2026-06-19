@@ -7,15 +7,6 @@ export function resolveEventPublishedAt(
   if (concluido === true) {
     return event?.lastScrapeAt ?? event?.publishedAt ?? event?._meta?.publishedAt ?? null;
   }
-
-  if (concluido === false) {
-    return event?.publishedAt ?? event?._meta?.publishedAt ?? event?.lastScrapeAt ?? null;
-  }
-
-  if (!event) {
-    return "";
-  }
-
   return event?.publishedAt ?? event?._meta?.publishedAt ?? event?.lastScrapeAt ?? null;
 }
 
