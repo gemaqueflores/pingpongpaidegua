@@ -9,7 +9,7 @@ export function resolveEventPublishedAt(
   }
 
   if (concluido === false) {
-    return event?.lastScrapeAt ?? null;
+    return event?.publishedAt ?? event?._meta?.publishedAt ?? event?.lastScrapeAt ?? null;
   }
 
   if (!event) {
