@@ -21,6 +21,7 @@ Monorepo: `apps/api/`, `apps/web/`, `apps/worker/`, `packages/`.
 | DEC-CBTM-003 | Pre-commit hook versionado em `.githooks/pre-commit`; ativado com `git config core.hooksPath .githooks`. | Garante hook versionado e portátil; `--no-verify` é proibido, exceto em commit RED de Red-Green quando o hook executa a suite que deve falhar por design. | 2026-06-10 |
 | DEC-CBTM-004 | O filtro `nameDisplay: { not: { contains: '#' } }` pertence apenas ao diretório global de atletas (`listAthleteDirectory`), nunca às listagens por evento. | Pares de duplas usam `nameDisplay = "A # B"`; filtrar `#` em contexto de evento exclui duplas por erro. | 2026-06-10 |
 | DEC-CBTM-005 | `TECHNICIAN_CATEGORY_ID = "88888888"` (TÉCNICOS) e `GENERAL_TOTALIZER_CATEGORY_ID = "99999999"` (Totalizador Geral); ambos seguem em `IGNORED_CATEGORY_IDS` por enquanto. | IDs estavam invertidos no código e foram corrigidos na PP-005. Futuramente `88888888` será usado para listar técnicos separadamente. | 2026-06-10 |
+| DEC-CBTM-006 | O card "Atletas" do resumo do evento (`totalInscritos`) conta qualquer `registrationStatus` não nulo (inclui `PRE_INSCRITO`); a aba "Atletas" (`listAthletes`/`buildEventAthletesSnapshot`) só lista quem está `INSCRITO`. Divergência entre os dois números em evento na fase inicial de inscrição é esperada, não bug. | Decisão de negócio confirmada por Leo na PP-019 (evento 5826, Copa Brasil Prata Belém/PA 2026): resumo reflete interesse/movimento de inscrição, aba reflete só confirmados. | 2026-06-19 |
 
 ---
 

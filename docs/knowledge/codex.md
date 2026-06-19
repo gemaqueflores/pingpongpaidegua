@@ -10,6 +10,49 @@ VM Oracle Cloud foi reinstalada/recriada e a conta ACME (`acme-v01`) usada pelo 
 
 Causa raiz: certificado expirou em 2026-05-16 e a renovação automática falhou após a recriação da VM. Correção aplicada em 2026-05-21 com renovação via webroot, validação de nginx e reload. Lição: após recriar VM, validar a persistência/configuração de `/etc/letsencrypt/accounts/` e executar o script operacional de renovação antes de assumir que o timer cobre o certificado.
 
+## Padrões de falha — PP-017
+
+### 2026-06-18/19 — PP-017 (PR #25, 1ª submissão) — Token exposto via GITHUB_OUTPUT interpolado
+Ao corrigir o erro de parsing do `drone-ssh` movendo o script para um arquivo enviado via payload base64
+(`GITHUB_OUTPUT`), o token `github.token` foi incluído no conteúdo do script antes de virar payload — esse
+payload é depois interpolado diretamente no `script:` do step seguinte, que aparece no log do Actions.
+Mesmo sendo um token efêmero de escopo mínimo (`contents: read`), isso é exposição de credencial em log
+(A02/A09 OWASP) — bloqueado no parecer. Corrigido na 2ª submissão do mesmo PR (`34e5dee`): token passado
+como argumento posicional (`$1`) só no comando final que invoca `bash`, nunca embutido no conteúdo do
+payload. Padrão a vigiar: ao introduzir mecanismo de transporte de script/payload via output de step,
+auditar explicitamente se algum valor sensível atravessa esse output antes de aprovar — scanner automatizado
+(`security-review-agent`) não capturou esse padrão, só detectado por leitura manual passo-a-passo do fluxo
+do valor.
+
+## Padrões de sucesso — PP-018
+
+### 2026-06-19 — PP-018 (PR #26)
+- Sinalizou proativamente a contradição do plano Red-Green antes de implementar: T-U-05 nasceria
+  funcionalmente verde por já ser equivalente a um teste preexistente (T-C-01) — pediu confirmação explícita
+  em vez de forçar um RED artificial (quebrar comportamento correto só para depois corrigi-lo) ou pular o
+  T-* silenciosamente. Implementou como GREEN/caracterização isolado, declarado no relatório.
+- Identificou e sinalizou divergência de base de branch (main em `19778c8` vs topo da branch PP-017 ainda
+  não mergeada em `34e5dee`) antes de criar a branch nova — evitou poluir o PR com commits de assunto não
+  relacionado. Mesma classe de comportamento do ponto anterior: declarar o impedimento/contradição antes de
+  agir, não decidir sozinho.
+- Red-Green individual por T-* mantido íntegro nos 5 T-* que comportavam o ciclo completo (T-U-01 a T-U-04,
+  T-U-06), com hashes RED/GREEN separados confirmados na revisão via `git show` direto nos commits.
+
+## Padrões de sucesso — PP-017
+
+### 2026-06-18/19 — PP-017 (PR #22, #23, #24, #25)
+- Ciclo tripartite completo e bem fundamentado, reaproveitando padrão de infraestrutura já existente
+  (`scrape-every-2h.yml`) em vez de inventar do zero — reduziu risco de implementação.
+- Investigação real e iterativa de causa raiz em produção: 3 hipóteses tentadas em sequência (token em
+  `envs:` malformatado → variáveis em geral via `envs:` → parsing do bloco `script:` multilinha pelo
+  `drone-ssh`), cada uma corrigida via PR pequeno e cirúrgico, com evidência de log real anexada a cada
+  iteração, sem nunca declarar sucesso sem confirmar via execução real contra a VM.
+- Quando bloqueado pelo achado de exposição de token, corrigiu a causa raiz do problema de segurança
+  (remover o valor do payload) em vez de tentar argumentar que o mascaramento automático cobriria o caso —
+  resposta correta a um ❌ de security review.
+- `shlex.quote` usado corretamente para escapar valores antes de substituição em script gerado
+  dinamicamente — boa prática de shell-injection-safety mantida em todas as iterações.
+
 ## Padrões de sucesso
 
 ### 2026-05-22 — PP-001 + PP-002 (PR #2)
@@ -30,6 +73,21 @@ Causa raiz: certificado expirou em 2026-05-16 e a renovação automática falhou
 - Codex abriu hotfix sem spec formal — padrão de urgência aceito por Leo. Válido para 1 arquivo produção + 1 arquivo teste com comportamento descrito diretamente.
 - Rev1 do PR #10: cobertura de testes insuficiente — apenas `V1`/`V2` testados, `VENCEDOR DE GRUPO A` e `V1 - Silva B` ausentes. Codex corrigiu na rev2 sem necessidade de bloqueio formal.
 - Red-Green por T-* não executado neste hotfix (sem spec formal) — aceito por Leo dado o contexto de urgência.
+
+## Padrões de sucesso — PP-016
+
+### 2026-06-18 — PP-016 (PR #21)
+- Primeira entrega limpa de Red-Green individual por T-* desde o rebaixamento do domínio para Instável em
+  PP-006 (classe E01) — 9/9 T-* com hashes red/green separados, confirmados via `git log` na revisão
+  independente, sem nenhum colapso.
+- Uso correto e declarado da exceção `--no-verify` em commit RED formal: 3 commits RED tocavam arquivo
+  dentro da cerca crítica do hook (`test:regression:critical`), Codex declarou cada um explicitamente como
+  RED esperado, e a revisão confirmou que cada um alterava apenas o arquivo de teste (sem produção).
+- Resposta técnica do ciclo tripartite (Rodada 2) bem fundamentada com evidência de produção via SSH (zero
+  partidas `ELIMINATORIA`, `round` ausente em 2097/3439 partidas) em vez de opinião — permitiu fechar o
+  draft sem rodada extra.
+- GREEN "already covered" (T-U-03, T-I-03, T-U-05) declarado proativamente no relatório, sem disfarçar
+  sobreposição de cobertura — correto mesmo sendo um padrão atípico do ciclo Red-Green clássico.
 
 ## Padrões de sucesso (PP-006)
 
