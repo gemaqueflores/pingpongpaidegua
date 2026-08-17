@@ -1,11 +1,89 @@
 # PP-020 (draft) — CAT: Health check global do projeto + saúde do evento Copa Brasil Prata Belém 2026
 
-## Status: CAT encerrado analiticamente (Rodada 4 — errata técnica aplicada e aceita)
+## Status: CAT encerrado analiticamente (Rodada 6 — fonte oficial CBTM + pré-condição PP-025 confirmada por query)
 
 Documento de trabalho do ciclo tripartite — não é Spec formal, não é registro final autoritativo por si só.
 Relatório final consolidado: artifact publicado (ver sessão), incorporando as correções desta rodada.
 Nenhuma implementação, commit ou Spec de correção foi autorizada nesta rodada. Próxima autoridade: Leo —
 decide a regra de negócio de H6 e quais achados (se algum) viram Spec de correção futura.
+
+## Rodada 5 — fonte oficial CBTM obtida e achado adicional (pós-encerramento do CAT, PP-022 já homologado)
+
+Leo forneceu os dois PDFs faltantes (limitação registrada na Rodada 4). Ambos lidos integralmente por
+Claude via extração de texto (`pdftotext`), não apenas resumo de terceiros.
+
+**Confirmado por leitura direta das fontes oficiais:**
+- Circular Copa Brasil Prata Belém 2026, página 9 ("Programação Completa"): Duplas Mista e Duplas
+  Mas-Fem — todas as categorias — disputadas em **Eliminatória Simples** no 1º dia (13/08), sem fase de
+  grupos.
+- Manual CBTM 2026, item **1.9.4.1.7**: "A Competição Olímpica por Duplas (...) será disputada em
+  eliminatória simples" — regra geral do manual, não específica deste evento, independente do volume de
+  inscrições.
+- Manual CBTM 2026, item **1.9.3.3.5**: mesma regra para Duplas Paralímpicas.
+
+**Achado adicional (origem: mensagem "Codex" não verificada tecnicamente nesta sessão, mas com citações
+de arquivo:linha conferidas por `Read` direto antes de aceitar):**
+- `ratingMatchFormat` só é aplicado por `computeOfficialCategoryMatchesCount()` quando o nome da categoria
+  começa com `R` (`isRatingCategoryName()`, `/^R[A-Z]/`,
+  [packages/shared/src/index.ts:228-233](../../../packages/shared/src/index.ts#L228-L233); consumido na
+  linha 330). Confirmado por leitura direta.
+- O simulador de grupos exige a mesma condição de prefixo (`resolveSortBasis`, mesmo padrão `/^r/i`) **e**
+  `ratingMatchFormat === "K1"` simultaneamente antes de usar eliminatória direta
+  ([apps/api/src/user/group-simulator.ts:130-133,614-615](../../../apps/api/src/user/group-simulator.ts#L130-L133)).
+  Confirmado por leitura direta.
+- Categorias de duplas do evento não começam com `R` — **confirmado por query read-only em produção**
+  (Rodada 6, ver abaixo), não mais apenas indício por convenção de nomenclatura.
+- **Consequência confirmada:** `ratingMatchFormat` dos 4 eventos internos (55/56/57/58) está atualmente
+  `RR_K1`. Mesmo que 57/58 (CBTM 5828/5829) fossem corrigidos isoladamente para `K1`, as 15 categorias
+  reais listadas na Rodada 6 continuariam caindo na fórmula de grupos/combinatória em
+  `computeOfficialCategoryMatchesCount()` e no simulador — nenhuma delas passa no gate `/^R[A-Z]/`. A
+  correção de `ratingMatchFormat` sozinha seria insuficiente, confirmado por dado real, não só por código.
+
+## Rodada 6 — pré-condição da PP-025 confirmada por query read-only em produção
+
+Origem: mensagem "Codex" não verificada tecnicamente nesta sessão (mesma ressalva de proveniência das
+rodadas anteriores) — mas o conteúdo é uma consulta read-only simples, de baixo risco de erro de
+interpretação, e consistente com o que a leitura de código já indicava. Registrado pelo mérito.
+
+**Configuração real dos 4 eventos (`ratingMatchFormat`):**
+```
+55|5826|RR_K1|concluído
+56|5827|RR_K1|concluído
+57|5828|RR_K1|concluído
+58|5829|RR_K1|concluído
+```
+
+**Categorias reais do evento 5828 (Duplas):** ABSOLUTO A MAS, ABSOLUTO B FEM, ABSOLUTO B MAS, ABSOLUTO C
+MAS, ABSOLUTO D MAS, ABSOLUTO E MAS, ABSOLUTO F MAS, ABSOLUTO G MAS, SUB-11 MAS, SUB-15 MAS, SUB-17 MAS.
+
+**Categorias reais do evento 5829 (Duplas Mistas):** DUPLA MISTA - ABSOLUTO A, DUPLA MISTA - ABSOLUTO C,
+DUPLA MISTA - ABSOLUTO E, DUPLA MISTA - SUB-15.
+
+Nenhuma das 15 categorias começa com `R` — confirma, com dado real, a hipótese da Rodada 5.
+
+**Reinterpretação de H1-H9 à luz da fonte oficial + query confirmada:**
+- H1, H2, H4/H5, H6, H8, H9: inalterados por este achado.
+- H3: a divergência resumo×agenda permanece (não explicada pelo formato K1); separadamente, qualquer
+  contagem "prevista/calculada" de duplas está usando a fórmula de grupos/combinatória em vez de `n-1`,
+  confirmado — não mais "a confirmar".
+- H7: fonte oficial reforça que `expectedMedalists=3` é o valor correto para uma chave K1 de 3 duplas
+  (eliminatória direta sempre tem bronze único quando há exatamente 3 competidores) — PP-022 permanece
+  correto ao sinalizar incompletude; não decide sozinho se o dado em si (3º medalhista ausente) é erro de
+  captura ou WO legítimo.
+
+**Precisão de causa (aceita):** classificar como lacuna de modelagem/aplicação do formato competitivo, não
+como "problema de nomenclatura" — a nomenclatura apenas expõe o gate incorreto; a regra oficial de duplas
+(eliminatória simples sempre, conforme Manual CBTM 1.9.4.1.7/1.9.3.3.5) não deveria depender do nome da
+categoria começar por `R`.
+
+**Encaminhamento (não executado nesta rodada — apenas registrado, aguardando autorização de Leo):**
+- Não abrir correção operacional simples `RR_K1 → K1` para os eventos internos 57/58 — confirmado
+  insuficiente, tanto por código quanto por dado real.
+- Candidato a nova Spec (PP-025, não formulada nesta sessão, não autorizada): definir como
+  representar/aplicar eliminatória simples direta a categorias de duplas **independente de nomenclatura
+  com prefixo `R`**, cobrindo `computeOfficialCategoryMatchesCount`, o simulador de grupos, e qualquer
+  outro consumidor do mesmo padrão de detecção por nome. Pré-condição de dado real (nomes de categoria +
+  `ratingMatchFormat` atual) já satisfeita nesta rodada.
 
 ## Nota de proveniência (obrigatória — protocolo de contrato)
 
