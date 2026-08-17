@@ -1,6 +1,68 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { UserService } from "../src/user/user.service";
+import {
+  buildEventCategoryMedalistDiagnostics,
+  UserService,
+} from "../src/user/user.service";
+
+test("PP-022 T-U-01 podio incompleto retorna diagnostico especifico", () => {
+  const diagnostics = buildEventCategoryMedalistDiagnostics({
+    athleteCount: 4,
+    publishedMatchesCount: 4,
+    medalistsCount: 2,
+    expectedMedalists: 3,
+  });
+
+  assert.equal(diagnostics.status, "medalhistas_incompletos");
+  assert.match(diagnostics.message, /2/);
+  assert.match(diagnostics.message, /3/);
+});
+
+test("PP-022 T-U-02 podio completo permanece ok", () => {
+  const diagnostics = buildEventCategoryMedalistDiagnostics({
+    athleteCount: 4,
+    publishedMatchesCount: 4,
+    medalistsCount: 3,
+    expectedMedalists: 3,
+  });
+
+  assert.equal(diagnostics.status, "ok");
+});
+
+test("PP-022 T-U-03 expectativa zero ou nula nao sinaliza podio incompleto", () => {
+  for (const expectedMedalists of [0, null]) {
+    const diagnostics = buildEventCategoryMedalistDiagnostics({
+      athleteCount: 1,
+      publishedMatchesCount: 1,
+      medalistsCount: 1,
+      expectedMedalists,
+    });
+
+    assert.equal(diagnostics.status, "ok");
+  }
+});
+
+test("PP-022 T-U-04 preserva diagnosticos preexistentes", () => {
+  const scenarios = [
+    {
+      input: { athleteCount: 0, publishedMatchesCount: 0, medalistsCount: 0, expectedMedalists: 0 },
+      expectedStatus: "sem_atletas",
+    },
+    {
+      input: { athleteCount: 3, publishedMatchesCount: 0, medalistsCount: 0, expectedMedalists: 0 },
+      expectedStatus: "sem_confrontos_publicados",
+    },
+    {
+      input: { athleteCount: 3, publishedMatchesCount: 2, medalistsCount: 0, expectedMedalists: 3 },
+      expectedStatus: "classificacao_pendente_ou_indefinida",
+    },
+  ] as const;
+
+  for (const scenario of scenarios) {
+    const diagnostics = buildEventCategoryMedalistDiagnostics(scenario.input);
+    assert.equal(diagnostics.status, scenario.expectedStatus);
+  }
+});
 
 function createMedalistsServiceHarness() {
   let cachedRecord:
@@ -13,10 +75,12 @@ function createMedalistsServiceHarness() {
     | null = null;
   let categoryFindManyCalls = 0;
   let failCategoryLookup = false;
+  const requestedCacheKeys: string[] = [];
 
   const prismaRead = {
     readModelCache: {
       async findUnique({ where }: { where: { key: string } }) {
+        requestedCacheKeys.push(where.key);
         if (cachedRecord && cachedRecord.key === where.key) {
           return {
             sourceScrapeRunId: cachedRecord.sourceScrapeRunId,
@@ -117,6 +181,12 @@ function createMedalistsServiceHarness() {
     getCategoryFindManyCalls() {
       return categoryFindManyCalls;
     },
+    getRequestedCacheKeys() {
+      return [...requestedCacheKeys];
+    },
+    getCachedRecordKey() {
+      return cachedRecord?.key ?? null;
+    },
   };
 }
 
@@ -136,7 +206,7 @@ test("event medalists persiste read model e reutiliza cache valido no mesmo scra
 test("event medalists usa cache stale quando recomputacao falha", async () => {
   const harness = createMedalistsServiceHarness();
   harness.setCachedRecord({
-    key: "event-medalists-v2|event:1",
+    key: "event-medalists-v3|event:1",
     sourceScrapeRunId: 55,
     payload: {
       eventId: 1,
@@ -172,6 +242,29 @@ test("event medalists usa cache stale quando recomputacao falha", async () => {
     isStale: true,
     staleReason: "compute_failed",
   });
+  assert.equal(harness.getCategoryFindManyCalls(), 1);
+});
+
+test("PP-022 T-I-01 ignora cache v2 e recompila read model sob chave v3", async () => {
+  const harness = createMedalistsServiceHarness();
+  harness.setCachedRecord({
+    key: "event-medalists-v2|event:1",
+    sourceScrapeRunId: 55,
+    payload: {
+      eventId: 1,
+      categories: [{ categoryId: 10, categoryName: "CACHE LEGADO", medalists: [] }],
+    },
+    updatedAt: new Date(),
+  });
+
+  const response = await harness.service.listEventCategoryMedalists(1);
+
+  assert.deepEqual(response.categories, []);
+  const requestedKeys = harness.getRequestedCacheKeys();
+  assert.ok(requestedKeys.length > 0);
+  assert.ok(requestedKeys.every((key) => key === "event-medalists-v3|event:1"));
+  assert.ok(!requestedKeys.includes("event-medalists-v2|event:1"));
+  assert.equal(harness.getCachedRecordKey(), "event-medalists-v3|event:1");
   assert.equal(harness.getCategoryFindManyCalls(), 1);
 });
 

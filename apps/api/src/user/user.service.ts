@@ -301,11 +301,58 @@ type EventCategoryMedalistRow = {
   walkoverMatchesCount: number;
   playedMatchesCount: number;
   medalists: EventCategoryMedalist[];
-  diagnostics?: {
-    status: "ok" | "sem_atletas" | "sem_confrontos_publicados" | "classificacao_pendente_ou_indefinida";
-    message: string;
-  };
+  diagnostics?: EventCategoryMedalistDiagnostics;
 };
+
+type EventCategoryMedalistDiagnostics = {
+  status:
+    | "ok"
+    | "sem_atletas"
+    | "sem_confrontos_publicados"
+    | "classificacao_pendente_ou_indefinida"
+    | "medalhistas_incompletos";
+  message: string;
+};
+
+export function buildEventCategoryMedalistDiagnostics(input: {
+  athleteCount: number;
+  publishedMatchesCount: number;
+  medalistsCount: number;
+  expectedMedalists: number | null;
+}): EventCategoryMedalistDiagnostics {
+  if (input.athleteCount === 0) {
+    return {
+      status: "sem_atletas",
+      message: "Categoria sem atletas vinculados.",
+    };
+  }
+  if (input.publishedMatchesCount === 0) {
+    return {
+      status: "sem_confrontos_publicados",
+      message: "Categoria sem confrontos publicados.",
+    };
+  }
+  if (input.medalistsCount === 0) {
+    return {
+      status: "classificacao_pendente_ou_indefinida",
+      message: "Confrontos publicados, mas a classificacao final ainda nao pode ser determinada.",
+    };
+  }
+  if (
+    typeof input.expectedMedalists === "number" &&
+    input.expectedMedalists > 0 &&
+    input.medalistsCount < input.expectedMedalists
+  ) {
+    return {
+      status: "medalhistas_incompletos",
+      message: `Encontrados ${input.medalistsCount} de ${input.expectedMedalists} medalhistas esperados.`,
+    };
+  }
+  return {
+    status: "ok",
+    message: "Categoria com medalhistas definidos.",
+  };
+}
 
 type CategoryAthleteRef = {
   athleteId: number;
@@ -2172,7 +2219,7 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
-    const cacheKey = this.buildReadModelKey("event-medalists-v2", scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey("event-medalists-v3", scope.canonicalEventId);
     return this.resolveEventReadModelCache({
       event,
       cacheKey,
@@ -2451,26 +2498,12 @@ export class UserService {
         typeof officialRegisteredCount === "number" && officialRegisteredCount >= 0
           ? officialRegisteredCount
           : competitiveEntries.length;
-      const diagnostics =
-        athleteCount === 0
-          ? {
-              status: "sem_atletas" as const,
-              message: "Categoria sem atletas vinculados.",
-            }
-          : fullCategoryMatches.length === 0
-            ? {
-                status: "sem_confrontos_publicados" as const,
-                message: "Categoria sem confrontos publicados.",
-              }
-            : medalists.length === 0
-              ? {
-                  status: "classificacao_pendente_ou_indefinida" as const,
-                  message: "Confrontos publicados, mas a classificacao final ainda nao pode ser determinada.",
-                }
-              : {
-                  status: "ok" as const,
-                  message: "Categoria com medalhistas definidos.",
-                };
+      const diagnostics = buildEventCategoryMedalistDiagnostics({
+        athleteCount,
+        publishedMatchesCount: fullCategoryMatches.length,
+        medalistsCount: medalists.length,
+        expectedMedalists,
+      });
 
       return {
         categoryId: category.id,
