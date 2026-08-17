@@ -206,6 +206,14 @@ Pre-requisito: Docker Desktop ativo.
 
 Subir infraestrutura + backend + worker:
 
+No desenvolvimento local, adicione ao `.env`:
+
+```bash
+ALLOW_INSECURE_DEV_AUTH_DEFAULTS=true
+```
+
+Depois suba os servicos:
+
 ```bash
 docker compose up --build -d
 docker compose ps
@@ -228,9 +236,14 @@ Credenciais locais de desenvolvimento:
 - senha local padrao: `admin-local-change-me`
 
 Em producao, configure obrigatoriamente:
+- `NODE_ENV=production`
+- `ALLOW_INSECURE_DEV_AUTH_DEFAULTS=false`
 - `JWT_SECRET`
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD_HASH`
+
+Os defaults publicos de autenticacao so sao aceitos quando
+`ALLOW_INSECURE_DEV_AUTH_DEFAULTS=true` estiver definida explicitamente para desenvolvimento local/CI.
 
 ## Variaveis e Operacao
 Valores de conexao locais padrao nos `.env.example`:

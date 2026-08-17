@@ -83,6 +83,8 @@ services:
       dockerfile: docker/api.Dockerfile
     restart: unless-stopped
     environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      ALLOW_INSECURE_DEV_AUTH_DEFAULTS: ${ALLOW_INSECURE_DEV_AUTH_DEFAULTS:-false}
       API_PORT: 4000
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       FRONTEND_ALLOW_VERCEL_PREVIEWS: "true"
