@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:api": "cross-env API_PORT=4001 FRONTEND_URL=http://localhost:3001 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cbtm REDIS_URL=redis://localhost:6379 JWT_SECRET=local-dev-jwt-secret-change-me JWT_EXPIRES_IN=8h ADMIN_USERNAME=admin-local ADMIN_PASSWORD_HASH=$2a$12$665oCAgtDnKAz4A9NLc/MOU3jd7wWdbLdrIWe9mIHwM6ypIzo45la npm run dev --workspace apps/api",
+    "dev:api": "cross-env ALLOW_INSECURE_DEV_AUTH_DEFAULTS=true API_PORT=4001 FRONTEND_URL=http://localhost:3001 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cbtm REDIS_URL=redis://localhost:6379 JWT_SECRET=local-dev-jwt-secret-change-me JWT_EXPIRES_IN=8h ADMIN_USERNAME=admin-local ADMIN_PASSWORD_HASH=$2a$12$665oCAgtDnKAz4A9NLc/MOU3jd7wWdbLdrIWe9mIHwM6ypIzo45la npm run dev --workspace apps/api",
     "dev:worker": "npm run dev --workspace apps/worker",
     "dev:web": "cross-env PORT=3001 NEXT_PUBLIC_API_URL=http://localhost:4001 npm run dev --workspace apps/web",
     "build": "npm run prisma:generate && npm run build --workspace @cbtm/shared && npm run build --workspace @cbtm/parser && npm run build --workspace apps-api && npm run build --workspace apps-worker && npm run build --workspace apps-web",
