@@ -206,11 +206,22 @@ Pre-requisito: Docker Desktop ativo.
 
 Subir infraestrutura + backend + worker:
 
-No desenvolvimento local, adicione ao `.env`:
+No desenvolvimento local, crie um `.env` explicito com os segredos e URLs exigidos pelo Compose. Os
+valores abaixo sao apenas nomes; gere ou escolha valores exclusivos para o ambiente local:
 
 ```bash
 ALLOW_INSECURE_DEV_AUTH_DEFAULTS=true
+POSTGRES_PASSWORD=<senha-local>
+JWT_SECRET=<segredo-local>
+ADMIN_PASSWORD_HASH='<hash-bcrypt-local>'
+API_DATABASE_URL_WRITE=postgresql://postgres:<senha-local>@postgres:5432/cbtm?connection_limit=8&pool_timeout=30&connect_timeout=10
+API_DATABASE_URL_READ=postgresql://postgres:<senha-local>@postgres:5432/cbtm?connection_limit=12&pool_timeout=30&connect_timeout=10
+WORKER_DATABASE_URL_WRITE=postgresql://postgres:<senha-local>@postgres:5432/cbtm?connection_limit=6&pool_timeout=30&connect_timeout=10
+WORKER_DATABASE_URL_READ=postgresql://postgres:<senha-local>@postgres:5432/cbtm?connection_limit=4&pool_timeout=30&connect_timeout=10
 ```
+
+O `docker-compose.yml` falha explicitamente se qualquer dessas sete variaveis estiver ausente ou vazia.
+Hashes bcrypt devem ficar entre aspas simples no `.env`, para preservar os caracteres `$`.
 
 Depois suba os servicos:
 
@@ -241,6 +252,14 @@ Em producao, configure obrigatoriamente:
 - `JWT_SECRET`
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD_HASH`
+- `POSTGRES_PASSWORD`
+- `API_DATABASE_URL_WRITE` e `API_DATABASE_URL_READ`
+- `WORKER_DATABASE_URL_WRITE` e `WORKER_DATABASE_URL_READ`
+
+API e worker usam variaveis de entrada distintas no Compose para preservar seus pools de conexao. Dentro
+de cada container, elas continuam sendo expostas como `DATABASE_URL_WRITE`, `DATABASE_URL_READ` e
+`DATABASE_URL`, sem alterar o contrato da aplicacao. Nao existem fallbacks funcionais para credenciais no
+Compose versionado.
 
 Os defaults publicos de autenticacao so sao aceitos quando
 `ALLOW_INSECURE_DEV_AUTH_DEFAULTS=true` estiver definida explicitamente para desenvolvimento local/CI.
