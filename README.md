@@ -218,10 +218,13 @@ API_DATABASE_URL_WRITE=postgresql://postgres:<senha-local>@postgres:5432/cbtm?co
 API_DATABASE_URL_READ=postgresql://postgres:<senha-local>@postgres:5432/cbtm?connection_limit=12&pool_timeout=30&connect_timeout=10
 WORKER_DATABASE_URL_WRITE=postgresql://postgres:<senha-local>@postgres:5432/cbtm?connection_limit=6&pool_timeout=30&connect_timeout=10
 WORKER_DATABASE_URL_READ=postgresql://postgres:<senha-local>@postgres:5432/cbtm?connection_limit=4&pool_timeout=30&connect_timeout=10
+REDIS_PASSWORD=<senha-redis-local-hexadecimal-ou-base64url>
+REDIS_URL=redis://:<senha-redis-local-hexadecimal-ou-base64url>@redis:6379
 ```
 
-O `docker-compose.yml` falha explicitamente se qualquer dessas sete variaveis estiver ausente ou vazia.
+O `docker-compose.yml` falha explicitamente se qualquer uma das nove variaveis estiver ausente ou vazia.
 Hashes bcrypt devem ficar entre aspas simples no `.env`, para preservar os caracteres `$`.
+Use senha Redis hexadecimal/base64url ou aplique percent-encoding antes de inclui-la em `REDIS_URL`.
 
 Depois suba os servicos:
 
@@ -255,11 +258,23 @@ Em producao, configure obrigatoriamente:
 - `POSTGRES_PASSWORD`
 - `API_DATABASE_URL_WRITE` e `API_DATABASE_URL_READ`
 - `WORKER_DATABASE_URL_WRITE` e `WORKER_DATABASE_URL_READ`
+- `REDIS_PASSWORD` e `REDIS_URL` autenticada com a mesma senha
 
 API e worker usam variaveis de entrada distintas no Compose para preservar seus pools de conexao. Dentro
 de cada container, elas continuam sendo expostas como `DATABASE_URL_WRITE`, `DATABASE_URL_READ` e
 `DATABASE_URL`, sem alterar o contrato da aplicacao. Nao existem fallbacks funcionais para credenciais no
 Compose versionado.
+
+O Redis recebe `requirepass` no processo do container. O healthcheck usa `REDISCLI_AUTH`, evitando senha
+como argumento `-a` do `redis-cli`. API, worker e scripts operacionais continuam consumindo a URL
+completa por `REDIS_URL`.
+
+Os cenarios de integracao de autenticacao exigem Docker e Redis real; por isso, sao executados
+explicitamente fora da suite unitária padrao:
+
+```bash
+npm run test:redis-auth
+```
 
 Os defaults publicos de autenticacao so sao aceitos quando
 `ALLOW_INSECURE_DEV_AUTH_DEFAULTS=true` estiver definida explicitamente para desenvolvimento local/CI.
