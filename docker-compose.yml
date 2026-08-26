@@ -44,24 +44,22 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     stop_grace_period: 30s
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Defina REDIS_PASSWORD no ambiente ou arquivo .env}
     command:
-      - redis-server
-      - --appendonly
-      - "yes"
-      - --tcp-backlog
-      - "511"
-      - --save
-      - "300"
-      - "100"
-      - --save
-      - "60"
-      - "10000"
-      - --maxmemory
-      - "256mb"
-      - --maxmemory-policy
-      - "noeviction"
+      - /bin/sh
+      - -ec
+      - |
+        exec redis-server \
+          --appendonly yes \
+          --tcp-backlog 511 \
+          --save 300 100 \
+          --save 60 10000 \
+          --maxmemory 256mb \
+          --maxmemory-policy noeviction \
+          --requirepass "$$REDIS_PASSWORD"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -116,7 +114,7 @@ services:
       DATABASE_URL_WRITE: ${API_DATABASE_URL_WRITE:?Defina API_DATABASE_URL_WRITE no ambiente ou arquivo .env}
       DATABASE_URL_READ: ${API_DATABASE_URL_READ:?Defina API_DATABASE_URL_READ no ambiente ou arquivo .env}
       DATABASE_URL: ${API_DATABASE_URL_WRITE:?Defina API_DATABASE_URL_WRITE no ambiente ou arquivo .env}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:?Defina REDIS_URL autenticada no ambiente ou arquivo .env}
     depends_on:
       postgres:
         condition: service_healthy
@@ -149,7 +147,7 @@ services:
       DATABASE_URL_WRITE: ${WORKER_DATABASE_URL_WRITE:?Defina WORKER_DATABASE_URL_WRITE no ambiente ou arquivo .env}
       DATABASE_URL_READ: ${WORKER_DATABASE_URL_READ:?Defina WORKER_DATABASE_URL_READ no ambiente ou arquivo .env}
       DATABASE_URL: ${WORKER_DATABASE_URL_WRITE:?Defina WORKER_DATABASE_URL_WRITE no ambiente ou arquivo .env}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:?Defina REDIS_URL autenticada no ambiente ou arquivo .env}
       SCRAPER_MODE: live
       SCRAPER_EVENT_URL: https://app.cbtm.org.br/IUI/App/Evento?EVE_Evento_ID={EVENT_ID}
       SCRAPER_FIXTURE_PATH: /workspace/fixtures/results.txt

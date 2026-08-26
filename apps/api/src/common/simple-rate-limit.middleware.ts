@@ -14,6 +14,7 @@ type RedisClient = {
   ) => Promise<RedisEvalReply>;
   quit?: () => Promise<void>;
   disconnect?: () => void;
+  on?: (event: "error", listener: (error: unknown) => void) => void;
 };
 
 export class SimpleRateLimitMiddleware {
@@ -225,11 +226,15 @@ return { current, ttl }
         default: new (url: string, options?: Record<string, unknown>) => RedisClient;
       };
       const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";
-      this.redis = new ioredisModule.default(redisUrl, {
+      const redis = new ioredisModule.default(redisUrl, {
         maxRetriesPerRequest: 1,
         enableReadyCheck: true,
         lazyConnect: false,
       });
+      // A falha segue para o catch de use(), que aplica o bucket local. O listener
+      // evita que o ioredis trate a rejeicao de autenticacao como evento sem handler.
+      redis.on?.("error", () => undefined);
+      this.redis = redis;
       return this.redis;
     } catch {
       this.redis = null;
