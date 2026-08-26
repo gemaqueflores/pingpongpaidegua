@@ -16,7 +16,7 @@ Monorepo: `apps/api/`, `apps/web/`, `apps/worker/`, `packages/`.
 
 | ID | Decisão | Motivo | Desde |
 |---|---|---|---|
-| DEC-CBTM-001 | TLS renovado via Certbot no nginx da VM Oracle. | Certificado expirado em produção; renovação manual documentada. | 2026-05-21 |
+| DEC-CBTM-001 | TLS da VM Oracle é renovado pelo Certbot via webroot/HTTP-01; após cada emissão bem-sucedida, o hook `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh` executa `nginx -t` e recarrega o Nginx. | Em 21/07/2026 o Certbot renovou corretamente, mas o Nginx não foi recarregado e continuou servindo em memória o certificado anterior, expirado em 19/08/2026. A PP-032 fechou o ciclo automático e validou dry-run, hook, fingerprint e HTTPS externo. | 2026-05-21; corrigida em 2026-08-26 |
 | DEC-CBTM-002 | CORS configurado na API NestJS, não no nginx. | O nginx fazia double-CORS; CORS foi centralizado na API. | 2026-05-21 |
 | DEC-CBTM-003 | Pre-commit hook versionado em `.githooks/pre-commit`; ativado com `git config core.hooksPath .githooks`. | Garante hook versionado e portátil; `--no-verify` é proibido, exceto em commit RED de Red-Green quando o hook executa a suite que deve falhar por design. | 2026-06-10 |
 | DEC-CBTM-004 | O filtro `nameDisplay: { not: { contains: '#' } }` pertence apenas ao diretório global de atletas (`listAthleteDirectory`), nunca às listagens por evento. | Pares de duplas usam `nameDisplay = "A # B"`; filtrar `#` em contexto de evento exclui duplas por erro. | 2026-06-10 |
