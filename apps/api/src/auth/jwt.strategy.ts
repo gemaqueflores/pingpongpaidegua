@@ -8,6 +8,7 @@ export interface JwtPayload {
   sub?: unknown;
   username?: unknown;
   role?: unknown;
+  tokenVersion?: unknown;
 }
 
 @Injectable()
@@ -27,17 +28,20 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       typeof payload.sub !== "string" ||
       typeof payload.username !== "string" ||
       payload.sub.length === 0 ||
-      payload.sub !== payload.username
+      payload.sub !== payload.username ||
+      typeof payload.tokenVersion !== "number" ||
+      !Number.isInteger(payload.tokenVersion) ||
+      payload.tokenVersion < 0
     ) {
       throw new UnauthorizedException("Sessao administrativa invalida");
     }
 
     const credential = await this.prisma.adminCredential.findUnique({
       where: { username: payload.username },
-      select: { username: true },
+      select: { username: true, tokenVersion: true },
     });
 
-    if (!credential) {
+    if (!credential || credential.tokenVersion !== payload.tokenVersion) {
       throw new UnauthorizedException("Sessao administrativa invalida");
     }
 

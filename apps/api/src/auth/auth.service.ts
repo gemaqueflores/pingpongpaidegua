@@ -9,6 +9,7 @@ interface AuthAccount {
   id: number;
   username: string;
   passwordHash: string;
+  tokenVersion: number;
   role: "ADMIN";
 }
 
@@ -67,6 +68,7 @@ export class AuthService {
         id: existing.id,
         username: existing.username,
         passwordHash: existing.passwordHash,
+        tokenVersion: existing.tokenVersion,
         role: "ADMIN",
       };
     }
@@ -82,6 +84,7 @@ export class AuthService {
       id: created.id,
       username: created.username,
       passwordHash: created.passwordHash,
+      tokenVersion: created.tokenVersion,
       role: "ADMIN",
     };
   }
@@ -104,6 +107,7 @@ export class AuthService {
       id: existing.id,
       username: existing.username,
       passwordHash: existing.passwordHash,
+      tokenVersion: existing.tokenVersion,
       role: "ADMIN",
     };
   }
@@ -209,6 +213,7 @@ export class AuthService {
       sub: validUser.username,
       username: validUser.username,
       role: validUser.role,
+      tokenVersion: validUser.tokenVersion,
     };
 
     return {
@@ -260,12 +265,24 @@ export class AuthService {
       where: { id: account.id },
       data: {
         passwordHash: nextHash,
+        tokenVersion: { increment: 1 },
       },
     });
 
     await this.prisma.passwordResetToken.update({
       where: { id: row.id },
       data: { usedAt: now },
+    });
+
+    return { success: true };
+  }
+
+  async revokeSessions(username: string): Promise<{ success: true }> {
+    await this.prisma.adminCredential.update({
+      where: { username },
+      data: {
+        tokenVersion: { increment: 1 },
+      },
     });
 
     return { success: true };

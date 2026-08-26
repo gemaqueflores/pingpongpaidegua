@@ -1,5 +1,9 @@
-import { Body, Controller, Post, Req } from "@nestjs/common";
+import { Body, Controller, Post, Req, UseGuards } from "@nestjs/common";
 import { Request } from "express";
+import { AuthUser, CurrentUser } from "../common/current-user.decorator";
+import { JwtAuthGuard } from "../common/jwt-auth.guard";
+import { Roles } from "../common/roles.decorator";
+import { RolesGuard } from "../common/roles.guard";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
@@ -26,5 +30,12 @@ export class AuthController {
   @Post("reset-password")
   async resetPassword(@Body() body: ResetPasswordDto): Promise<{ success: true }> {
     return this.authService.resetPassword(body.token, body.password);
+  }
+
+  @Post("revoke-sessions")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("ADMIN")
+  async revokeSessions(@CurrentUser() user: AuthUser): Promise<{ success: true }> {
+    return this.authService.revokeSessions(user.username);
   }
 }

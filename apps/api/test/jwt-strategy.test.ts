@@ -8,6 +8,7 @@ type Credential = {
   id: number;
   username: string;
   passwordHash: string;
+  tokenVersion: number;
 };
 
 function createStrategy(credential: Credential | null): JwtStrategy {
@@ -39,6 +40,7 @@ test("T-I-01: rejeita token quando AdminCredential nao existe", async () => {
       sub: "admin-removido",
       username: "admin-removido",
       role: "ADMIN",
+      tokenVersion: 0,
     } as any)),
     UnauthorizedException,
   );
@@ -49,11 +51,13 @@ test("T-I-02: credencial existente autoriza fluxo administrativo legitimo", asyn
     id: 1,
     username: "admin-real",
     passwordHash: "hash-nao-utilizado-neste-teste",
+    tokenVersion: 2,
   });
   const user = await strategy.validate({
     sub: "admin-real",
     username: "admin-real",
     role: "ADMIN",
+    tokenVersion: 2,
   } as any);
   const guard = new RolesGuard({
     getAllAndOverride: () => ["ADMIN"],
@@ -67,12 +71,14 @@ test("T-I-03: role da sessao vem do banco e ignora role do payload", async () =>
     id: 1,
     username: "admin-real",
     passwordHash: "hash-nao-utilizado-neste-teste",
+    tokenVersion: 2,
   });
 
   const user = await strategy.validate({
     sub: "admin-real",
     username: "admin-real",
     role: "USER",
+    tokenVersion: 2,
   } as any);
 
   assert.equal(user.role, "ADMIN");
@@ -84,6 +90,7 @@ test("T-I-04: rejeita payload com sub e username divergentes", async () => {
     id: 1,
     username: "admin-real",
     passwordHash: "hash-nao-utilizado-neste-teste",
+    tokenVersion: 2,
   });
 
   await assert.rejects(
@@ -91,7 +98,64 @@ test("T-I-04: rejeita payload com sub e username divergentes", async () => {
       sub: "outro-admin",
       username: "admin-real",
       role: "ADMIN",
+      tokenVersion: 2,
     } as any)),
+    UnauthorizedException,
+  );
+});
+
+test("PP-034 T-I-01: rejeita token com tokenVersion desatualizado", async () => {
+  const strategy = createStrategy({
+    id: 1,
+    username: "admin-real",
+    passwordHash: "hash-nao-utilizado-neste-teste",
+    tokenVersion: 3,
+  });
+
+  await assert.rejects(
+    () => strategy.validate({
+      sub: "admin-real",
+      username: "admin-real",
+      role: "ADMIN",
+      tokenVersion: 2,
+    }),
+    UnauthorizedException,
+  );
+});
+
+test("PP-034 T-I-02: aceita token com tokenVersion atual", async () => {
+  const strategy = createStrategy({
+    id: 1,
+    username: "admin-real",
+    passwordHash: "hash-nao-utilizado-neste-teste",
+    tokenVersion: 3,
+  });
+
+  const user = await strategy.validate({
+    sub: "admin-real",
+    username: "admin-real",
+    role: "ADMIN",
+    tokenVersion: 3,
+  });
+
+  assert.equal(user.username, "admin-real");
+  assert.equal(user.role, "ADMIN");
+});
+
+test("PP-034: rejeita token legado sem tokenVersion", async () => {
+  const strategy = createStrategy({
+    id: 1,
+    username: "admin-real",
+    passwordHash: "hash-nao-utilizado-neste-teste",
+    tokenVersion: 0,
+  });
+
+  await assert.rejects(
+    () => strategy.validate({
+      sub: "admin-real",
+      username: "admin-real",
+      role: "ADMIN",
+    }),
     UnauthorizedException,
   );
 });
