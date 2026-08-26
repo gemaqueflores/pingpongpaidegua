@@ -30,6 +30,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5432:5432"
+    networks:
+      - postgres-tier
     ulimits:
       nofile:
         soft: 65535
@@ -65,6 +67,8 @@ services:
       retries: 10
     ports:
       - "127.0.0.1:6379:6379"
+    networks:
+      - redis-tier
     ulimits:
       nofile:
         soft: 65535
@@ -122,6 +126,10 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:4000:4000"
+    networks:
+      - postgres-tier
+      - redis-tier
+      - app-tier
     ulimits:
       nofile:
         soft: 65535
@@ -189,6 +197,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - postgres-tier
+      - redis-tier
+      - app-tier
     logging:
       driver: "json-file"
       options:
@@ -210,11 +222,18 @@ services:
         condition: service_healthy
     ports:
       - "3000:3000"
+    networks:
+      - app-tier
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "5"
+
+networks:
+  postgres-tier:
+  redis-tier:
+  app-tier:
 
 volumes:
   postgres_data:
