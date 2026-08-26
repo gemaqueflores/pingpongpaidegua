@@ -96,8 +96,6 @@ async function checkQueue(redisUrl: string, maxPendingJobs: number): Promise<Che
     connection: {
       url: redisUrl,
       maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
-      lazyConnect: true,
       retryStrategy: () => null,
     },
   });
@@ -186,8 +184,6 @@ async function checkEventFreshness(
     connection: {
       url: redisUrl,
       maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
-      lazyConnect: true,
       retryStrategy: () => null,
     },
   });
