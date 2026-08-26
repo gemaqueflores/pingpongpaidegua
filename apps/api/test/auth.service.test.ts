@@ -3,6 +3,14 @@ import assert from "node:assert/strict";
 import { hashSync } from "bcryptjs";
 import { JwtService } from "@nestjs/jwt";
 import { AuthService } from "../src/auth/auth.service";
+import { JwtStrategy } from "../src/auth/jwt.strategy";
+
+type AdminRow = {
+  id: number;
+  username: string;
+  passwordHash: string;
+  tokenVersion: number;
+};
 
 type ResetRow = {
   id: number;
@@ -16,16 +24,18 @@ type ResetRow = {
 function createPrismaMock() {
   const rows: ResetRow[] = [];
   let nextId = 1;
-  const adminStore = [
+  const adminStore: AdminRow[] = [
     {
       id: 1,
       username: process.env.ADMIN_USERNAME ?? "admin",
       passwordHash: process.env.ADMIN_PASSWORD_HASH ?? hashSync("senha-correta", 4),
+      tokenVersion: 0,
     },
   ];
 
   return {
     rows,
+    adminStore,
     prisma: {
       passwordResetToken: {
         create: async ({ data }: { data: Omit<ResetRow, "id" | "usedAt" | "createdAt"> }) => {
@@ -60,6 +70,7 @@ function createPrismaMock() {
                 id: row.id,
                 username: row.username,
                 passwordHash: row.passwordHash,
+                tokenVersion: row.tokenVersion,
               }
             : null;
         },
@@ -68,24 +79,45 @@ function createPrismaMock() {
             id: Math.max(...adminStore.map((item) => item.id)) + 1,
             username: data.username,
             passwordHash: data.passwordHash,
+            tokenVersion: 0,
           };
           adminStore.push(row);
           return {
             id: row.id,
             username: row.username,
             passwordHash: row.passwordHash,
+            tokenVersion: row.tokenVersion,
           };
         },
-        update: async ({ where, data }: { where: { id: number }; data: { passwordHash: string } }) => {
-          const target = adminStore.find((item) => item.id === where.id);
+        update: async ({
+          where,
+          data,
+        }: {
+          where: { id?: number; username?: string };
+          data: {
+            passwordHash?: string;
+            tokenVersion?: { increment: number };
+          };
+        }) => {
+          const target = adminStore.find(
+            (item) =>
+              (where.id !== undefined && item.id === where.id) ||
+              (where.username !== undefined && item.username === where.username),
+          );
           if (!target) {
             throw new Error("admin_not_found");
           }
-          target.passwordHash = data.passwordHash;
+          if (data.passwordHash !== undefined) {
+            target.passwordHash = data.passwordHash;
+          }
+          if (data.tokenVersion) {
+            target.tokenVersion += data.tokenVersion.increment;
+          }
           return {
             id: target.id,
             username: target.username,
             passwordHash: target.passwordHash,
+            tokenVersion: target.tokenVersion,
           };
         },
       },
@@ -107,6 +139,8 @@ function createAuthService(input?: { nowProvider?: () => number }) {
   return {
     authService,
     rows: prismaMock.rows,
+    adminStore: prismaMock.adminStore,
+    prisma: prismaMock.prisma,
   };
 }
 
@@ -189,6 +223,7 @@ test("permite login com credencial administrativa legada persistida no banco", a
           id: 99,
           username: "mush1n-d0sh4",
           passwordHash: legacyHash,
+          tokenVersion: 3,
         };
       }
       if (where.username === "admin-local") {
@@ -196,6 +231,7 @@ test("permite login com credencial administrativa legada persistida no banco", a
           id: 1,
           username: "admin-local",
           passwordHash: process.env.ADMIN_PASSWORD_HASH!,
+          tokenVersion: 0,
         };
       }
       return null;
@@ -307,5 +343,83 @@ test("reset password falha com token expirado", async () => {
   }, {
     ADMIN_USERNAME: "admin",
     ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),
+  });
+});
+
+test("T-U-01: payload de login inclui tokenVersion atual", async () => {
+  await withEnv(async () => {
+    const { authService, adminStore } = createAuthService();
+    adminStore[0].tokenVersion = 2;
+
+    const result = await authService.login("admin", "senha-correta", "ip-version");
+    const payload = await (authService as any).jwtService.verifyAsync(result.accessToken);
+
+    assert.equal(payload.tokenVersion, 2);
+  }, {
+    ADMIN_USERNAME: "admin",
+    ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),
+  });
+});
+
+test("T-U-02: reset password incrementa tokenVersion na mesma atualizacao", async () => {
+  await withEnv(async () => {
+    const now = 4_000_000;
+    const { authService, adminStore } = createAuthService({ nowProvider: () => now });
+    const rawToken = "token-versionado-12345678901234567890";
+    const tokenHash = (authService as any).tokenHash(rawToken);
+
+    await (authService as any).prisma.passwordResetToken.create({
+      data: {
+        email: "gemaqueflores@gmail.com",
+        tokenHash,
+        expiresAt: new Date(now + 300000),
+      },
+    });
+
+    await authService.resetPassword(rawToken, "novaSenha@123");
+
+    assert.equal(adminStore[0].tokenVersion, 1);
+  }, {
+    ADMIN_USERNAME: "admin",
+    ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),
+  });
+});
+
+test("T-I-03/T-I-04: revogacao incrementa somente o proprio admin", async () => {
+  await withEnv(async () => {
+    const { authService, adminStore } = createAuthService();
+    adminStore.push({
+      id: 2,
+      username: "segundo-admin",
+      passwordHash: hashSync("outra-senha", 4),
+      tokenVersion: 7,
+    });
+
+    const result = await authService.revokeSessions("admin");
+
+    assert.deepEqual(result, { success: true });
+    assert.equal(adminStore[0].tokenVersion, 1);
+    assert.equal(adminStore[1].tokenVersion, 7);
+  }, {
+    ADMIN_USERNAME: "admin",
+    ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),
+  });
+});
+
+test("T-I-03: o token usado para revogar deixa de ser valido", async () => {
+  await withEnv(async () => {
+    const { authService, prisma } = createAuthService();
+    const strategy = new JwtStrategy(prisma);
+    const login = await authService.login("admin", "senha-correta", "ip-self-revoke");
+    const payload = await (authService as any).jwtService.verifyAsync(login.accessToken);
+
+    await strategy.validate(payload);
+    await authService.revokeSessions("admin");
+
+    await assert.rejects(() => strategy.validate(payload), /Sessao administrativa invalida/);
+  }, {
+    ADMIN_USERNAME: "admin",
+    ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),
+    JWT_SECRET: "jwt-strategy-pp034-test-secret",
   });
 });
