@@ -135,6 +135,7 @@ export class AdminEventsController {
     return this.service.cleanupRawCaptures({
       eventId: id,
       dryRun: body.dryRun ?? false,
+      errorDaysOverride: body.errorDaysOverride,
     });
   }
 
