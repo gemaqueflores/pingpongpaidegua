@@ -5,6 +5,7 @@ import { PrismaService } from "../common/prisma.service";
 type CleanupInput = {
   eventId?: number | null;
   dryRun?: boolean;
+  errorDaysOverride?: number;
 };
 
 type EventCleanupResult = {
@@ -76,7 +77,8 @@ export class RawCaptureRetentionService {
   }> {
     const dryRun = input.dryRun === true;
     const successDays = toNumberFromEnv(process.env.RAW_CAPTURE_RETENTION_DAYS_SUCCESS, 14);
-    const errorDays = toNumberFromEnv(process.env.RAW_CAPTURE_RETENTION_DAYS_ERROR, 0);
+    const errorDays = input.errorDaysOverride
+      ?? toNumberFromEnv(process.env.RAW_CAPTURE_RETENTION_DAYS_ERROR, 0);
     const maxRunsPerEvent = Math.max(1, Math.floor(toNumberFromEnv(process.env.RAW_CAPTURE_MAX_RUNS_PER_EVENT, 20)));
 
     const successCutoff = toCutoff(successDays);
