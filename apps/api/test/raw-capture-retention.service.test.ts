@@ -191,6 +191,7 @@ test("PP-040 T-U-05: rota aceita override inteiro nao negativo e rejeita invalid
   ]);
 
   await assert.rejects(() => dispatch({ errorDaysOverride: -1 }));
+  await assert.rejects(() => dispatch({ errorDaysOverride: "7" }));
   await assert.rejects(() => dispatch({ errorDaysOverride: "invalido" }));
   assert.equal(calls.length, 1);
 });
