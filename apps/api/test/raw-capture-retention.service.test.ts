@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ScrapeStatus } from "@prisma/client";
+import { ValidationPipe } from "@nestjs/common";
+import { AdminEventsController } from "../src/admin/admin-events.controller";
+import { RawCaptureCleanupDto } from "../src/admin/dto/raw-capture-cleanup.dto";
 import type { PrismaService } from "../src/common/prisma.service";
 import { RawCaptureRetentionService } from "../src/admin/raw-capture-retention.service";
 
@@ -158,4 +161,36 @@ test("PP-040 T-U-04: dry-run com override contabiliza sem deletar", async () => 
   assert.equal(result.summary.rawCapturesPrunable, 4);
   assert.equal(result.summary.rawCapturesDeleted, 0);
   assert.deepEqual(deletedRunIds, []);
+});
+
+test("PP-040 T-U-05: rota aceita override inteiro nao negativo e rejeita invalidos antes do servico", async () => {
+  const calls: unknown[] = [];
+  const service = {
+    cleanupRawCaptures: async (input: unknown) => {
+      calls.push(input);
+      return input;
+    },
+  };
+  const controller = new AdminEventsController(service as never);
+  const pipe = new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  });
+  const dispatch = async (body: unknown) => {
+    const dto = await pipe.transform(body, {
+      type: "body",
+      metatype: RawCaptureCleanupDto,
+    });
+    return controller.cleanupRawCapturesByEvent(26, dto);
+  };
+
+  await dispatch({ dryRun: true, errorDaysOverride: 7 });
+  assert.deepEqual(calls, [
+    { eventId: 26, dryRun: true, errorDaysOverride: 7 },
+  ]);
+
+  await assert.rejects(() => dispatch({ errorDaysOverride: -1 }));
+  await assert.rejects(() => dispatch({ errorDaysOverride: "invalido" }));
+  assert.equal(calls.length, 1);
 });
