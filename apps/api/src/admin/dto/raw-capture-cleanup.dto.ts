@@ -13,7 +13,6 @@ export class RawCaptureCleanupDto {
   dryRun?: boolean;
 
   @IsOptional()
-  @Type(() => Number)
   @IsInt()
   @Min(0)
   errorDaysOverride?: number;
