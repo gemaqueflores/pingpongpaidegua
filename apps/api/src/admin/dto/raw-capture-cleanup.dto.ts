@@ -11,4 +11,9 @@ export class RawCaptureCleanupDto {
   @IsOptional()
   @IsBoolean()
   dryRun?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  errorDaysOverride?: number;
 }

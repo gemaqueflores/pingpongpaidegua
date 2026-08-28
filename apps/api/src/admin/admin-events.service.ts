@@ -633,7 +633,11 @@ export class AdminEventsService {
     };
   }
 
-  async cleanupRawCaptures(input: { eventId?: number; dryRun?: boolean }) {
+  async cleanupRawCaptures(input: {
+    eventId?: number;
+    dryRun?: boolean;
+    errorDaysOverride?: number;
+  }) {
     if (input.eventId) {
       await this.ensureEvent(input.eventId);
     }
