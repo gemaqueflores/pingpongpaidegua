@@ -58,3 +58,9 @@ test("T-U-03: rejeita JWT_SECRET customizado com exatamente 31 caracteres", asyn
     assert.throws(() => resolveJwtSecret(), /32/);
   });
 });
+
+test("T-U-04: permite default de desenvolvimento quando autorizado", async () => {
+  await withAuthEnv({ ALLOW_INSECURE_DEV_AUTH_DEFAULTS: "true" }, () => {
+    assert.equal(resolveJwtSecret(), "local-dev-jwt-secret-change-me");
+  });
+});
