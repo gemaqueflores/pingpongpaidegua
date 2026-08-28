@@ -123,7 +123,7 @@ test("PP-034 T-I-01: rejeita token com tokenVersion desatualizado", async () => 
   );
 });
 
-test("PP-034 T-I-02: aceita token com tokenVersion atual", async () => {
+test("PP-034 T-I-02 / PP-042 T-U-03: aceita payload atual sem role", async () => {
   const strategy = createStrategy({
     id: 1,
     username: "admin-real",
@@ -134,7 +134,6 @@ test("PP-034 T-I-02: aceita token com tokenVersion atual", async () => {
   const user = await strategy.validate({
     sub: "admin-real",
     username: "admin-real",
-    role: "ADMIN",
     tokenVersion: 3,
   });
 
