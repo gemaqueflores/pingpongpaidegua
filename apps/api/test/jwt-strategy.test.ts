@@ -12,7 +12,7 @@ type Credential = {
 };
 
 function createStrategy(credential: Credential | null): JwtStrategy {
-  process.env.JWT_SECRET = "jwt-strategy-test-secret";
+  process.env.JWT_SECRET = "jwt-strategy-test-secret-minimum-32";
   const prisma = {
     adminCredential: {
       findUnique: async ({ where }: { where: { username: string } }) =>
