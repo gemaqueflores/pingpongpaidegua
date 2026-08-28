@@ -184,7 +184,7 @@ test("bloqueia login apos 3 tentativas invalidas", async () => {
   });
 });
 
-test("sucesso de login reseta contador de falhas", async () => {
+test("PP-042 T-U-02: login preserva role ADMIN na resposta e reseta falhas", async () => {
   await withEnv(async () => {
     const { authService } = createAuthService();
 
@@ -340,6 +340,31 @@ test("reset password falha com token expirado", async () => {
       () => authService.resetPassword(rawToken, "novaSenha@123"),
       /Token de reset invalido ou expirado/,
     );
+  }, {
+    ADMIN_USERNAME: "admin",
+    ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),
+  });
+});
+
+test("PP-042 T-U-01: login assina payload sem role", async () => {
+  await withEnv(async () => {
+    let signedPayload: Record<string, unknown> | undefined;
+    const jwtService = {
+      signAsync: async (payload: Record<string, unknown>) => {
+        signedPayload = payload;
+        return "token-pp-042";
+      },
+    } as JwtService;
+    const prismaMock = createPrismaMock();
+    const authService = new AuthService(jwtService, prismaMock.prisma);
+
+    await authService.login("admin", "senha-correta", "ip-pp-042");
+
+    assert.deepEqual(signedPayload, {
+      sub: "admin",
+      username: "admin",
+      tokenVersion: 0,
+    });
   }, {
     ADMIN_USERNAME: "admin",
     ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),

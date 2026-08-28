@@ -7,7 +7,6 @@ import { resolveJwtSecret } from "./auth-config";
 export interface JwtPayload {
   sub?: unknown;
   username?: unknown;
-  role?: unknown;
   tokenVersion?: unknown;
 }
 

@@ -104,7 +104,7 @@ test("T-I-04: rejeita payload com sub e username divergentes", async () => {
   );
 });
 
-test("PP-034 T-I-01: rejeita token com tokenVersion desatualizado", async () => {
+test("PP-034 T-I-01 / PP-042 T-U-04: rejeita tokenVersion desatualizado sem role", async () => {
   const strategy = createStrategy({
     id: 1,
     username: "admin-real",
@@ -116,14 +116,13 @@ test("PP-034 T-I-01: rejeita token com tokenVersion desatualizado", async () => 
     () => strategy.validate({
       sub: "admin-real",
       username: "admin-real",
-      role: "ADMIN",
       tokenVersion: 2,
     }),
     UnauthorizedException,
   );
 });
 
-test("PP-034 T-I-02: aceita token com tokenVersion atual", async () => {
+test("PP-034 T-I-02 / PP-042 T-U-03: aceita payload atual sem role", async () => {
   const strategy = createStrategy({
     id: 1,
     username: "admin-real",
@@ -134,7 +133,6 @@ test("PP-034 T-I-02: aceita token com tokenVersion atual", async () => {
   const user = await strategy.validate({
     sub: "admin-real",
     username: "admin-real",
-    role: "ADMIN",
     tokenVersion: 3,
   });
 
@@ -155,7 +153,7 @@ test("PP-034: rejeita token legado sem tokenVersion", async () => {
       sub: "admin-real",
       username: "admin-real",
       role: "ADMIN",
-    }),
+    } as any),
     UnauthorizedException,
   );
 });
