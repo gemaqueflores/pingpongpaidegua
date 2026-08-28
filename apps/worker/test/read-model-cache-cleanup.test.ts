@@ -8,6 +8,7 @@ test("T-I-03 stage-1-reset invalida espelho pelo fluxo de processamento", async 
   const original = {
     eventFindUnique: prisma.event.findUnique,
     eventUpdate: prisma.event.update,
+    eventUpdateMany: prisma.event.updateMany,
     scrapeRunCreate: prisma.scrapeRun.create,
     scrapeRunUpdate: prisma.scrapeRun.update,
     readModelCacheDeleteMany: prisma.readModelCache.deleteMany,
@@ -56,6 +57,7 @@ test("T-I-03 stage-1-reset invalida espelho pelo fluxo de processamento", async 
     })) as typeof prisma.event.findUnique;
     prisma.scrapeRun.create = (async () => ({ id: 77 })) as typeof prisma.scrapeRun.create;
     prisma.event.update = (async () => ({})) as typeof prisma.event.update;
+    prisma.event.updateMany = (async () => ({ count: 1 })) as typeof prisma.event.updateMany;
     prisma.scrapeRun.update = (async () => ({})) as typeof prisma.scrapeRun.update;
     prisma.readModelCache.deleteMany = (async (args: { where: { eventId: number } }) => {
       calls.push(args);
@@ -68,6 +70,7 @@ test("T-I-03 stage-1-reset invalida espelho pelo fluxo de processamento", async 
   } finally {
     prisma.event.findUnique = original.eventFindUnique;
     prisma.event.update = original.eventUpdate;
+    prisma.event.updateMany = original.eventUpdateMany;
     prisma.scrapeRun.create = original.scrapeRunCreate;
     prisma.scrapeRun.update = original.scrapeRunUpdate;
     prisma.readModelCache.deleteMany = original.readModelCacheDeleteMany;

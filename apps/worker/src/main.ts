@@ -15,6 +15,89 @@ type ScrapeJobData = {
   publishMode?: "compare" | "replace";
 };
 
+export type FailedReasonPattern =
+  | "GetItemsRangeForLoad"
+  | "browser_fallback"
+  | "browser_context_closed"
+  | "other";
+
+export type FailedReasonSummary = Record<FailedReasonPattern, number>;
+
+type FailedQueueJob = {
+  timestamp?: number;
+  failedReason?: string | null;
+  remove(): Promise<void>;
+};
+
+type FailedQueueReader = {
+  getFailed(start: number, end: number): Promise<FailedQueueJob[]>;
+};
+
+export type FailedQueueCleanupResult = {
+  total: number;
+  porPadrao: FailedReasonSummary;
+  removidos: number;
+};
+
+export function classifyFailedReasons(failedReasons: Array<string | null | undefined>): FailedReasonSummary {
+  const summary: FailedReasonSummary = {
+    GetItemsRangeForLoad: 0,
+    browser_fallback: 0,
+    browser_context_closed: 0,
+    other: 0,
+  };
+
+  for (const failedReason of failedReasons) {
+    const normalized = String(failedReason ?? "").toLowerCase();
+    if (normalized.includes("getitemsrangeforload")) {
+      summary.GetItemsRangeForLoad += 1;
+    } else if (normalized.includes("browser fallback")) {
+      summary.browser_fallback += 1;
+    } else if (
+      normalized.includes("browsercontext.close") ||
+      normalized.includes("target page, context or browser has been closed")
+    ) {
+      summary.browser_context_closed += 1;
+    } else {
+      summary.other += 1;
+    }
+  }
+
+  return summary;
+}
+
+export async function cleanupFailedQueue(
+  queue: FailedQueueReader,
+  options: {
+    now?: number;
+    retentionDays?: number;
+  } = {},
+): Promise<FailedQueueCleanupResult> {
+  const now = options.now ?? Date.now();
+  const retentionDays = options.retentionDays ?? config.failedQueueRetentionDays;
+  const cutoff = now - retentionDays * 86400 * 1000;
+  const failedJobs = await queue.getFailed(0, 500);
+  const porPadrao = classifyFailedReasons(failedJobs.map((job) => job.failedReason));
+  let removidos = 0;
+
+  for (const job of failedJobs) {
+    const timestamp = Number(job.timestamp ?? 0);
+    if (Number.isFinite(timestamp) && timestamp > 0 && timestamp < cutoff) {
+      await job.remove();
+      removidos += 1;
+    }
+  }
+
+  const result = {
+    total: failedJobs.length,
+    porPadrao,
+    removidos,
+  };
+
+  log("info", "Cleanup fila failed", result);
+  return result;
+}
+
 async function autoConcludeExpiredEvents(): Promise<number> {
   const now = new Date();
   const updated = await prisma.event.updateMany({
@@ -84,6 +167,23 @@ async function bootstrap(): Promise<void> {
         removeOnComplete: {
           age: 24 * 3600,
           count: 30,
+        },
+      },
+    );
+  }
+
+  if (config.failedQueueCleanupEnabled) {
+    await queue.add(
+      "cleanup-failed-queue",
+      { reason: "scheduled-daily-cleanup" },
+      {
+        jobId: "cleanup-failed-queue-repeat",
+        repeat: {
+          every: config.failedQueueCleanupEveryMs,
+        },
+        removeOnComplete: {
+          age: 24 * 3600,
+          count: 10,
         },
       },
     );
@@ -220,6 +320,10 @@ async function bootstrap(): Promise<void> {
             },
             {
               jobId: `event-${candidate.id}-scheduled-${scheduledBucket}`,
+              removeOnFail: {
+                age: config.failedQueueRetentionDays * 86400,
+                count: 200,
+              },
             },
           );
         }
@@ -245,6 +349,11 @@ async function bootstrap(): Promise<void> {
           dryRun: result.dryRun,
           ...result.summary,
         });
+        return;
+      }
+
+      if (job.name === "cleanup-failed-queue") {
+        await cleanupFailedQueue(queue);
         return;
       }
 
@@ -332,11 +441,15 @@ async function bootstrap(): Promise<void> {
     scrapeIntervalBySituationMs: config.scrapeIntervalBySituationMs,
     rawCaptureCleanupEnabled: config.rawCaptureCleanupEnabled,
     rawCaptureCleanupEveryMs: config.rawCaptureCleanupEveryMs,
+    failedQueueCleanupEnabled: config.failedQueueCleanupEnabled,
+    failedQueueCleanupEveryMs: config.failedQueueCleanupEveryMs,
   });
 }
 
-bootstrap().catch(async (error) => {
-  log("error", "Falha ao iniciar worker", { error: String(error) });
-  await prisma.$disconnect();
-  process.exit(1);
-});
+if (require.main === module) {
+  bootstrap().catch(async (error) => {
+    log("error", "Falha ao iniciar worker", { error: String(error) });
+    await prisma.$disconnect();
+    process.exit(1);
+  });
+}
