@@ -52,3 +52,9 @@ test("T-U-02: aceita JWT_SECRET customizado com exatamente 32 caracteres", async
     assert.equal(resolveJwtSecret(), minimumLengthSecret);
   });
 });
+
+test("T-U-03: rejeita JWT_SECRET customizado com exatamente 31 caracteres", async () => {
+  await withAuthEnv({ JWT_SECRET: "a".repeat(31) }, () => {
+    assert.throws(() => resolveJwtSecret(), /32/);
+  });
+});
