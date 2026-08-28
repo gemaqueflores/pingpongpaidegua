@@ -153,7 +153,7 @@ test("PP-034: rejeita token legado sem tokenVersion", async () => {
       sub: "admin-real",
       username: "admin-real",
       role: "ADMIN",
-    }),
+    } as any),
     UnauthorizedException,
   );
 });
