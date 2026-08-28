@@ -334,9 +334,9 @@ export default function AdminPage() {
   const [scrapeProgressByEvent, setScrapeProgressByEvent] = useState<Record<number, ScrapeProgressState>>({});
   const [efficiencyConfig, setEfficiencyConfig] = useState<EfficiencyConfig | null>(null);
   const [efficiencySaving, setEfficiencySaving] = useState(false);
-  const [pesoOuro, setPesoOuro] = useState("400");
-  const [pesoPrata, setPesoPrata] = useState("240");
-  const [pesoBronze, setPesoBronze] = useState("120");
+  const [pesoOuro, setPesoOuro] = useState("");
+  const [pesoPrata, setPesoPrata] = useState("");
+  const [pesoBronze, setPesoBronze] = useState("");
   const [eventMerges, setEventMerges] = useState<AdminEventMergeRow[]>([]);
   const [mergePrimaryEventId, setMergePrimaryEventId] = useState("");
   const [mergeSecondaryEventId, setMergeSecondaryEventId] = useState("");
@@ -1093,6 +1093,7 @@ export default function AdminPage() {
               min={0}
               step={1}
               value={pesoOuro}
+              disabled={!efficiencyConfig || efficiencySaving}
               onChange={(event) => setPesoOuro(event.target.value)}
             />
           </label>
@@ -1104,6 +1105,7 @@ export default function AdminPage() {
               min={0}
               step={1}
               value={pesoPrata}
+              disabled={!efficiencyConfig || efficiencySaving}
               onChange={(event) => setPesoPrata(event.target.value)}
             />
           </label>
@@ -1115,12 +1117,13 @@ export default function AdminPage() {
               min={0}
               step={1}
               value={pesoBronze}
+              disabled={!efficiencyConfig || efficiencySaving}
               onChange={(event) => setPesoBronze(event.target.value)}
             />
           </label>
         </div>
         <div className="row admin-action-row">
-          <button className="admin-btn-primary" onClick={saveEfficiencyConfig} disabled={efficiencySaving}>
+          <button className="admin-btn-primary" onClick={saveEfficiencyConfig} disabled={!efficiencyConfig || efficiencySaving}>
             {efficiencySaving ? "Salvando..." : "Salvar pesos"}
           </button>
           {efficiencyConfig ? (

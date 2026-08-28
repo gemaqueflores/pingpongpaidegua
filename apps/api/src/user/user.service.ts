@@ -277,6 +277,17 @@ type EfficiencyHistoryMedalist = {
 
 type EfficiencyEventMedalist = EfficiencyHistoryMedalist;
 
+type EfficiencyWeights = {
+  pesoOuro: number;
+  pesoPrata: number;
+  pesoBronze: number;
+};
+
+type EfficiencyConfigVersionLike = EfficiencyWeights & {
+  dataInicioVigencia: Date;
+  dataFimVigencia: Date | null;
+};
+
 type EfficiencyEventLevel = "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN" | null;
 
 type EventCategoryMedalist = {
@@ -937,18 +948,22 @@ function resolvePaginationWindow(pageRaw?: string, pageSizeRaw?: string): Pagina
 export class UserService {
   private readonly prisma: PrismaReadService;
   private readonly prismaWrite: PrismaService;
-  private globalEfficiencyCache:
-    | {
-        expiresAt: number;
-        data: {
-          weights: { pesoOuro: number; pesoPrata: number; pesoBronze: number };
-          ranking: ClubEfficiencyRow[];
-        };
-      }
-    | null = null;
+  private globalEfficiencyCache = new Map<
+    string,
+    {
+      cacheVersion: number;
+      expiresAt: number;
+      data: {
+        weights: { pesoOuro: number; pesoPrata: number; pesoBronze: number };
+        ranking: ClubEfficiencyRow[];
+        availableYears?: number[];
+      };
+    }
+  >();
   private readonly clubEfficiencyCache = new Map<
     number,
     {
+      cacheVersion: number;
       expiresAt: number;
       data: unknown;
     }
@@ -966,6 +981,11 @@ export class UserService {
       }
     | null = null;
   private static readonly EFFICIENCY_CACHE_TTL_MS = 60_000;
+  private static efficiencyCacheVersion = 0;
+
+  static invalidateEfficiencyMemoryCaches(): void {
+    UserService.efficiencyCacheVersion += 1;
+  }
 
   constructor(
     @Inject(PrismaReadService) prisma: PrismaReadService,
@@ -2963,28 +2983,46 @@ export class UserService {
     ].join("|");
   }
 
-  async listGlobalEfficiency() {
+  async listGlobalEfficiency(year?: number) {
     const now = Date.now();
-    if (this.globalEfficiencyCache && this.globalEfficiencyCache.expiresAt > now) {
-      return this.globalEfficiencyCache.data;
+    const cacheKey = typeof year === "number" ? `year:${year}` : "all";
+    const cacheHit = this.globalEfficiencyCache.get(cacheKey);
+    if (
+      cacheHit &&
+      cacheHit.cacheVersion === UserService.efficiencyCacheVersion &&
+      cacheHit.expiresAt > now
+    ) {
+      return cacheHit.data;
     }
 
-    const data = await this.computeEfficiencyRanking({});
-    this.globalEfficiencyCache = {
+    const [rankingData, availableYears] = await Promise.all([
+      this.computeEfficiencyRanking({ year }),
+      this.listEfficiencyAvailableYears(),
+    ]);
+    const data = { ...rankingData, availableYears };
+    this.globalEfficiencyCache.set(cacheKey, {
+      cacheVersion: UserService.efficiencyCacheVersion,
       expiresAt: now + UserService.EFFICIENCY_CACHE_TTL_MS,
       data,
-    };
+    });
     return data;
   }
 
-  private async computeEfficiencyRanking(input: { eventIds?: number[] }) {
+  private async computeEfficiencyRanking(input: { eventIds?: number[]; year?: number }) {
     const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
     if (eligibleClubIds.size === 0) {
       return { weights: await this.getEfficiencyWeights(), ranking: [] as ClubEfficiencyRow[] };
     }
 
-    const hasScopedEvents = Array.isArray(input.eventIds) && input.eventIds.length > 0;
-    const eventFilter = hasScopedEvents ? { eventId: { in: input.eventIds } } : {};
+    const scopedEventIds = typeof input.year === "number"
+      ? await this.listEfficiencyEventIdsForYear(input.year, input.eventIds)
+      : input.eventIds;
+    if (typeof input.year === "number" && (scopedEventIds?.length ?? 0) === 0) {
+      return { weights: await this.getEfficiencyWeights(), ranking: [] as ClubEfficiencyRow[] };
+    }
+
+    const hasScopedEvents = Array.isArray(scopedEventIds) && scopedEventIds.length > 0;
+    const eventFilter = hasScopedEvents ? { eventId: { in: scopedEventIds } } : {};
     const eligibleClubFilter = { clubId: { in: [...eligibleClubIds] } };
     const athleteFilter = {
       ...eventFilter,
@@ -2994,15 +3032,15 @@ export class UserService {
     const categoryFilter =
       hasScopedEvents
         ? {
-            eventId: { in: input.eventIds },
+            eventId: { in: scopedEventIds },
             OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
           }
         : {
             OR: [{ cbtmCategoryId: null }, { cbtmCategoryId: { notIn: IGNORED_CATEGORY_IDS } }],
           };
 
-    const [weights, clubs, registeredAthletesByClub, categories] = await Promise.all([
-      this.getEfficiencyWeights(),
+    const [efficiencyWeightVersions, clubs, registeredAthletesByClub, categories] = await Promise.all([
+      this.loadEfficiencyConfigVersions(),
       this.prisma.club.findMany({
         where: {
           id: { in: [...eligibleClubIds] },
@@ -3057,13 +3095,15 @@ export class UserService {
         },
       }),
     ]);
+    const weights = this.resolveEfficiencyWeightsFromLoadedVersions(efficiencyWeightVersions, new Date())
+      ?? await this.getEfficiencyWeights();
 
     const eventIdsForWeights = [...new Set(categories.map((category) => category.eventId))];
     const eventsById = new Map(
       (
         await this.prisma.event.findMany({
           where: { id: { in: eventIdsForWeights } },
-          select: { id: true, nivel: true, nome: true },
+          select: { id: true, nivel: true, nome: true, dataInicio: true },
         })
       ).map((event) => [event.id, event]),
     );
@@ -3316,6 +3356,12 @@ export class UserService {
       for (const [eventId, medalists] of eventsForClub.entries()) {
         const event = eventsById.get(eventId);
         const eventWeight = this.resolveEfficiencyEventWeight(event?.nivel ?? null, event?.nome ?? null);
+        const eventMedalWeights = efficiencyWeightVersions
+          ? this.resolveEfficiencyWeightsForDate(
+              efficiencyWeightVersions,
+              event?.dataInicio ?? this.resolveOldestEfficiencyVersionDate(efficiencyWeightVersions) ?? new Date(),
+            )
+          : weights;
         const dedupedMedalists = this.dedupeEfficiencyMedalistsByEvent(
           event?.nome ?? "",
           officialCategoryNamesByEvent.get(eventId) ?? new Set<string>(),
@@ -3323,7 +3369,7 @@ export class UserService {
         );
         for (const medalist of dedupedMedalists) {
           row[medalist.medalha] += 1;
-          row.pontuacao[medalist.medalha] += this.getEfficiencyMedalWeight(medalist.medalha, weights) * eventWeight;
+          row.pontuacao[medalist.medalha] += this.getEfficiencyMedalWeight(medalist.medalha, eventMedalWeights) * eventWeight;
         }
       }
     }
@@ -3353,10 +3399,55 @@ export class UserService {
     return { weights, ranking };
   }
 
+  private async listEfficiencyEventIdsForYear(year: number, baseEventIds?: number[]): Promise<number[]> {
+    const start = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0));
+    const end = new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0, 0));
+    const where: {
+      id?: { in: number[] };
+      dataInicio: { gte: Date; lt: Date };
+    } = {
+      dataInicio: {
+        gte: start,
+        lt: end,
+      },
+    };
+    if (Array.isArray(baseEventIds) && baseEventIds.length > 0) {
+      where.id = { in: baseEventIds };
+    }
+
+    const events = await this.prisma.event.findMany({
+      where,
+      select: { id: true, dataInicio: true },
+    });
+    return events.map((event) => event.id);
+  }
+
+  private async listEfficiencyAvailableYears(): Promise<number[]> {
+    const events = await this.prisma.event.findMany({
+      where: {
+        dataInicio: {
+          not: null,
+        },
+      },
+      select: { dataInicio: true },
+    });
+    const years = new Set<number>();
+    for (const event of events) {
+      if (event.dataInicio) {
+        years.add(event.dataInicio.getUTCFullYear());
+      }
+    }
+    return [...years].sort((left, right) => right - left);
+  }
+
   async getClubEfficiencyCareer(clubId: number) {
     const now = Date.now();
     const cacheHit = this.clubEfficiencyCache.get(clubId);
-    if (cacheHit && cacheHit.expiresAt > now) {
+    if (
+      cacheHit &&
+      cacheHit.cacheVersion === UserService.efficiencyCacheVersion &&
+      cacheHit.expiresAt > now
+    ) {
       return cacheHit.data;
     }
 
@@ -3972,6 +4063,7 @@ export class UserService {
       athletesContribution,
     };
     this.clubEfficiencyCache.set(clubId, {
+      cacheVersion: UserService.efficiencyCacheVersion,
       expiresAt: now + UserService.EFFICIENCY_CACHE_TTL_MS,
       data: response,
     });
@@ -6508,7 +6600,32 @@ export class UserService {
     };
   }
 
-  private async getEfficiencyWeights() {
+  private resolveEfficiencyWeightsForDate(
+    versions: EfficiencyConfigVersionLike[],
+    referenceDate: Date,
+  ): EfficiencyWeights {
+    const sortedVersions = [...versions].sort(
+      (left, right) => left.dataInicioVigencia.getTime() - right.dataInicioVigencia.getTime(),
+    );
+    const referenceTime = referenceDate.getTime();
+    const matchingVersion = sortedVersions.find((version) => {
+      const startsBeforeReference = version.dataInicioVigencia.getTime() <= referenceTime;
+      const endsAfterReference = !version.dataFimVigencia || version.dataFimVigencia.getTime() >= referenceTime;
+      return startsBeforeReference && endsAfterReference;
+    }) ?? sortedVersions[0] ?? null;
+
+    if (matchingVersion) {
+      return {
+        pesoOuro: matchingVersion.pesoOuro,
+        pesoPrata: matchingVersion.pesoPrata,
+        pesoBronze: matchingVersion.pesoBronze,
+      };
+    }
+
+    return DEFAULT_EFFICIENCY_WEIGHTS;
+  }
+
+  private async getEfficiencyWeights(referenceDate?: Date) {
     let config:
       | {
           pesoOuro: number;
@@ -6516,6 +6633,18 @@ export class UserService {
           pesoBronze: number;
         }
       | null = null;
+
+    try {
+      const versions = await this.loadEfficiencyConfigVersions();
+      if (versions) {
+        if (versions.length === 0) {
+          return DEFAULT_EFFICIENCY_WEIGHTS;
+        }
+        return this.resolveEfficiencyWeightsForDate(versions, referenceDate ?? new Date());
+      }
+    } catch {
+      config = null;
+    }
 
     try {
       const prismaWithEfficiency = this.prisma as unknown as {
@@ -6556,6 +6685,55 @@ export class UserService {
       pesoPrata: config.pesoPrata,
       pesoBronze: config.pesoBronze,
     };
+  }
+
+  private async loadEfficiencyConfigVersions(): Promise<EfficiencyConfigVersionLike[] | null> {
+    const prismaWithEfficiencyVersion = this.prisma as unknown as {
+      efficiencyConfigVersion?: {
+        findMany?: (args: {
+          orderBy: { dataInicioVigencia: "asc" };
+          select: {
+            dataInicioVigencia: boolean;
+            dataFimVigencia: boolean;
+            pesoOuro: boolean;
+            pesoPrata: boolean;
+            pesoBronze: boolean;
+          };
+        }) => Promise<EfficiencyConfigVersionLike[]>;
+      };
+    };
+    return await prismaWithEfficiencyVersion.efficiencyConfigVersion?.findMany?.({
+      orderBy: { dataInicioVigencia: "asc" },
+      select: {
+        dataInicioVigencia: true,
+        dataFimVigencia: true,
+        pesoOuro: true,
+        pesoPrata: true,
+        pesoBronze: true,
+      },
+    }) ?? null;
+  }
+
+  private resolveEfficiencyWeightsFromLoadedVersions(
+    versions: EfficiencyConfigVersionLike[] | null,
+    referenceDate: Date,
+  ): EfficiencyWeights | null {
+    if (!versions) {
+      return null;
+    }
+    if (versions.length === 0) {
+      return DEFAULT_EFFICIENCY_WEIGHTS;
+    }
+    return this.resolveEfficiencyWeightsForDate(versions, referenceDate);
+  }
+
+  private resolveOldestEfficiencyVersionDate(versions: EfficiencyConfigVersionLike[]): Date | null {
+    return versions.reduce<Date | null>((oldest, version) => {
+      if (!oldest || version.dataInicioVigencia.getTime() < oldest.getTime()) {
+        return version.dataInicioVigencia;
+      }
+      return oldest;
+    }, null);
   }
 
   private getEfficiencyMedalWeight(

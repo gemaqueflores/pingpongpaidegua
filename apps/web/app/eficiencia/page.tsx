@@ -23,12 +23,13 @@ export default function EfficiencyHubPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined);
   const [data, setData] = useState<GlobalEfficiencyResponse | null>(null);
   const [apiError, setApiError] = useState(false);
 
   useEffect(() => {
     setLoading(true);
-    void apiGetGlobalEfficiency()
+    void apiGetGlobalEfficiency(selectedYear)
       .then((result) => {
         setApiError(false);
         setData(result);
@@ -38,7 +39,9 @@ export default function EfficiencyHubPage() {
         setData(null);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedYear]);
+
+  const availableYears = data?.availableYears ?? [];
 
   const filtered = useMemo(() => {
     const rows = [...(data?.ranking ?? [])].sort((left, right) => {
@@ -71,7 +74,28 @@ export default function EfficiencyHubPage() {
 
         <Card className="grid" variant="event">
           <p className="efficiency-page-kicker">Ranking geral por medalhas</p>
-          <p className="arena-muted efficiency-page-period">Período considerado: todos os eventos computados na base.</p>
+          <p className="arena-muted efficiency-page-period">
+            Período considerado: {selectedYear ?? "todos os eventos computados na base"}.
+          </p>
+
+          <label className="admin-field admin-field-grid">
+            <span>Ano</span>
+            <select
+              className="admin-input"
+              value={selectedYear ?? ""}
+              onChange={(event) => {
+                const value = event.target.value;
+                setSelectedYear(value ? Number(value) : undefined);
+              }}
+            >
+              <option value="">Todos os anos</option>
+              {availableYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <SearchInput
             value={search}

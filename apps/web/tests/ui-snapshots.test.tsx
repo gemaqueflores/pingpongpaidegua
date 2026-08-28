@@ -249,6 +249,34 @@ test("PP-002 T-U-04 eficiencia/page exibe erro da API", () => {
   assert.match(html, /Serviço indisponível/);
 });
 
+test("PP-015 T-C-01 admin/page nao inicializa pesos com hardcode numerico", () => {
+  const source = readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(source, /useState\("400"\)/);
+  assert.doesNotMatch(source, /useState\("240"\)/);
+  assert.doesNotMatch(source, /useState\("120"\)/);
+});
+
+test("PP-015 T-C-02 eficiencia/page usa seletor de ano vindo da API", () => {
+  const source = readFileSync(new URL("../app/eficiencia/page.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /availableYears/);
+  assert.match(source, /apiGetGlobalEfficiency\(selectedYear/);
+  assert.match(source, /<select/);
+  assert.match(source, /Todos os anos/);
+});
+
+test("PP-015 T-NR-01 eficiencia/[clubId] permanece sem filtro por ano", () => {
+  const pageSource = readFileSync(new URL("../app/eficiencia/[clubId]/page.tsx", import.meta.url), "utf8");
+  const apiSource = readFileSync(new URL("../lib/user-api.ts", import.meta.url), "utf8");
+
+  assert.match(pageSource, /apiGetClubEfficiencyCareer\(clubId\)/);
+  assert.doesNotMatch(pageSource, /selectedYear/);
+  assert.doesNotMatch(pageSource, /availableYears/);
+  assert.doesNotMatch(pageSource, /<select/);
+  assert.match(apiSource, /apiGetClubEfficiencyCareer\(clubId: number\)/);
+});
+
 test("PP-002 T-U-05 home exibe erro da API na secao de eventos", () => {
   const source = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
   const html = renderToStaticMarkup(

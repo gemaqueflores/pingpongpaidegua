@@ -8,6 +8,7 @@ import { CreateAdminEventDto } from "./dto/create-admin-event.dto";
 import { UpdateAdminEventDto } from "./dto/update-admin-event.dto";
 import { CreateEventMergeDto } from "./dto/create-event-merge.dto";
 import { RawCaptureRetentionService } from "./raw-capture-retention.service";
+import { UserService } from "../user/user.service";
 
 type DateBoundary = "start" | "end";
 const EVENT_TZ_OFFSET_MINUTES = -3 * 60;
@@ -16,6 +17,33 @@ const DEFAULT_EFFICIENCY_CONFIG = {
   pesoPrata: 80,
   pesoBronze: 50,
 } as const;
+
+type EfficiencyConfigVersionRecord = {
+  id: number;
+  dataInicioVigencia: Date;
+  dataFimVigencia: Date | null;
+  pesoOuro: number;
+  pesoPrata: number;
+  pesoBronze: number;
+};
+
+type EfficiencyConfigVersionDelegate = {
+  findFirst(args: unknown): Promise<EfficiencyConfigVersionRecord | null>;
+  update(args: { where: { id: number }; data: { dataFimVigencia: Date } }): Promise<EfficiencyConfigVersionRecord>;
+  create(args: {
+    data: {
+      dataInicioVigencia: Date;
+      dataFimVigencia: Date | null;
+      pesoOuro: number;
+      pesoPrata: number;
+      pesoBronze: number;
+    };
+  }): Promise<EfficiencyConfigVersionRecord>;
+};
+
+type PrismaWithEfficiencyVersion = {
+  efficiencyConfigVersion?: EfficiencyConfigVersionDelegate;
+};
 
 type ConformanceAuditSummary = {
   categoryCountExpected: number;
@@ -171,37 +199,92 @@ export class AdminEventsService {
   }
 
   async getEfficiencyConfig() {
-    const config = await this.prisma.efficiencyConfig.findUnique({
+    const versionDelegate = (this.prisma as unknown as PrismaWithEfficiencyVersion).efficiencyConfigVersion;
+    const currentVersion = await versionDelegate?.findFirst({
+      where: { dataFimVigencia: null },
+      orderBy: { dataInicioVigencia: "desc" },
+    });
+
+    if (currentVersion) {
+      return currentVersion;
+    }
+
+    const legacyConfig = await this.prisma.efficiencyConfig.findUnique({
       where: { id: 1 },
     });
 
-    if (config) {
-      return config;
+    const seedConfig = legacyConfig ?? DEFAULT_EFFICIENCY_CONFIG;
+
+    if (versionDelegate) {
+      return versionDelegate.create({
+        data: {
+          dataInicioVigencia: new Date(),
+          dataFimVigencia: null,
+          pesoOuro: seedConfig.pesoOuro,
+          pesoPrata: seedConfig.pesoPrata,
+          pesoBronze: seedConfig.pesoBronze,
+        },
+      });
     }
 
     return this.prisma.efficiencyConfig.create({
       data: {
         id: 1,
-        ...DEFAULT_EFFICIENCY_CONFIG,
+        ...seedConfig,
       },
     });
   }
 
   async updateEfficiencyConfig(input: { pesoOuro: number; pesoPrata: number; pesoBronze: number }) {
-    return this.prisma.efficiencyConfig.upsert({
-      where: { id: 1 },
-      create: {
-        id: 1,
-        pesoOuro: input.pesoOuro,
-        pesoPrata: input.pesoPrata,
-        pesoBronze: input.pesoBronze,
-      },
-      update: {
-        pesoOuro: input.pesoOuro,
-        pesoPrata: input.pesoPrata,
-        pesoBronze: input.pesoBronze,
-      },
+    const prismaWithTransaction = this.prisma as unknown as {
+      $transaction<T>(callback: (client: PrismaWithEfficiencyVersion) => Promise<T>): Promise<T>;
+    };
+
+    const saved = await prismaWithTransaction.$transaction(async (client) => {
+      const versionDelegate = client.efficiencyConfigVersion;
+      if (!versionDelegate) {
+        return this.prisma.efficiencyConfig.upsert({
+          where: { id: 1 },
+          create: {
+            id: 1,
+            pesoOuro: input.pesoOuro,
+            pesoPrata: input.pesoPrata,
+            pesoBronze: input.pesoBronze,
+          },
+          update: {
+            pesoOuro: input.pesoOuro,
+            pesoPrata: input.pesoPrata,
+            pesoBronze: input.pesoBronze,
+          },
+        });
+      }
+
+      const effectiveStart = new Date();
+      const previousEnd = new Date(effectiveStart.getTime() - 1);
+      const currentVersion = await versionDelegate.findFirst({
+        where: { dataFimVigencia: null },
+        orderBy: { dataInicioVigencia: "desc" },
+      });
+
+      if (currentVersion) {
+        await versionDelegate.update({
+          where: { id: currentVersion.id },
+          data: { dataFimVigencia: previousEnd },
+        });
+      }
+
+      return versionDelegate.create({
+        data: {
+          dataInicioVigencia: effectiveStart,
+          dataFimVigencia: null,
+          pesoOuro: input.pesoOuro,
+          pesoPrata: input.pesoPrata,
+          pesoBronze: input.pesoBronze,
+        },
+      });
     });
+    UserService.invalidateEfficiencyMemoryCaches();
+    return saved;
   }
 
   async listEventMerges() {

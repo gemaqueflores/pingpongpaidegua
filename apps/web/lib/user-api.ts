@@ -134,6 +134,7 @@ export interface GlobalEfficiencyResponse {
     pesoPrata: number;
     pesoBronze: number;
   };
+  availableYears: number[];
   ranking: EventEfficiencyRow[];
 }
 
@@ -402,8 +403,13 @@ export async function apiGetEventSchedule(eventId: number): Promise<EventSchedul
   return handleResponse(response);
 }
 
-export async function apiGetGlobalEfficiency(): Promise<GlobalEfficiencyResponse> {
-  const response = await fetchWithRecovery(`${API_BASE}/efficiency`, {
+export async function apiGetGlobalEfficiency(year?: number): Promise<GlobalEfficiencyResponse> {
+  const query = new URLSearchParams();
+  if (typeof year === "number") {
+    query.set("year", String(year));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const response = await fetchWithRecovery(`${API_BASE}/efficiency${suffix}`, {
     headers: getHeaders(),
     cache: "no-store",
   });

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Inject, Param, ParseIntPipe, Post, Query, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Header, Inject, Param, ParseIntPipe, Post, Query, UseInterceptors } from "@nestjs/common";
 import { UserService } from "./user.service";
 import { AthleteSummaryQueryDto } from "./dto/athlete-summary-query.dto";
 import { ReportProblemDto } from "./dto/report-problem.dto";
@@ -79,8 +79,9 @@ export class UserController {
   }
 
   @Get("efficiency")
-  async listGlobalEfficiency() {
-    return this.service.listGlobalEfficiency();
+  async listGlobalEfficiency(@Query("year") year?: string) {
+    const parsedYear = this.parseEfficiencyYear(year);
+    return this.service.listGlobalEfficiency(parsedYear);
   }
 
   @Get("events/:id/group-simulation")
@@ -122,6 +123,17 @@ export class UserController {
     @Query() query: AthleteSummaryQueryDto,
   ) {
     return this.service.getAthleteSummary(eventId, athleteId, query.orderBy ?? "phase_hierarchy_datetime");
+  }
+
+  private parseEfficiencyYear(year?: string): number | undefined {
+    if (year === undefined || year === null || year === "") {
+      return undefined;
+    }
+    const parsed = Number(year);
+    if (!Number.isInteger(parsed) || parsed < 1900 || parsed > 2100) {
+      throw new BadRequestException("Parametro year invalido. Use um ano entre 1900 e 2100.");
+    }
+    return parsed;
   }
 
   @Get("events/:id/athletes/:athleteId/identity")
