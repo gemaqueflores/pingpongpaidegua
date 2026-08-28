@@ -184,7 +184,7 @@ test("bloqueia login apos 3 tentativas invalidas", async () => {
   });
 });
 
-test("sucesso de login reseta contador de falhas", async () => {
+test("PP-042 T-U-02: login preserva role ADMIN na resposta e reseta falhas", async () => {
   await withEnv(async () => {
     const { authService } = createAuthService();
 
