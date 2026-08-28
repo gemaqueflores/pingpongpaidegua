@@ -64,3 +64,12 @@ test("T-U-04: permite default de desenvolvimento quando autorizado", async () =>
     assert.equal(resolveJwtSecret(), "local-dev-jwt-secret-change-me");
   });
 });
+
+test("T-U-05: rejeita default de desenvolvimento sem autorizacao", async () => {
+  await withAuthEnv({}, () => {
+    assert.throws(
+      () => resolveJwtSecret(),
+      /ALLOW_INSECURE_DEV_AUTH_DEFAULTS/,
+    );
+  });
+});
