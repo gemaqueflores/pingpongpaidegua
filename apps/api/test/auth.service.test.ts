@@ -346,6 +346,31 @@ test("reset password falha com token expirado", async () => {
   });
 });
 
+test("PP-042 T-U-01: login assina payload sem role", async () => {
+  await withEnv(async () => {
+    let signedPayload: Record<string, unknown> | undefined;
+    const jwtService = {
+      signAsync: async (payload: Record<string, unknown>) => {
+        signedPayload = payload;
+        return "token-pp-042";
+      },
+    } as JwtService;
+    const prismaMock = createPrismaMock();
+    const authService = new AuthService(jwtService, prismaMock.prisma);
+
+    await authService.login("admin", "senha-correta", "ip-pp-042");
+
+    assert.deepEqual(signedPayload, {
+      sub: "admin",
+      username: "admin",
+      tokenVersion: 0,
+    });
+  }, {
+    ADMIN_USERNAME: "admin",
+    ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),
+  });
+});
+
 test("T-U-01: payload de login inclui tokenVersion atual", async () => {
   await withEnv(async () => {
     const { authService, adminStore } = createAuthService();
