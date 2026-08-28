@@ -420,6 +420,6 @@ test("T-I-03: o token usado para revogar deixa de ser valido", async () => {
   }, {
     ADMIN_USERNAME: "admin",
     ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),
-    JWT_SECRET: "jwt-strategy-pp034-test-secret",
+    JWT_SECRET: "jwt-strategy-pp034-test-secret-32c",
   });
 });

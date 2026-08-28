@@ -75,10 +75,10 @@ test("rejeita hash configurado da senha default sem flag explicita", async () =>
 test("aceita segredo e hash customizados sem depender de NODE_ENV", async () => {
   const customHash = hashSync("senha-forte-de-teste", 4);
   await withAuthEnv({
-    JWT_SECRET: "segredo-customizado-de-teste",
+    JWT_SECRET: "segredo-customizado-de-teste-32c",
     ADMIN_PASSWORD_HASH: customHash,
   }, () => {
-    assert.equal(resolveJwtSecret(), "segredo-customizado-de-teste");
+    assert.equal(resolveJwtSecret(), "segredo-customizado-de-teste-32c");
     assert.equal(resolveBootstrapAdminPasswordHash(), customHash);
   });
 });
