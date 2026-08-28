@@ -27,6 +27,8 @@ export function resolveJwtSecret(): string {
   if (configured) {
     if (configured === DEV_JWT_SECRET) {
       assertInsecureDefaultAllowed("JWT_SECRET");
+    } else if (configured.length < 32) {
+      throw new Error("JWT_SECRET deve ter no minimo 32 caracteres.");
     }
     return configured;
   }
