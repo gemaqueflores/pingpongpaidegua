@@ -1,6 +1,6 @@
 # PP-012 — Resiliência do Pipeline: Jobs Redis e Proteção contra Falhas Silenciosas
 
-**Aprovação Leo:** _pendente_
+**Aprovação Leo:** ✅ aprovada retroativamente em 2026-08-28 (implementação já existente, PR #27, aprovação formalizada antes do rebase/homologação)
 
 ---
 

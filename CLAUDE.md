@@ -25,6 +25,14 @@ Monorepo: `apps/api/`, `apps/web/`, `apps/worker/`, `packages/`.
 
 ---
 
+## Pendências rastreáveis — segurança/robustez de infra
+
+| ID | Lacuna | Impacto | Bloqueio para correção |
+|---|---|---|---|
+| PEND-CBTM-001 | API pública (`api-pingpongpaidegua.duckdns.org`) roda sem Cloudflare (proxy/WAF/TLS de borda) porque o domínio pertence à zona `duckdns.org` (terceiro) — Cloudflare Free/Pro exige controle dos nameservers da zona para ativar proxy. TLS depende integralmente do ciclo Certbot→nginx local na VM, que já causou 2 incidentes de certificado expirado (DEC-CBTM-001, PP-032). | Sem WAF/proteção de borda na API; renovação TLS segue com único ponto de falha (reload do nginx na VM). | Requer domínio próprio (ex.: `pingpongpaidegua.com.br`) migrado para nameservers Cloudflare antes de qualquer Spec de proxy. Leo decidiu em 2026-08-28 manter DuckDNS por enquanto — reavaliar quando houver decisão sobre domínio próprio. |
+
+---
+
 ## Pre-commit Hook
 
 ```bash
