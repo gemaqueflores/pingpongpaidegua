@@ -209,6 +209,7 @@ export interface OfficialCategoryMatchesOptions {
   categoryName?: string | null;
   eventStartDate?: Date | string | null;
   ratingMatchFormat?: "RR_K1" | "K1" | null;
+  competitionFormat?: "AUTO" | "K1" | null;
 }
 
 export interface WalkoverDetectionInput {
@@ -325,6 +326,10 @@ export function computeOfficialCategoryMatchesCount(
   const n = Number(registeredCount ?? 0);
   if (!Number.isFinite(n) || n <= 1) {
     return 0;
+  }
+
+  if (options?.competitionFormat === "K1") {
+    return n - 1;
   }
 
   if (isRatingCategoryName(options?.categoryName)) {
