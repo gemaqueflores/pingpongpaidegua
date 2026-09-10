@@ -233,10 +233,10 @@ test("PP-016 T-I-03 event summary agregado usa fonte observada quando filho foi 
   assert.equal(summary.totalPartidasPrevistasFonte, "observada");
 });
 
-test("PP-016 T-I-04 event summary usa cache v13 e ignora payload v12 sem fonte", async () => {
+test("PP-025 T-I-02b event summary usa cache v14 e ignora payload v13", async () => {
   const harness = createServiceHarness({
     cachedRecord: {
-      key: "event-summary-v12|event:1",
+      key: "event-summary-v13|event:1",
       sourceScrapeRunId: 99,
       payload: { id: 1, totalPartidasPrevistas: 6 },
       updatedAt: new Date("2026-03-09T10:00:00.000Z"),
@@ -246,7 +246,7 @@ test("PP-016 T-I-04 event summary usa cache v13 e ignora payload v12 sem fonte",
   const summary = await harness.service.getEventSummary(1);
 
   assert.equal(summary.totalPartidasPrevistasFonte, "estimada");
-  assert.equal(harness.getCachedRecord()?.key, "event-summary-v13|event:1");
+  assert.equal(harness.getCachedRecord()?.key, "event-summary-v14|event:1");
 });
 
 test("event list e event summary usam a mesma agregacao para o mesmo evento", async () => {
