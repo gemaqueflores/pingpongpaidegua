@@ -1130,20 +1130,6 @@ export default function AdminPage() {
               onChange={(event) => setPesoBronze(event.target.value)}
             />
           </label>
-          <label className="admin-field admin-field-grid">
-            <span>Formato da competição</span>
-            <select
-              className="admin-input admin-input-level"
-              value={competitionFormat}
-              onChange={(event) => setCompetitionFormat(event.target.value as CompetitionFormat)}
-            >
-              {COMPETITION_FORMATS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
         <div className="row admin-action-row">
           <button className="admin-btn-primary" onClick={saveEfficiencyConfig} disabled={!efficiencyConfig || efficiencySaving}>
@@ -1190,6 +1176,20 @@ export default function AdminPage() {
               onChange={(event) => setRatingMatchFormat(event.target.value as RatingMatchFormat)}
             >
               {RATING_MATCH_FORMATS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-field admin-field-grid">
+            <span>Formato da competição</span>
+            <select
+              className="admin-input admin-input-level"
+              value={competitionFormat}
+              onChange={(event) => setCompetitionFormat(event.target.value as CompetitionFormat)}
+            >
+              {COMPETITION_FORMATS.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
                 </option>
