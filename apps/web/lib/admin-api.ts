@@ -4,6 +4,7 @@ const API_BASE = getApiBase();
 
 export type EventLevel = "ESTADUAL" | "COPA" | "NACIONAL" | "OPEN";
 export type RatingMatchFormat = "RR_K1" | "K1";
+export type CompetitionFormat = "AUTO" | "K1";
 export type SeedCriteria = "AUTO" | "RANKING" | "RATING";
 export type EventSituation =
   | "DRAFT"
@@ -26,6 +27,7 @@ export interface AdminEventPayload {
   dataFim?: string | null;
   concluido?: boolean;
   ratingMatchFormat?: RatingMatchFormat;
+  competitionFormat?: CompetitionFormat;
   seedCriteria?: SeedCriteria;
   groupBestOfSets?: number | null;
   eliminationBestOfSets?: number | null;
@@ -46,6 +48,7 @@ export interface AdminEventRow {
   dataFim: string | null;
   concluido: boolean;
   ratingMatchFormat: RatingMatchFormat;
+  competitionFormat: CompetitionFormat;
   seedCriteria: SeedCriteria;
   groupBestOfSets: number | null;
   eliminationBestOfSets: number | null;

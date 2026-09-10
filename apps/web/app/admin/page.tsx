@@ -21,6 +21,7 @@ import {
   type AdminEventRow,
   type AdminEventMergeRow,
   type EfficiencyConfig,
+  type CompetitionFormat,
   type EventLevel,
   type EventSituation,
   type RatingMatchFormat,
@@ -82,6 +83,10 @@ const EVENT_LEVELS: EventLevel[] = ["ESTADUAL", "COPA", "NACIONAL", "OPEN"];
 const RATING_MATCH_FORMATS: Array<{ value: RatingMatchFormat; label: string }> = [
   { value: "RR_K1", label: "RR+k1 (grupo + eliminatória)" },
   { value: "K1", label: "k1 (eliminatória simples)" },
+];
+const COMPETITION_FORMATS: Array<{ value: CompetitionFormat; label: string }> = [
+  { value: "AUTO", label: "Automático (conforme categoria)" },
+  { value: "K1", label: "k1 (eliminatória simples para todas as categorias)" },
 ];
 const SEED_CRITERIA_OPTIONS: Array<{ value: SeedCriteria; label: string }> = [
   { value: "AUTO", label: "Auto (conforme circular)" },
@@ -366,6 +371,7 @@ export default function AdminPage() {
   const [fimRealizacao, setFimRealizacao] = useState("");
   const [concluidoForm, setConcluidoForm] = useState(false);
   const [ratingMatchFormat, setRatingMatchFormat] = useState<RatingMatchFormat>("RR_K1");
+  const [competitionFormat, setCompetitionFormat] = useState<CompetitionFormat>("AUTO");
   const [seedCriteria, setSeedCriteria] = useState<SeedCriteria>("AUTO");
   const [groupBestOfSets, setGroupBestOfSets] = useState("");
   const [eliminationBestOfSets, setEliminationBestOfSets] = useState("");
@@ -451,6 +457,7 @@ export default function AdminPage() {
     setFimRealizacao("");
     setConcluidoForm(false);
     setRatingMatchFormat("RR_K1");
+    setCompetitionFormat("AUTO");
     setSeedCriteria("AUTO");
     setGroupBestOfSets("");
     setEliminationBestOfSets("");
@@ -469,6 +476,7 @@ export default function AdminPage() {
     setFimRealizacao(formatDateInput(event.fimRealizacao ?? event.dataFim));
     setConcluidoForm(Boolean(event.concluido));
     setRatingMatchFormat(event.ratingMatchFormat ?? "RR_K1");
+    setCompetitionFormat(event.competitionFormat ?? "AUTO");
     setSeedCriteria(event.seedCriteria ?? "AUTO");
     setGroupBestOfSets(event.groupBestOfSets ? String(event.groupBestOfSets) : "");
     setEliminationBestOfSets(event.eliminationBestOfSets ? String(event.eliminationBestOfSets) : "");
@@ -742,6 +750,7 @@ export default function AdminPage() {
         cbtmEventId: parsedCbtmEventId,
         nivel: nivel || undefined,
         ratingMatchFormat,
+        competitionFormat,
         seedCriteria,
         groupBestOfSets: parsedGroupBestOfSets,
         eliminationBestOfSets: parsedEliminationBestOfSets,
@@ -1120,6 +1129,20 @@ export default function AdminPage() {
               disabled={!efficiencyConfig || efficiencySaving}
               onChange={(event) => setPesoBronze(event.target.value)}
             />
+          </label>
+          <label className="admin-field admin-field-grid">
+            <span>Formato da competição</span>
+            <select
+              className="admin-input admin-input-level"
+              value={competitionFormat}
+              onChange={(event) => setCompetitionFormat(event.target.value as CompetitionFormat)}
+            >
+              {COMPETITION_FORMATS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
         <div className="row admin-action-row">
