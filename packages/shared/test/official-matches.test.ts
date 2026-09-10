@@ -11,6 +11,19 @@ describe("computeOfficialCategoryMatchesCount", () => {
     ).toBe(3);
   });
 
+  it("PP-025 T-U-02 AUTO preserva a formula existente para categoria nao rating", () => {
+    const legacyResult = computeOfficialCategoryMatchesCount(6, {
+      categoryName: "ABSOLUTO A MAS",
+    });
+
+    expect(
+      computeOfficialCategoryMatchesCount(6, {
+        categoryName: "ABSOLUTO A MAS",
+        competitionFormat: "AUTO",
+      }),
+    ).toBe(legacyResult);
+  });
+
   it("categorias rating apos 2026-02-24 usam eliminatoria simples", () => {
     expect(
       computeOfficialCategoryMatchesCount(16, {
