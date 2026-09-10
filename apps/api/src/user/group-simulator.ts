@@ -599,6 +599,7 @@ export function simulateGroupsForCategory(input: {
   categoryName?: string | null;
   preferredGroupCount?: number | null;
   ratingMatchFormat?: "RR_K1" | "K1" | null;
+  competitionFormat?: "AUTO" | "K1" | null;
 }): GroupSimulationResult {
   const warnings: string[] = [];
   const uniqueAthletes = new Map<number, GroupSimulationAthleteInput>();
@@ -612,7 +613,9 @@ export function simulateGroupsForCategory(input: {
   }
   const athletes = [...uniqueAthletes.values()];
   const sortBasis = resolveSortBasis(input.categoryName);
-  const useKnockout = sortBasis === "rating" && input.ratingMatchFormat === "K1";
+  const useKnockout =
+    input.competitionFormat === "K1" ||
+    (sortBasis === "rating" && input.ratingMatchFormat === "K1");
   if (duplicatedAthleteCount > 0) {
     warnings.push(
       `Simulador descartou ${duplicatedAthleteCount} atleta(s) duplicado(s) pelo mesmo athleteId na entrada da categoria.`,
