@@ -172,6 +172,8 @@ export class AdminEventsService {
         nome: dto.nome,
         nivel: dto.nivel ?? null,
         ratingMatchFormat: dto.ratingMatchFormat ?? "RR_K1",
+        competitionFormat:
+          (dto as CreateAdminEventDto & { competitionFormat?: "AUTO" | "K1" }).competitionFormat ?? "AUTO",
         seedCriteria: dto.seedCriteria ?? "AUTO",
         groupBestOfSets: dto.groupBestOfSets ?? null,
         eliminationBestOfSets: dto.eliminationBestOfSets ?? null,
@@ -447,6 +449,8 @@ export class AdminEventsService {
         nome: dto.nome,
         nivel: dto.nivel,
         ratingMatchFormat: dto.ratingMatchFormat,
+        competitionFormat: (dto as UpdateAdminEventDto & { competitionFormat?: "AUTO" | "K1" })
+          .competitionFormat,
         seedCriteria: dto.seedCriteria,
         groupBestOfSets: dto.groupBestOfSets,
         eliminationBestOfSets: dto.eliminationBestOfSets,
