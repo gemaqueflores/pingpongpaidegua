@@ -1658,7 +1658,7 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
-    const cacheKey = this.buildReadModelKey("event-summary-v13", scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey("event-summary-v14", scope.canonicalEventId);
     return this.resolveEventReadModelCache({
       event,
       cacheKey,
@@ -2239,7 +2239,7 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
-    const cacheKey = this.buildReadModelKey("event-medalists-v3", scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey("event-medalists-v4", scope.canonicalEventId);
     return this.resolveEventReadModelCache({
       event,
       cacheKey,
