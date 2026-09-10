@@ -84,6 +84,23 @@ test("categorias rating com formato K1 simulam confrontos iniciais sem grupos", 
   assert.equal(new Set(seedBlocks.values()).size, 4);
 });
 
+test("PP-025 T-U-05 formato K1 do evento gera eliminatoria para categoria nao rating", () => {
+  const athletes = Array.from({ length: 8 }, (_, index) =>
+    athlete(index + 1, `CLUBE ${index + 1}`, 2000 - index * 10),
+  );
+
+  const result = simulateGroupsForCategory({
+    seed: "event:k1:cat:doubles",
+    categoryName: "DUPLA ABSOLUTO MASC",
+    competitionFormat: "K1",
+    athletes,
+  });
+
+  assert.equal(result.stats.structureType, "knockout");
+  assert.equal(result.groups.length, 0);
+  assert.equal(result.matchups.length, 4);
+});
+
 test("simulador usa distribuicao em zigue-zague invertido (A-B-C-C-B-A)", () => {
   const result = simulateGroupsForCategory({
     seed: "event:2:cat:3",
