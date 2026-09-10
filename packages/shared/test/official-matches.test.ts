@@ -38,6 +38,16 @@ describe("computeOfficialCategoryMatchesCount", () => {
     ).toBe(legacyResult);
   });
 
+  it("PP-025 T-U-04 AUTO preserva K1 de categorias rating", () => {
+    expect(
+      computeOfficialCategoryMatchesCount(5, {
+        categoryName: "RATING A",
+        competitionFormat: "AUTO",
+        ratingMatchFormat: "K1",
+      }),
+    ).toBe(4);
+  });
+
   it("categorias rating apos 2026-02-24 usam eliminatoria simples", () => {
     expect(
       computeOfficialCategoryMatchesCount(16, {
