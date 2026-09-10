@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { validate } from "class-validator";
 import { AdminEventsService } from "../src/admin/admin-events.service";
+import { CreateAdminEventDto } from "../src/admin/dto/create-admin-event.dto";
 
 test("PP-025 T-I-02a update propaga competitionFormat e invalida filho e canonico", async () => {
   let updateData: Record<string, unknown> | undefined;
@@ -45,4 +47,16 @@ test("PP-025 T-I-02a update propaga competitionFormat e invalida filho e canonic
 
   assert.equal(updateData?.competitionFormat, "K1");
   assert.deepEqual(invalidatedIds, [57, 55]);
+});
+
+test("PP-025 T-U-07 DTO rejeita competitionFormat fora do enum", async () => {
+  const dto = Object.assign(new CreateAdminEventDto(), {
+    cbtmEventId: 5828,
+    nome: "Evento invalido",
+    competitionFormat: "INVALIDO",
+  });
+
+  const errors = await validate(dto);
+
+  assert.ok(errors.some((error) => error.property === "competitionFormat"));
 });
