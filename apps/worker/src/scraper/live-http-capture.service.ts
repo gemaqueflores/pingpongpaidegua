@@ -166,6 +166,7 @@ function parseCategoriesFromHtml(
       categoryName,
       eventStartDate: options?.eventStartDate ?? null,
       ratingMatchFormat: options?.ratingMatchFormat ?? null,
+      competitionFormat: options?.competitionFormat ?? null,
     });
     categories.push({
       categoryId,

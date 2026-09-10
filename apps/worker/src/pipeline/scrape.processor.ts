@@ -554,6 +554,7 @@ export class ScrapeProcessor {
           fetchEliminatoria: scrapePolicy.fetchEliminatoria,
           eventStartDate: event.dataInicio ?? event.inicioRealizacao ?? null,
           ratingMatchFormat: event.ratingMatchFormat ?? "RR_K1",
+          competitionFormat: event.competitionFormat ?? "AUTO",
         }),
         new Promise<never>((_, reject) => {
           setTimeout(

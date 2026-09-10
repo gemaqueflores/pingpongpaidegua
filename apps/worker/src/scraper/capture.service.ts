@@ -42,6 +42,7 @@ export interface CaptureOptions {
   fetchEliminatoria?: boolean;
   eventStartDate?: Date | string | null;
   ratingMatchFormat?: "RR_K1" | "K1" | null;
+  competitionFormat?: "AUTO" | "K1" | null;
 }
 
 type CaptureOptionsResolved = {
@@ -51,6 +52,7 @@ type CaptureOptionsResolved = {
   fetchEliminatoria: boolean;
   eventStartDate: Date | string | null;
   ratingMatchFormat: "RR_K1" | "K1" | null;
+  competitionFormat: "AUTO" | "K1" | null;
 };
 
 const TAB_CONFIG: Array<{ tabName: string; controlVar: string; tabLabel: string }> = [
@@ -67,6 +69,7 @@ function resolveCaptureOptions(options: CaptureOptions | undefined): CaptureOpti
     fetchEliminatoria: false,
     eventStartDate: options?.eventStartDate ?? null,
     ratingMatchFormat: options?.ratingMatchFormat ?? null,
+    competitionFormat: options?.competitionFormat ?? null,
   };
 }
 
@@ -281,6 +284,7 @@ export class CaptureService {
             fetchEliminatoria: options.fetchEliminatoria,
             eventStartDate: options.eventStartDate,
             ratingMatchFormat: options.ratingMatchFormat,
+            competitionFormat: options.competitionFormat,
           },
           erroredResultCategoryIds,
         );
@@ -929,6 +933,7 @@ export class CaptureService {
         categoryName: category.categoryName,
         eventStartDate: options.eventStartDate,
         ratingMatchFormat: options.ratingMatchFormat,
+        competitionFormat: options.competitionFormat,
       });
       return {
         ...category,
