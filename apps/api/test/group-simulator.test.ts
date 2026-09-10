@@ -101,6 +101,21 @@ test("PP-025 T-U-05 formato K1 do evento gera eliminatoria para categoria nao ra
   assert.equal(result.matchups.length, 4);
 });
 
+test("PP-025 T-U-06 formato AUTO preserva simulacao por grupos", () => {
+  const result = simulateGroupsForCategory({
+    seed: "event:auto:cat:doubles",
+    categoryName: "DUPLA ABSOLUTO MASC",
+    competitionFormat: "AUTO",
+    athletes: Array.from({ length: 6 }, (_, index) =>
+      athlete(index + 1, `CLUBE ${index + 1}`, 2000 - index * 10),
+    ),
+  });
+
+  assert.equal(result.stats.structureType, "groups");
+  assert.ok(result.groups.length > 0);
+  assert.equal(result.matchups.length, 0);
+});
+
 test("simulador usa distribuicao em zigue-zague invertido (A-B-C-C-B-A)", () => {
   const result = simulateGroupsForCategory({
     seed: "event:2:cat:3",
