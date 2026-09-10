@@ -37,6 +37,11 @@ enum RatingMatchFormat {
   K1
 }
 
+enum CompetitionFormat {
+  AUTO
+  K1
+}
+
 enum SeedCriteria {
   AUTO
   RANKING
@@ -65,6 +70,7 @@ model Event {
   nome         String
   nivel        EventLevel?
   ratingMatchFormat RatingMatchFormat @default(RR_K1) @map("rating_match_format")
+  competitionFormat CompetitionFormat @default(AUTO) @map("competition_format")
   seedCriteria SeedCriteria @default(AUTO) @map("seed_criteria")
   groupBestOfSets Int? @map("group_best_of_sets")
   eliminationBestOfSets Int? @map("elimination_best_of_sets")
