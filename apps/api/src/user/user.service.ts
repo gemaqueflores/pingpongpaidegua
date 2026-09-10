@@ -4198,6 +4198,7 @@ export class UserService {
           select: {
             id: true,
             ratingMatchFormat: true,
+            competitionFormat: true,
           },
         })
       ).map((item) => [item.id, item] as const),
@@ -4351,6 +4352,7 @@ export class UserService {
         })),
         preferredGroupCount: historical.preferredGroupCount,
         ratingMatchFormat: eventRulesByEventId.get(category.eventId)?.ratingMatchFormat ?? "RR_K1",
+        competitionFormat: eventRulesByEventId.get(category.eventId)?.competitionFormat ?? "AUTO",
       });
       const useRatingPoints = simulation.stats.sortBasis === "rating";
 
