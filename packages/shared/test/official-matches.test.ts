@@ -2,6 +2,52 @@ import { describe, expect, it } from "vitest";
 import { computeOfficialCategoryMatchesCount } from "../src";
 
 describe("computeOfficialCategoryMatchesCount", () => {
+  it("PP-025 T-U-01 aplica K1 do evento sem depender do prefixo da categoria", () => {
+    expect(
+      computeOfficialCategoryMatchesCount(4, {
+        categoryName: "ABSOLUTO A MAS",
+        competitionFormat: "K1",
+      }),
+    ).toBe(3);
+  });
+
+  it("PP-025 T-U-02 AUTO preserva a formula existente para categoria nao rating", () => {
+    const legacyResult = computeOfficialCategoryMatchesCount(6, {
+      categoryName: "ABSOLUTO A MAS",
+    });
+
+    expect(
+      computeOfficialCategoryMatchesCount(6, {
+        categoryName: "ABSOLUTO A MAS",
+        competitionFormat: "AUTO",
+      }),
+    ).toBe(legacyResult);
+  });
+
+  it("PP-025 T-U-03 AUTO nao deixa ratingMatchFormat vazar para categoria nao rating", () => {
+    const legacyResult = computeOfficialCategoryMatchesCount(8, {
+      categoryName: "ABSOLUTO A MAS",
+    });
+
+    expect(
+      computeOfficialCategoryMatchesCount(8, {
+        categoryName: "ABSOLUTO A MAS",
+        competitionFormat: "AUTO",
+        ratingMatchFormat: "K1",
+      }),
+    ).toBe(legacyResult);
+  });
+
+  it("PP-025 T-U-04 AUTO preserva K1 de categorias rating", () => {
+    expect(
+      computeOfficialCategoryMatchesCount(5, {
+        categoryName: "RATING A",
+        competitionFormat: "AUTO",
+        ratingMatchFormat: "K1",
+      }),
+    ).toBe(4);
+  });
+
   it("categorias rating apos 2026-02-24 usam eliminatoria simples", () => {
     expect(
       computeOfficialCategoryMatchesCount(16, {

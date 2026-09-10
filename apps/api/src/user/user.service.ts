@@ -412,6 +412,7 @@ type OfficialRegistrationTotals = {
 type EventOfficialRules = {
   startDate: Date | null;
   ratingMatchFormat: "RR_K1" | "K1";
+  competitionFormat: "AUTO" | "K1";
 };
 
 type ScopedEventSummaryInput = {
@@ -420,6 +421,7 @@ type ScopedEventSummaryInput = {
   dataInicio: Date | null;
   inicioRealizacao: Date | null;
   ratingMatchFormat: "RR_K1" | "K1" | null;
+  competitionFormat: "AUTO" | "K1" | null;
 };
 
 type ScopedEventSummaryMetrics = {
@@ -1247,6 +1249,7 @@ export class UserService {
           categoryName: row.categoryName,
           eventStartDate: eventRulesByEventId?.get(eventId)?.startDate ?? null,
           ratingMatchFormat: eventRulesByEventId?.get(eventId)?.ratingMatchFormat ?? "RR_K1",
+          competitionFormat: eventRulesByEventId?.get(eventId)?.competitionFormat ?? "AUTO",
         });
 
         totalListed += listed;
@@ -1343,6 +1346,7 @@ export class UserService {
         {
           startDate: item.dataInicio ?? item.inicioRealizacao ?? null,
           ratingMatchFormat: item.ratingMatchFormat ?? "RR_K1",
+          competitionFormat: item.competitionFormat ?? "AUTO",
         },
       ]),
     );
@@ -1408,6 +1412,7 @@ export class UserService {
       const rules = eventRulesByEventId.get(category.eventId) ?? {
         startDate: null,
         ratingMatchFormat: "RR_K1" as const,
+        competitionFormat: "AUTO" as const,
       };
       const registeredBaseCount =
         officialRegisteredByCategoryId.get(category.id) ?? (athleteCountByCategory.get(category.id) ?? 0);
@@ -1415,6 +1420,7 @@ export class UserService {
         categoryName: category.name,
         eventStartDate: rules.startDate,
         ratingMatchFormat: rules.ratingMatchFormat,
+        competitionFormat: rules.competitionFormat,
       });
       const publishedMatchesCount = publishedByCategoryId.get(category.id) ?? 0;
       if (publishedMatchesCount > calculatedMatchesCount) {
@@ -1564,6 +1570,7 @@ export class UserService {
           dataInicio: true,
           dataFim: true,
           ratingMatchFormat: true,
+          competitionFormat: true,
           concluido: true,
           lastScrapeAt: true,
         },
@@ -1595,6 +1602,7 @@ export class UserService {
         dataInicio: item.dataInicio,
         inicioRealizacao: item.inicioRealizacao,
         ratingMatchFormat: item.ratingMatchFormat,
+        competitionFormat: item.competitionFormat,
       }));
     const sharedMetrics = await this.loadScopedEventSummaryMetrics(scopedEventItems);
 
@@ -1658,7 +1666,7 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
-    const cacheKey = this.buildReadModelKey("event-summary-v13", scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey("event-summary-v14", scope.canonicalEventId);
     return this.resolveEventReadModelCache({
       event,
       cacheKey,
@@ -1713,6 +1721,7 @@ export class UserService {
             dataInicio: true,
             inicioRealizacao: true,
             ratingMatchFormat: true,
+            competitionFormat: true,
           },
         });
         const sharedMetrics = await this.loadScopedEventSummaryMetrics(scopedLastScrape);
@@ -2239,7 +2248,7 @@ export class UserService {
     const scope = await this.resolveEventScope(eventId);
     const event = await this.ensureEvent(scope.canonicalEventId);
     const latestReliableRunId = await this.getLatestReliableScrapeRunIdForScope(scope.allEventIds);
-    const cacheKey = this.buildReadModelKey("event-medalists-v3", scope.canonicalEventId);
+    const cacheKey = this.buildReadModelKey("event-medalists-v4", scope.canonicalEventId);
     return this.resolveEventReadModelCache({
       event,
       cacheKey,
@@ -2324,6 +2333,7 @@ export class UserService {
           dataInicio: true,
           inicioRealizacao: true,
           ratingMatchFormat: true,
+          competitionFormat: true,
         },
       }),
     ]);
@@ -2333,6 +2343,7 @@ export class UserService {
         {
           startDate: item.dataInicio ?? item.inicioRealizacao ?? null,
           ratingMatchFormat: item.ratingMatchFormat ?? "RR_K1",
+          competitionFormat: item.competitionFormat ?? "AUTO",
         },
       ]),
     );
@@ -2489,6 +2500,7 @@ export class UserService {
               categoryName: category.name,
               eventStartDate: eventRulesByEventId.get(category.eventId)?.startDate ?? null,
               ratingMatchFormat: eventRulesByEventId.get(category.eventId)?.ratingMatchFormat ?? "RR_K1",
+              competitionFormat: eventRulesByEventId.get(category.eventId)?.competitionFormat ?? "AUTO",
             })
           : null;
       const registeredBaseCount =
@@ -2499,6 +2511,7 @@ export class UserService {
         categoryName: category.name,
         eventStartDate: eventRulesByEventId.get(category.eventId)?.startDate ?? null,
         ratingMatchFormat: eventRulesByEventId.get(category.eventId)?.ratingMatchFormat ?? "RR_K1",
+        competitionFormat: eventRulesByEventId.get(category.eventId)?.competitionFormat ?? "AUTO",
       });
       const calculatedMatchesCount =
         typeof officialMatchesCount === "number" && officialMatchesCount >= 0
@@ -4198,6 +4211,7 @@ export class UserService {
           select: {
             id: true,
             ratingMatchFormat: true,
+            competitionFormat: true,
           },
         })
       ).map((item) => [item.id, item] as const),
@@ -4351,6 +4365,7 @@ export class UserService {
         })),
         preferredGroupCount: historical.preferredGroupCount,
         ratingMatchFormat: eventRulesByEventId.get(category.eventId)?.ratingMatchFormat ?? "RR_K1",
+        competitionFormat: eventRulesByEventId.get(category.eventId)?.competitionFormat ?? "AUTO",
       });
       const useRatingPoints = simulation.stats.sortBasis === "rating";
 

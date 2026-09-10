@@ -1,12 +1,49 @@
 # PP-025 — Formato de eliminatória simples para duplas independente de prefixo "R"
 
-## Status: v3 — aprovada por Leo (✅), pronta para implementação após PP-022 integrado em main
+## Status: v4 — aprovada por Leo (✅), pronta para implementação (PP-022 confirmado integrado em main)
 
 Caminho `apps/api/test/group-simulator.test.ts` confirmado como arquivo existente real. Implementação
-liberada ao Codex somente após a pré-condição de sequenciamento (PP-022 integrado em `main`) ser
-satisfeita — ver seção "Pré-condição de sequenciamento" abaixo.
+liberada ao Codex — pré-condição de sequenciamento (PP-022 integrado em `main`) **confirmada satisfeita**
+nesta versão (ver seção "Pré-condição de sequenciamento").
 
-## Errata v2 → v3 (correção de erro próprio)
+## Domínio instável
+
+Nenhum domínio de `DOMAIN_MATURITY.md` cobre diretamente "cálculo de contagem oficial de partidas" ou
+"simulador de grupos" — ambos "Sem histórico" (confirmado nesta versão, sem entrada nova desde a v3).
+Atenção redobrada por analogia: mudança de schema + múltiplos consumidores exige verificação cuidadosa de
+não-regressão em todos os call-sites, não só nos dois eventos-alvo (57/58).
+
+## Errata v3 → v4 (ciclo tripartite de retomada, CAT concluído em 1 rodada)
+
+A v3 ficou desatualizada em relação ao código real de `apps/api/src/user/user.service.ts` no intervalo
+entre sua aprovação e a retomada desta Spec (o arquivo recebeu commits de outras entregas, incluindo
+PP-022). Ciclo tripartite (`docs/specs/PP-025-formato-duplas-eliminatoria-simples-draft.md`) confirmou, por
+leitura direta do código atual (branch `docs/fecha-pend-cbtm-005`, topo `da15594`) e resposta técnica do
+Codex, os quatro ajustes abaixo. **Nenhum cenário funcional, causa raiz ou critério de aceitação da v3 foi
+reaberto** — apenas correção factual de call-sites, errata de cache key, um T-* novo e um critério de
+aceitação explicitado.
+
+1. **Call-sites de `user.service.ts` corrigidos.** A v3 citava "4 call-sites (linhas 1226, 1394, 2468,
+   2478)". Código real hoje tem 15 ocorrências de `ratingMatchFormat` no arquivo, agrupadas em 3 cadeias
+   (ver "Impacto técnico"). A afirmação "4 chamadas de cálculo" permanece correta — o que a v3 subestimou
+   foi o plumbing necessário para abastecê-las, incluindo uma terceira cadeia (simulador de grupos, rota
+   real do endpoint) que a v3 não tinha mapeado separadamente.
+2. **Errata de cache key corrigida.** A v3 (errata v2→v3) afirmava que `event-medalists-v3` "já foi
+   bumpada em PP-022" e pedia para o Codex "confirmar linha atual antes de editar". Confirmado nesta versão
+   (leitura direta de `user.service.ts:2242`, ainda `event-medalists-v3`) e pelo Codex: **PP-022 fez
+   `event-medalists-v2→v3`**, não `v3→v4`. **PP-025 é integralmente responsável pelo bump `v3→v4`**, sem
+   dependência operacional adicional de PP-022 além de estar integrado em `main`.
+3. **T-I-03 novo** (ver Plano de testes) cobrindo a cadeia 3 — rota real do endpoint de simulação de
+   grupos (`user.service.ts:4194-4204` e `:4341-4353`), que hoje só propaga `ratingMatchFormat` e **não é
+   coberta** pelos T-U-05/T-U-06 originais (que testam `group-simulator.ts` isoladamente, com input
+   direto). Sem esse T-*, `computeOfficialCategoryMatchesCount`/`useKnockout` podem passar em isolamento
+   enquanto o endpoint real em produção continua ignorando `competitionFormat`.
+4. **Critério de aceitação explicitado**: em eventos agregados (canonical + filhos via `EventMerge`),
+   `competitionFormat` deve ser resolvido por `category.eventId` (o filho real da categoria) — nunca
+   aplicando o formato do evento canônico a todos os filhos indiscriminadamente. Mesmo padrão já usado hoje
+   para `ratingMatchFormat` via `eventRulesByEventId.get(category.eventId)`.
+
+## Errata v2 → v3 (correção de erro próprio, mantida da v3)
 
 **Minha v2 estava errada.** Busquei `invalidateReadModelCaches` só em `apps/api/src/user/user.service.ts`
 e, não encontrando, declarei "não existe" — busca incompleta, não verificação real do código. A função
@@ -23,31 +60,22 @@ Duas proteções complementares existem, não uma só:
 
 T-I-02 dividido em T-I-02a (invalidação ativa) + T-I-02b (versionamento como segunda camada).
 
-## Errata v1 → v2 (correções aceitas nesta rodada anterior, mantidas)
+## Errata v1 → v2 (correções aceitas, mantidas)
 
 1. Adicionado T-U-08 (frontend admin) — o formulário estava no escopo de arquivos mas sem T-* próprio.
 2. Comando de validação final corrigido — `npm test` isolado não cobre `apps-web`. Confirmado por leitura
    de `package.json`: `test:regression:critical` não inclui `apps-web`; existe script pronto `verify:web`
    reaproveitado em vez de listar comandos soltos.
 3. T-I-01 dividido em propagação (T-I-01a) + persistência (T-I-01b).
-5. Caminhos de arquivo de teste e ordem Red-Green por T-* especificados — nesta v3, substituídos por
-   caminhos exatos sem curinga (ver "Ordem de implementação").
+5. Caminhos de arquivo de teste e ordem Red-Green por T-* especificados — caminhos exatos sem curinga.
 6. Operação pós-deploy reclassificada: execução condicionada à autorização explícita de Leo após deploy.
 
-## Domínio instável
+## Pré-condição de sequenciamento
 
-Nenhum domínio de `DOMAIN_MATURITY.md` cobre diretamente "cálculo de contagem oficial de partidas" ou
-"simulador de grupos" — ambos "Sem histórico". Atenção redobrada por analogia: mudança de schema +
-múltiplos consumidores exige verificação cuidadosa de não-regressão em todos os call-sites, não só nos
-dois eventos-alvo (57/58).
-
-## Pré-condição de sequenciamento (obrigatória)
-
-**A implementação de PP-025 só pode começar depois que PP-022 estiver integrado** (commit `a549ea8`
-mergeado em `main`, não apenas homologado localmente). Ambas tocam `apps/api/src/user/user.service.ts` e
-as versões de chave de cache `event-medalists-v*` — implementar em paralelo criaria conflito de merge e
-risco de uma Spec sobrescrever o bump de versão de cache da outra. Codex confirma que PP-022 está
-integrado em `main` antes de criar a branch de PP-025.
+**Confirmada satisfeita nesta versão.** `git log --all --oneline --grep="PP-022" -i` mostra `a549ea8`
+mergeado em `main` via PR #29 (`ad036a3 Merge pull request #29 from
+gemaqueflores/fix/pp-022-diagnostico-podio-incompleto`). PP-025 pode iniciar imediatamente — não há
+bloqueio de sequenciamento pendente.
 
 ## Skills Codex a ativar
 - florestech-implementacao
@@ -88,7 +116,10 @@ mesmo corrigindo `ratingMatchFormat` isoladamente para `K1`, o gate `isRatingCat
   mesmo evento (confirmado pelo evento legado 44/CBTM 5468, que mistura categorias individuais não-R e
   categorias Rating sob o mesmo `eventId` com `ratingMatchFormat=K1`).
 - **Padrão:** candidato a `EPISODIC_MEMORY.md` — "sinal de detecção desenhado para um propósito (rating)
-  reaproveitado para outro propósito (formato de disputa) sem campo estruturado dedicado".
+  reaproveitado para outro propósito (formato de disputa) sem campo estruturado dedicado". Reforçado pelo
+  próprio ciclo de retomada desta Spec (v3→v4): Spec aprovada e não implementada por tempo suficiente para
+  o código-base mudar sob ela é um padrão a observar — candidato a registrar em `EPISODIC_MEMORY.md` se
+  recorrer numa próxima Spec represada.
 
 ## Cenários funcionais (DADO/QUANDO/ENTÃO)
 
@@ -137,6 +168,14 @@ ENTÃO a leitura usa as novas chaves de cache (`event-summary-v14`, `event-medal
 payload calculado sob a fórmula antiga — mesmo padrão de prova já usado em PP-022 (T-I-01: cache antigo
 comprovadamente ignorado).
 
+**Cenário 8 — evento agregado: competitionFormat resolvido por filho, não por canônico (novo na v4)**
+DADO um evento agregado onde o canônico (ex.: 55) está `competitionFormat = "AUTO"` e um filho via
+`EventMerge` (ex.: 57) está `competitionFormat = "K1"`
+QUANDO `computeOfficialCategoryMatchesCount()`/o endpoint de simulação de grupos são chamados para uma
+categoria pertencente ao filho 57
+ENTÃO a regra aplicada é a do evento 57 (`K1`, `n-1`/matchups), resolvida por `category.eventId`, nunca a
+regra do canônico 55 aplicada indiscriminadamente a todos os filhos do merge.
+
 ## Critérios de aceitação
 
 - `Event.competitionFormat` (enum `AUTO | K1`, default `AUTO`) adicionado via migration Prisma; migration
@@ -155,7 +194,13 @@ comprovadamente ignorado).
 - Cache bump: `event-summary-v13 → v14`, `event-medalists-v3 → v4` — proteção complementar à invalidação
   ativa já existente em `invalidateReadModelCaches` (`admin-events.service.ts:979-1005`), que já roda após
   update administrativo de evento e já cobre eventos relacionados via `EventMerge`. O bump não substitui
-  essa invalidação, é redundância adicional.
+  essa invalidação, é redundância adicional. **PP-025 é integralmente responsável por ambos os bumps desta
+  versão** (`event-medalists-v3→v4` não depende de nenhum bump adicional de PP-022 além da integração em
+  `main` já confirmada).
+- **Em eventos agregados, `competitionFormat` é resolvido por `category.eventId` (o filho real da
+  categoria), nunca pelo evento canônico aplicado indiscriminadamente a todos os filhos via `EventMerge`**
+  (critério explicitado na v4 — ver Cenário 8, mesmo padrão já usado para `ratingMatchFormat` via
+  `eventRulesByEventId.get(category.eventId)`).
 - Nenhuma reescrita de `ScrapeRun` histórico.
 - Evento 44/CBTM 5468 permanece com `competitionFormat = AUTO` (não alterado por esta Spec) e seu
   comportamento é coberto por teste de não regressão (Cenário 3).
@@ -177,17 +222,32 @@ comprovadamente ignorado).
 
 - Arquivos a criar/modificar:
   - `prisma/schema.prisma` — `Event.competitionFormat` enum `AUTO | K1`, default `AUTO`; nova migration.
-  - `packages/shared/src/index.ts` — `OfficialCategoryMatchesOptions` (linha 208-212) ganha
-    `competitionFormat?: "AUTO" | "K1"`; `computeOfficialCategoryMatchesCount` (linha 321+) prioriza esse
-    campo antes de `isRatingCategoryName`.
+    Confirmado ausente no schema atual (`Event` hoje só tem `ratingMatchFormat`, `seedCriteria`,
+    `groupBestOfSets`, `eliminationBestOfSets`, linhas 62-72).
+  - `packages/shared/src/index.ts` — `OfficialCategoryMatchesOptions` (linha 208) ganha
+    `competitionFormat?: "AUTO" | "K1"`; `computeOfficialCategoryMatchesCount` (linha 321) prioriza esse
+    campo antes de `isRatingCategoryName` (linha 228). Linhas confirmadas nesta versão, sem deriva.
   - `apps/api/src/user/group-simulator.ts` — `useKnockout` (linha 615) considera `competitionFormat` do
-    evento.
-  - `apps/api/src/user/user.service.ts` — `EventOfficialRules` (linha 401-404) ganha `competitionFormat`;
-    4 call-sites (linhas 1226, 1394, 2468, 2478) propagam o campo; cache keys
-    `event-summary-v13→v14` (linha 1641), `event-medalists-v3→v4` (mesma chave já bumpada em PP-022,
-    Codex confirma linha atual antes de editar).
-  - `apps/worker/src/pipeline/scrape.processor.ts` — linha 549-557, propagar `event.competitionFormat`
-    para `captureService.capture()`, mesmo padrão de `ratingMatchFormat` na linha 556.
+    evento. Linha confirmada nesta versão, sem deriva.
+  - `apps/api/src/user/user.service.ts` — **lista corrigida na v4, 15 linhas reais em 3 cadeias**
+    (confirmado por leitura direta nesta versão, branch `docs/fecha-pend-cbtm-005`, topo `da15594`):
+    - `EventOfficialRules` (tipo, linha 412-415) ganha `competitionFormat?: "AUTO" | "K1"`.
+    - **Cadeia 1 — resumo de evento**: select 1566, transporte para `ScopedEventSummaryInput` 1597, select
+      do endpoint de resumo 1715, montagem de `EventOfficialRules` 1345/1410 (fallback), chamadas de
+      cálculo 1249/1417. Cache key `event-summary-v13` (linha 1661) → `v14`.
+    - **Cadeia 2 — medalhistas**: select 2326, montagem de `EventOfficialRules` 2335, chamadas de cálculo
+      2491/2501. Cache key `event-medalists-v3` (linha 2242) → `v4`.
+    - **Cadeia 3 — simulador de grupos, rota real do endpoint (nova na v4, distinta dos testes isolados de
+      `group-simulator.ts`)**: select de `ratingMatchFormat` em `eventRulesByEventId` (linhas 4194-4204,
+      hoje só seleciona `id`+`ratingMatchFormat` — precisa incluir `competitionFormat`), propagação para
+      `simulateGroupsForCategory` (linha 4341-4353, hoje só passa `ratingMatchFormat` — precisa passar
+      `competitionFormat` também).
+    - Todas as leituras de `eventRulesByEventId`/regras por evento nesta cadeia devem indexar por
+      `category.eventId` (não pelo evento canônico do escopo agregado) — ver critério de aceitação sobre
+      eventos agregados.
+  - `apps/worker/src/pipeline/scrape.processor.ts` — linha 549-557 (confirmada sem deriva), propagar
+    `event.competitionFormat` para `captureService.capture()`, mesmo padrão de `ratingMatchFormat` na
+    linha 556.
   - `apps/worker/src/scraper/capture.service.ts:924`, `apps/worker/src/scraper/live-http-capture.service.ts:165`
     — aceitar `competitionFormat` nas opções de captura e propagar para
     `computeOfficialCategoryMatchesCount`.
@@ -208,13 +268,16 @@ comprovadamente ignorado).
 ## Plano de testes
 
 ### Cobertura geral
-- camadas obrigatórias: unitário (shared, api, worker), integração (cache do agregado)
+- camadas obrigatórias: unitário (shared, api, worker), integração (cache do agregado, cadeia do
+  simulador via rota real)
 - arquivos de teste a criar/estender: teste de `packages/shared` para
   `computeOfficialCategoryMatchesCount`; teste de `group-simulator.ts`; teste de `user.service.ts`
-  (cache de summary/medalhistas); teste de `scrape.processor.ts`/`capture.service.ts` (propagação de
-  opção); teste de validação do DTO admin.
+  (cache de summary/medalhistas, rota real do endpoint de simulação, resolução por `category.eventId` em
+  eventos agregados); teste de `scrape.processor.ts`/`capture.service.ts` (propagação de opção); teste de
+  validação do DTO admin.
 - fixtures/mocks: evento sintético com `competitionFormat = K1`; evento sintético replicando o padrão do
-  44/5468 (`ratingMatchFormat=K1`, `competitionFormat=AUTO`, categorias mistas R/não-R).
+  44/5468 (`ratingMatchFormat=K1`, `competitionFormat=AUTO`, categorias mistas R/não-R); par
+  canonical/filho via `EventMerge` com `competitionFormat` divergente entre si (Cenário 8).
 
 ### T-U-01 — competitionFormat=K1 aplica n-1 independente do prefixo
 Camada: `computeOfficialCategoryMatchesCount` (shared)
@@ -245,13 +308,13 @@ QUANDO: a função é chamada
 ENTÃO: resultado é `n-1` — comportamento atual para categorias rating dentro do evento misto permanece
 intacto.
 
-### T-U-05 — simulador: competitionFormat=K1 gera matchups, zero grupos
+### T-U-05 — simulador (isolado): competitionFormat=K1 gera matchups, zero grupos
 Camada: `group-simulator.ts` (`useKnockout`)
 DADO: evento com `competitionFormat: "K1"`, categoria sem prefixo `R`
 QUANDO: `simulateGroups()` é chamado para essa categoria
 ENTÃO: retorno contém `matchups` (eliminatória direta), nenhum grupo formado.
 
-### T-U-06 — simulador: competitionFormat=AUTO não regride
+### T-U-06 — simulador (isolado): competitionFormat=AUTO não regride
 Camada: mesma função
 DADO: evento com `competitionFormat: "AUTO"`, categoria e condições idênticas a um cenário já coberto
 pelos testes existentes do simulador
@@ -298,6 +361,28 @@ ENTÃO: mesmo nesse cenário, a leitura nunca usa as chaves antigas (`event-summ
 mesmo padrão de prova do T-I-01 de PP-022. Esta é proteção redundante e complementar a T-I-02a, não o
 único mecanismo.
 
+### T-I-03 — rota real do endpoint de simulação de grupos propaga competitionFormat (novo na v4)
+Camada: integração (`user.service.ts`, cadeia 3 — endpoint de simulação de grupos, distinta de T-U-05/06)
+DADO: um evento com `competitionFormat: "K1"` e uma categoria sem prefixo `R` associada a esse evento,
+consultado através do endpoint real de simulação de grupos (não da função `simulateGroups()` isolada)
+QUANDO: o endpoint é chamado (via harness de integração do Nest/Prisma mock, exercitando o select de
+`eventRulesByEventId` em `user.service.ts:4194-4204` e a chamada a `simulateGroupsForCategory` em
+`:4341-4353`)
+ENTÃO: o `select` inclui `competitionFormat` (não apenas `ratingMatchFormat`); o objeto passado para
+`simulateGroupsForCategory` inclui `competitionFormat: "K1"`; a resposta do endpoint contém `matchups` e
+nenhum grupo para essa categoria — prova de que a propagação ocorre na rota real consumida pelo frontend,
+fechando a lacuna que T-U-05/T-U-06 (testes isolados de `group-simulator.ts`) não cobrem.
+
+### T-I-04 — eventos agregados: competitionFormat resolvido por category.eventId, não pelo canônico (novo na v4)
+Camada: integração (`user.service.ts`, `computeOfficialCategoryMatchesCount` e rota de simulação)
+DADO: evento canônico (ex.: 55) com `competitionFormat: "AUTO"` e evento filho via `EventMerge` (ex.: 57)
+com `competitionFormat: "K1"`, uma categoria sem prefixo `R` pertencente ao filho 57
+QUANDO: `computeOfficialCategoryMatchesCount()` e o endpoint de simulação de grupos são chamados para essa
+categoria, no contexto do escopo agregado (canonical + filhos)
+ENTÃO: o resultado aplicado é o do evento 57 (`K1` → `n-1`/matchups), não o do canônico 55 (`AUTO`) — a
+resolução usa `eventRulesByEventId.get(category.eventId)`, nunca o `competitionFormat` do evento canônico
+do escopo aplicado indiscriminadamente a todos os filhos.
+
 ### T-U-07 — validação de competitionFormat no DTO admin
 Camada: `admin-events.service.ts` (ou DTO correspondente)
 DADO: payload de criação/edição de evento com `competitionFormat: "INVALIDO"` (fora do enum)
@@ -317,9 +402,13 @@ de round-trip completo (carrega → exibe → envia), não apenas que o campo ex
 - Persistência: T-I-01b, T-I-02a e T-I-02b leem o payload/estado real passado ao Prisma/harness de
   cache, não confiam apenas no retorno de função isolada.
 - Regra de negócio: T-U-03/T-U-04 cobrem explicitamente a violação potencial (vazamento de K1 para
-  categorias erradas do evento misto) além do cumprimento (T-U-01).
+  categorias erradas do evento misto) além do cumprimento (T-U-01); T-I-04 cobre a violação potencial
+  equivalente em eventos agregados (vazamento do formato do canônico para os filhos).
 - Formulário: T-U-08 verifica carregamento E envio (não só renderização do campo).
 - Invalidação de cache: T-I-02a prova o mecanismo ativo real (não apenas o de segurança T-I-02b).
+- Rota real vs. função isolada: T-I-03 prova que a cadeia 3 (endpoint de simulação) propaga
+  `competitionFormat` de ponta a ponta, não apenas que a função `group-simulator.ts` se comporta
+  corretamente quando alimentada diretamente (T-U-05/06).
 
 ### Ordem de implementação (Red-Green-Refactor por T-*, caminhos exatos)
 
@@ -333,13 +422,17 @@ contrato (test red → feat/fix green → refactor opcional):
 | 3 | T-I-01a, T-I-01b | `apps/worker/test/scrape-processor.competition-format.test.ts` (novo) | `apps/worker/src/pipeline/scrape.processor.ts`, `apps/worker/src/scraper/capture.service.ts`, `apps/worker/src/scraper/live-http-capture.service.ts` |
 | 4 | T-I-02a | `apps/api/test/admin-events.competition-format.test.ts` (novo) | `apps/api/src/admin/admin-events.service.ts` |
 | 5 | T-I-02b | `apps/api/test/user-service.event-summary-cache.test.ts`, `apps/api/test/user-service.event-medalists-cache.test.ts` | `apps/api/src/user/user.service.ts` |
-| 6 | T-U-07 | `apps/api/test/admin-events.competition-format.test.ts` (mesmo arquivo do passo 4 — validação do DTO e invalidação de cache são cenários do mesmo conjunto de testes admin) | DTO de evento admin + `apps/api/src/admin/admin-events.service.ts` |
-| 7 | T-U-08 | `apps/web/tests/admin-event-competition-format.test.tsx` (novo) | `apps/web/app/admin/page.tsx` ou componente extraído |
+| 6 | T-I-03 | `apps/api/test/user-service.group-simulation-route.competition-format.test.ts` (novo) | `apps/api/src/user/user.service.ts` (cadeia 3, linhas 4194-4204/4341-4353) |
+| 7 | T-I-04 | `apps/api/test/user-service.aggregated-event-competition-format.test.ts` (novo) | `apps/api/src/user/user.service.ts` (resolução por `category.eventId`) |
+| 8 | T-U-07 | `apps/api/test/admin-events.competition-format.test.ts` (mesmo arquivo do passo 4 — validação do DTO é cenário do mesmo conjunto de testes admin) | DTO de evento admin + `apps/api/src/admin/admin-events.service.ts` |
+| 9 | T-U-08 | `apps/web/tests/admin-event-competition-format.test.tsx` (novo) | `apps/web/app/admin/page.tsx` ou componente extraído |
 | 0 (antes de tudo) | — | — | `prisma/schema.prisma` + migration — não é T-* de comportamento, é pré-requisito estrutural para os demais; roda antes do T-U-01 |
 
 Caminhos fixados, sem curinga — confirmar antes de criar que `apps/api/test/group-simulator.test.ts` é o
 nome real do arquivo de teste já existente para `group-simulator.ts` (se o nome real divergir, Codex usa
 o arquivo existente correto e reporta o ajuste no relatório de entrega, sem criar arquivo duplicado).
+T-I-03 e T-I-04 (novos na v4) tocam a mesma região de `user.service.ts` (cadeia 3) — Codex pode
+implementá-los em sequência imediata um do outro, mas mantendo commits Red/Green separados por T-*.
 
 Concluir cada T-* (red + green, refactor se houver) antes de iniciar o próximo. Migration (passo 0) não
 segue ciclo Red-Green — é alteração de schema, validada por `npx prisma migrate dev`/equivalente e pela
@@ -351,8 +444,8 @@ Este checklist **não é executado automaticamente pelo Codex ao concluir a impl
 uma operação em produção que requer autorização explícita de Leo após o deploy estar em produção e
 validado — mesmo padrão de decisão explícita já usado para push/PR em outras Specs deste CAT.
 
-1. Confirmar PP-022 integrado em `main` antes de iniciar a implementação de PP-025 (pré-condição, não
-   deste checklist pós-deploy).
+1. Confirmar PP-022 integrado em `main` — **já confirmado nesta versão** (`a549ea8` via PR #29), não
+   bloqueia início da implementação.
 2. Deploy de PP-025 em produção.
 3. **Aguardar autorização explícita de Leo** para prosseguir com a configuração dos eventos 57/58.
 4. Configurar eventos internos 57/58 com `competitionFormat = K1` via endpoint/formulário admin.

@@ -1,4 +1,4 @@
-﻿import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { isOperationalRecoveryWarning, resolveScrapeLockStaleMsFromEnv } from "@cbtm/shared";
 import { PrismaService } from "../common/prisma.service";
@@ -172,6 +172,7 @@ export class AdminEventsService {
         nome: dto.nome,
         nivel: dto.nivel ?? null,
         ratingMatchFormat: dto.ratingMatchFormat ?? "RR_K1",
+        competitionFormat: dto.competitionFormat ?? "AUTO",
         seedCriteria: dto.seedCriteria ?? "AUTO",
         groupBestOfSets: dto.groupBestOfSets ?? null,
         eliminationBestOfSets: dto.eliminationBestOfSets ?? null,
@@ -447,6 +448,7 @@ export class AdminEventsService {
         nome: dto.nome,
         nivel: dto.nivel,
         ratingMatchFormat: dto.ratingMatchFormat,
+        competitionFormat: dto.competitionFormat,
         seedCriteria: dto.seedCriteria,
         groupBestOfSets: dto.groupBestOfSets,
         eliminationBestOfSets: dto.eliminationBestOfSets,

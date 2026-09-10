@@ -206,7 +206,7 @@ test("event medalists persiste read model e reutiliza cache valido no mesmo scra
 test("event medalists usa cache stale quando recomputacao falha", async () => {
   const harness = createMedalistsServiceHarness();
   harness.setCachedRecord({
-    key: "event-medalists-v3|event:1",
+    key: "event-medalists-v4|event:1",
     sourceScrapeRunId: 55,
     payload: {
       eventId: 1,
@@ -245,10 +245,10 @@ test("event medalists usa cache stale quando recomputacao falha", async () => {
   assert.equal(harness.getCategoryFindManyCalls(), 1);
 });
 
-test("PP-022 T-I-01 ignora cache v2 e recompila read model sob chave v3", async () => {
+test("PP-025 T-I-02b ignora cache v3 e recompila read model sob chave v4", async () => {
   const harness = createMedalistsServiceHarness();
   harness.setCachedRecord({
-    key: "event-medalists-v2|event:1",
+    key: "event-medalists-v3|event:1",
     sourceScrapeRunId: 55,
     payload: {
       eventId: 1,
@@ -262,9 +262,9 @@ test("PP-022 T-I-01 ignora cache v2 e recompila read model sob chave v3", async 
   assert.deepEqual(response.categories, []);
   const requestedKeys = harness.getRequestedCacheKeys();
   assert.ok(requestedKeys.length > 0);
-  assert.ok(requestedKeys.every((key) => key === "event-medalists-v3|event:1"));
-  assert.ok(!requestedKeys.includes("event-medalists-v2|event:1"));
-  assert.equal(harness.getCachedRecordKey(), "event-medalists-v3|event:1");
+  assert.ok(requestedKeys.every((key) => key === "event-medalists-v4|event:1"));
+  assert.ok(!requestedKeys.includes("event-medalists-v3|event:1"));
+  assert.equal(harness.getCachedRecordKey(), "event-medalists-v4|event:1");
   assert.equal(harness.getCategoryFindManyCalls(), 1);
 });
 

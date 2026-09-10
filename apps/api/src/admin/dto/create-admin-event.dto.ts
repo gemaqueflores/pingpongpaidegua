@@ -4,6 +4,8 @@ const EVENT_LEVEL_VALUES = ["ESTADUAL", "COPA", "NACIONAL", "OPEN"] as const;
 type EventLevelInput = (typeof EVENT_LEVEL_VALUES)[number];
 const RATING_MATCH_FORMAT_VALUES = ["RR_K1", "K1"] as const;
 type RatingMatchFormatInput = (typeof RATING_MATCH_FORMAT_VALUES)[number];
+const COMPETITION_FORMAT_VALUES = ["AUTO", "K1"] as const;
+type CompetitionFormatInput = (typeof COMPETITION_FORMAT_VALUES)[number];
 const SEED_CRITERIA_VALUES = ["AUTO", "RANKING", "RATING"] as const;
 type SeedCriteriaInput = (typeof SEED_CRITERIA_VALUES)[number];
 
@@ -50,6 +52,10 @@ export class CreateAdminEventDto {
   @IsOptional()
   @IsIn(RATING_MATCH_FORMAT_VALUES)
   ratingMatchFormat?: RatingMatchFormatInput;
+
+  @IsOptional()
+  @IsIn(COMPETITION_FORMAT_VALUES)
+  competitionFormat?: CompetitionFormatInput;
 
   @IsOptional()
   @IsIn(SEED_CRITERIA_VALUES)
