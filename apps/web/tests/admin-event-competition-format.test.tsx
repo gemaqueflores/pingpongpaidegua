@@ -12,5 +12,10 @@ test("PP-025 T-U-08 admin carrega, exibe e envia competitionFormat", () => {
   assert.match(pageSource, /setCompetitionFormat\(event\.competitionFormat \?\? "AUTO"\)/);
   assert.match(pageSource, /value=\{competitionFormat\}/);
   assert.match(pageSource, /competitionFormat,\s*seedCriteria/);
+
+  const eventFormHeading = pageSource.indexOf('"Novo evento monitorado"');
+  const competitionFormatField = pageSource.indexOf("Formato da competição");
+  assert.ok(eventFormHeading >= 0);
+  assert.ok(competitionFormatField > eventFormHeading, "competitionFormat deve pertencer ao formulário do evento");
   assert.match(pageSource, /Formato da competi[cç][aã]o/);
 });
