@@ -1,4 +1,4 @@
-﻿import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { isOperationalRecoveryWarning, resolveScrapeLockStaleMsFromEnv } from "@cbtm/shared";
 import { PrismaService } from "../common/prisma.service";

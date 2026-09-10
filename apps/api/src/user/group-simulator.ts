@@ -1,4 +1,4 @@
-﻿import { normalizeAthleteName } from "@cbtm/shared";
+import { normalizeAthleteName } from "@cbtm/shared";
 import { allocateGroupsCobra } from "../rules/cbtm-rules-engine";
 
 export interface GroupSimulationAthleteInput {
