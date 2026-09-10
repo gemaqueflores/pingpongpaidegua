@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { computeOfficialCategoryMatchesCount } from "../src";
 
 describe("computeOfficialCategoryMatchesCount", () => {
+  it("PP-025 T-U-01 aplica K1 do evento sem depender do prefixo da categoria", () => {
+    expect(
+      computeOfficialCategoryMatchesCount(4, {
+        categoryName: "ABSOLUTO A MAS",
+        competitionFormat: "K1",
+      }),
+    ).toBe(3);
+  });
+
   it("categorias rating apos 2026-02-24 usam eliminatoria simples", () => {
     expect(
       computeOfficialCategoryMatchesCount(16, {
