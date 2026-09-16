@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { Badge } from "./Badge";
 import { designTokens } from "../../lib/designTokens";
 
@@ -56,7 +56,7 @@ export function EventCard(props: EventCardProps) {
         <Badge tone={statusTone}>{statusLabel}</Badge>
       </div>
       <p className="event-period">{periodLabel}</p>
-      <div className="event-metrics">
+      <div className="event-card-metrics">
         <span>Atletas: <strong>{totalInscritos}</strong></span>
         <span>Inscrições: <strong>{inscricoesTotaisOficiais ?? totalInscritos}</strong></span>
         <span>Partidas: <strong>{totalPartidasJogadas ?? totalPartidas ?? 0}</strong></span>

@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import React from "react";
@@ -45,6 +45,9 @@ test("EventCard snapshot", () => {
   );
 
   assert.match(html, /event-card/);
+  assert.match(html, /event-card-metrics/);
+  assert.doesNotMatch(html, /class="event-metrics"/);
+  assert.doesNotMatch(html, /event-metric-card/);
   assert.match(html, /Ver Evento/);
   assert.match(html, /Simular Grupos/);
 });

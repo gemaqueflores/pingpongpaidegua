@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --bg: var(--token-primary-bg, #0a1233);
   --bg-panel: var(--token-card-bg, #121e52);
   --fg: var(--token-text-primary, #ffffff);
@@ -548,7 +548,7 @@ a {
   font-size: 0.85rem;
 }
 
-.event-metrics {
+.event-card-metrics {
   display: flex;
   flex-wrap: wrap;
   gap: 10px 18px;
@@ -2451,6 +2451,16 @@ a {
     min-width: 0;
   }
 
+  .user-theme .event-card-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+  }
+
+  .user-theme .event-card-metrics > span {
+    min-width: 0;
+  }
+
   .user-theme .data-table {
     display: block;
     width: 100%;
@@ -2537,6 +2547,12 @@ a {
 
   .user-theme .event-metrics {
     grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .user-theme .event-card-metrics {
+    display: flex;
+    flex-wrap: wrap;
     gap: 8px;
   }
 
