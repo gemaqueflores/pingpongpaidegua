@@ -47,6 +47,7 @@ test("EventCard snapshot", () => {
   assert.match(html, /event-card/);
   assert.match(html, /event-card-metrics/);
   assert.doesNotMatch(html, /class="event-metrics"/);
+  assert.doesNotMatch(html, /event-metric-card/);
   assert.match(html, /Ver Evento/);
   assert.match(html, /Simular Grupos/);
 });
