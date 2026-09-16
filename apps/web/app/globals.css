@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --bg: var(--token-primary-bg, #0a1233);
   --bg-panel: var(--token-card-bg, #121e52);
   --fg: var(--token-text-primary, #ffffff);

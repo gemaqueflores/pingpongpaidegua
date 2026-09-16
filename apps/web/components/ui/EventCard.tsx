@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { Badge } from "./Badge";
 import { designTokens } from "../../lib/designTokens";
 
