@@ -1675,6 +1675,10 @@ export class UpsertService {
           });
           if (cbtmMatchCandidates.length === 1) {
             existingMatch = cbtmMatchCandidates[0];
+          } else if (cbtmMatchCandidates.length > 1) {
+            warnings.push(
+              `Ambiguidade de cbtmMatchId=${normalizedCbtmMatchId} no evento ${eventId}/categoria ${category.id}: ${cbtmMatchCandidates.length} linhas candidatas - mantendo comportamento atual (matchKey).`,
+            );
           }
         }
       }
