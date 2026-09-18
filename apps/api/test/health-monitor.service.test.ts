@@ -66,3 +66,26 @@ test("stage 2 de recuperacao so pode ser usado antes da fase de jogo", () => {
   assert.equal(shouldClearCompetitiveDataOnManualStage2("INSCRICOES_ABERTAS"), true);
   assert.equal(shouldClearCompetitiveDataOnManualStage2("POS_INSCRICOES_PRE_EVENTO"), true);
 });
+
+test("T-U-03 health monitor usa queryRaw sem chamar queryRawUnsafe", async () => {
+  let queryRawCalls = 0;
+  let queryRawUnsafeCalls = 0;
+  const prismaRead = {
+    async $queryRaw() {
+      queryRawCalls += 1;
+      return [{ result: 1 }];
+    },
+    async $queryRawUnsafe() {
+      queryRawUnsafeCalls += 1;
+      return [{ result: 1 }];
+    },
+  };
+  const service = new HealthMonitorService({} as never, prismaRead as never, {} as never) as unknown as {
+    checkDatabase(): Promise<void>;
+  };
+
+  await service.checkDatabase();
+
+  assert.equal(queryRawCalls, 1);
+  assert.equal(queryRawUnsafeCalls, 0);
+});

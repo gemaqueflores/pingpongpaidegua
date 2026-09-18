@@ -86,7 +86,7 @@ export class HealthMonitorService implements OnModuleInit, OnModuleDestroy {
 
   private async checkDatabase(): Promise<void> {
     try {
-      await this.prismaRead.$queryRawUnsafe("SELECT 1");
+      await this.prismaRead.$queryRaw`SELECT 1`;
     } catch (error) {
       this.logger.error(
         `Healthcheck de banco falhou: ${error instanceof Error ? error.message : "erro desconhecido"}`,
