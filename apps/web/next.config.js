@@ -1,4 +1,8 @@
 /** @type {import('next').NextConfig} */
+const withBundleAnalyzer = require("@next/bundle-analyzer")({
+  enabled: process.env.ANALYZE === "true",
+});
+
 const apiOrigin = new URL(
   process.env.NEXT_PUBLIC_API_URL ?? "https://api-pingpongpaidegua.duckdns.org",
 ).origin;
@@ -39,4 +43,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withBundleAnalyzer(nextConfig);
