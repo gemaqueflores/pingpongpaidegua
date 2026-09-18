@@ -95,7 +95,7 @@ function extractGameIdFromRound(round: string | null | undefined): string | null
   return null;
 }
 
-function extractCbtmMatchId(match: ParsedMatch): string | null {
+export function extractCbtmMatchId(match: ParsedMatch): string | null {
   const fromMetadataKeys = [
     match.metadata?.cbtmMatchId,
     match.metadata?.matchId,
