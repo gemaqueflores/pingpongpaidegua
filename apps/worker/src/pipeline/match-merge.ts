@@ -95,6 +95,18 @@ function extractGameIdFromRound(round: string | null | undefined): string | null
   return null;
 }
 
+export function normalizeCbtmMatchId(value: unknown): string | null {
+  const asText = compactWhitespace(String(value ?? ""));
+  if (!asText) {
+    return null;
+  }
+  if (isNumericString(asText)) {
+    return String(Number(asText));
+  }
+  const digits = asText.match(/\d+/)?.[0];
+  return digits ? String(Number(digits)) : null;
+}
+
 export function extractCbtmMatchId(match: ParsedMatch): string | null {
   const fromMetadataKeys = [
     match.metadata?.cbtmMatchId,
@@ -104,16 +116,9 @@ export function extractCbtmMatchId(match: ParsedMatch): string | null {
   ];
 
   for (const value of fromMetadataKeys) {
-    const asText = compactWhitespace(String(value ?? ""));
-    if (!asText) {
-      continue;
-    }
-    if (isNumericString(asText)) {
-      return String(Number(asText));
-    }
-    const digits = asText.match(/\d+/)?.[0];
-    if (digits) {
-      return String(Number(digits));
+    const normalized = normalizeCbtmMatchId(value);
+    if (normalized) {
+      return normalized;
     }
   }
 
