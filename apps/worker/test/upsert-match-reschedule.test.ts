@@ -146,3 +146,82 @@ test("T-I-01 reagendamento atualiza a linha preservando id e matchKey", async ()
   assert.equal(matches[0]?.matchKey, original.matchKey);
   assert.equal(matches[0]?.matchDatetime?.toISOString(), rescheduledDatetime);
 });
+
+test("T-I-04 mantem o mesmo cbtmMatchId independente entre categorias", async () => {
+  const eventId = await createTestEvent();
+  const service = new UpsertService();
+  const [categoryA, categoryB] = await Promise.all([
+    prisma.category.create({
+      data: {
+        eventId,
+        name: "SUB-21 FEM",
+        normalizedName: "sub-21 fem",
+        cbtmCategoryId: "67",
+      },
+    }),
+    prisma.category.create({
+      data: {
+        eventId,
+        name: "SUB-19 FEM",
+        normalizedName: "sub-19 fem",
+        cbtmCategoryId: "68",
+      },
+    }),
+  ]);
+  const [originalA, originalB] = await Promise.all([
+    prisma.match.create({
+      data: {
+        eventId,
+        categoryId: categoryA.id,
+        cbtmMatchId: "2",
+        phase: "RESULTADOS",
+        round: "Final",
+        tableNumber: "17",
+        matchDatetime: new Date("2026-09-16T21:30:00.000Z"),
+        scoreRaw: "3-1",
+        matchKey: `evento-${eventId}-categoria-a-jogo-2`,
+      },
+    }),
+    prisma.match.create({
+      data: {
+        eventId,
+        categoryId: categoryB.id,
+        cbtmMatchId: "2",
+        phase: "RESULTADOS",
+        round: "Final",
+        tableNumber: "8",
+        matchDatetime: new Date("2026-09-17T18:00:00.000Z"),
+        scoreRaw: "3-2",
+        matchKey: `evento-${eventId}-categoria-b-jogo-2`,
+      },
+    }),
+  ]);
+
+  await service.upsert(
+    eventId,
+    buildDataset(
+      buildMatch({ jogo: "2" }, {
+        categoryId: "67",
+        categoryName: "SUB-21 FEM",
+        categoryNormalizedName: "sub-21 fem",
+        matchKey: `evento-${eventId}-categoria-a-jogo-2-reagendado`,
+        tableNumber: "19",
+        matchDatetime: "2026-09-18T16:30:00.000Z",
+      }),
+    ),
+    { processRegistrations: false },
+  );
+
+  const [matches, persistedA, persistedB] = await Promise.all([
+    prisma.match.count({ where: { eventId } }),
+    prisma.match.findUniqueOrThrow({ where: { id: originalA.id } }),
+    prisma.match.findUniqueOrThrow({ where: { id: originalB.id } }),
+  ]);
+  assert.equal(matches, 2);
+  assert.equal(persistedA.matchKey, originalA.matchKey);
+  assert.equal(persistedA.tableNumber, "19");
+  assert.equal(persistedA.matchDatetime?.toISOString(), "2026-09-18T16:30:00.000Z");
+  assert.equal(persistedB.tableNumber, originalB.tableNumber);
+  assert.equal(persistedB.matchDatetime?.toISOString(), originalB.matchDatetime?.toISOString());
+  assert.equal(persistedB.updatedAt.toISOString(), originalB.updatedAt.toISOString());
+});
