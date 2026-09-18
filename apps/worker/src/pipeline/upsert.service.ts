@@ -1655,6 +1655,7 @@ export class UpsertService {
           const cbtmMatchCandidates = await prisma.match.findMany({
             where: {
               eventId,
+              categoryId: category.id,
               cbtmMatchId: normalizedCbtmMatchId,
             },
             select: {
