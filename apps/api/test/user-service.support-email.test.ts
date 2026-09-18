@@ -1,17 +1,29 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import test from "node:test";
+import test, { after } from "node:test";
 import { UserService } from "../src/user/user.service";
 
 const require = createRequire(import.meta.url);
+const nodemailer = require("nodemailer") as {
+  createTransport: (config: Record<string, unknown>) => {
+    sendMail: (mail: Record<string, unknown>) => Promise<unknown>;
+  };
+};
+const originalCreateTransport = nodemailer.createTransport;
+let captureMail: ((mail: Record<string, unknown>) => void) | undefined;
+
+nodemailer.createTransport = (() => ({
+  async sendMail(mail: Record<string, unknown>) {
+    captureMail?.(mail);
+    return {};
+  },
+})) as typeof nodemailer.createTransport;
+
+after(() => {
+  nodemailer.createTransport = originalCreateTransport;
+});
 
 async function captureSupportEmail(title: string, description: string): Promise<Record<string, unknown>> {
-  const nodemailer = require("nodemailer") as {
-    createTransport: (config: Record<string, unknown>) => {
-      sendMail: (mail: Record<string, unknown>) => Promise<unknown>;
-    };
-  };
-  const originalCreateTransport = nodemailer.createTransport;
   const originalEnv = {
     SMTP_HOST: process.env.SMTP_HOST,
     SMTP_PORT: process.env.SMTP_PORT,
@@ -26,18 +38,15 @@ async function captureSupportEmail(title: string, description: string): Promise<
   process.env.SMTP_USER = "test-user";
   process.env.SMTP_PASS = "test-pass";
   process.env.SMTP_FROM = "noreply@example.test";
-  nodemailer.createTransport = (() => ({
-    async sendMail(mail: Record<string, unknown>) {
-      sentMail = mail;
-      return {};
-    },
-  })) as typeof nodemailer.createTransport;
+  captureMail = (mail) => {
+    sentMail = mail;
+  };
 
   try {
     const service = new UserService({} as never, {} as never);
     await service.reportProblem(title, description);
   } finally {
-    nodemailer.createTransport = originalCreateTransport;
+    captureMail = undefined;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
         delete process.env[key];
