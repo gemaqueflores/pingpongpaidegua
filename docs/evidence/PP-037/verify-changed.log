@@ -1,0 +1,291 @@
+
+> appcbtmeventos-monorepo@1.0.0 verify:changed
+> tsx scripts/verify-changed.ts
+
+node.exe : warning: in the working copy of 'apps/api/test/user-service.pp037-modalities.test.ts', LF will be replaced 
+by CRLF the next time Git touches it
+No linha:1 caractere:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warning: in the... Git touches it:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Changed files:
+- apps/api/test/user-service.pp037-modalities.test.ts
+- apps/api/test/fixtures/pp037-modalities.ts
+- apps/api/test/pp037-visual-check.ts
+
+Validation commands:
+- npm run verify:encoding
+- npm run verify:security
+- npm run test --workspace apps-api
+- npm run build --workspace apps-api
+
+> npm run verify:encoding
+
+> appcbtmeventos-monorepo@1.0.0 verify:encoding
+> tsx scripts/check-encoding.ts
+
+warning: in the working copy of 'apps/api/test/user-service.pp037-modalities.test.ts', LF will be replaced by CRLF the 
+next time Git touches it
+encoding ok (3 candidate files)
+
+> npm run verify:security
+
+> appcbtmeventos-monorepo@1.0.0 verify:security
+> tsx scripts/security-scan.ts
+
+security scan ok (3 candidate files)
+
+> npm run test --workspace apps-api
+
+> apps-api@1.0.0 pretest
+> npm --prefix ../.. run build --workspace @cbtm/shared
+
+
+> @cbtm/shared@1.0.0 build
+> tsc -p tsconfig.json
+
+
+> apps-api@1.0.0 test
+> tsx --test test/**/*.test.ts
+
+✔ PP-025 T-I-02a update propaga competitionFormat e invalida filho e canonico (4.1962ms)
+✔ PP-025 T-U-07 DTO rejeita competitionFormat fora do enum (4.6114ms)
+✔ PP-015 T-U-04 updateEfficiencyConfig fecha vigencia anterior em transacao (2.1968ms)
+✔ PP-015 T-I-04 updateEfficiencyConfig invalida cache global de eficiencia (1.2411ms)
+✔ detecta WO quando placar e parciais sao 3x0 com 11x0 (4.684ms)
+✔ nao detecta WO quando houver parcial diferente de 11x0 (0.5112ms)
+✔ detecta duplo WO com placar 0-0 e parciais 0-0 (0.4243ms)
+✔ detecta duplo WO quando scoreRaw explicita 0x0 mesmo sem setsResult (0.3958ms)
+✔ performance por categoria soma pontos apenas da categoria (32.8706ms)
+✔ classificacao eliminatoria campeao (3.7917ms)
+✔ eliminatoria com confronto pendente nao bloqueia podio quando final ja foi decidida (4.2016ms)
+✔ classificacao eliminatoria mapeia 2 3 5 9 17 33 (1.4535ms)
+✔ classificacao de categoria com ate 5 atletas usa grupo unico (4.2252ms)
+✔ reconhece dupla por nome canonico mesmo com separador e ordem diferentes (3.362ms)
+✔ grupo unico com mais de 3 unidades competitivas mantem duplo bronze (3.0553ms)
+✔ categoria com apenas 3 unidades competitivas limita podio a ouro, prata e bronze (0.812ms)
+✔ medalhistas esperados em eliminatoria de duplas aceitam ouro, prata e duplo bronze (1.431ms)
+✔ WO na fase de grupos anula confrontos anteriores do atleta para desempate/classificacao (0.9087ms)
+✔ grupo unico com WO e duplo WO ainda classifica atleta elegivel por comparecimento (0.7155ms)
+✔ categoria com 5 atletas em unica 01 usa grupo unico e pode gerar 1º lugar (2.1367ms)
+✔ classificacao retorna 33 quando atleta só jogou grupos e houve eliminatoria na categoria (0.9505ms)
+✔ categoria com grupos + eliminatoria deve classificar por eliminatoria mesmo com <=5 participantes efetivos (0.5565ms)
+✔ RHM com semifinal/final define prata como perdedor da final (nao pelo grupo unico) (1.5883ms)
+✔ empate simples entre 2 atletas em grupo unico resolve por confronto direto (0.7421ms)
+✔ empate triplo resolve por razao de sets (1.0105ms)
+✔ empate triplo resolve por razao de pontos (1.4975ms)
+✔ empate parcial reexecuta desempate no subconjunto restante (1.4025ms)
+✔ empate absoluto usa sorteio deterministico (0.9996ms)
+✔ grupo unico reconhece rodadas com sufixos de jogo no mesmo grupo (0.4513ms)
+✔ grupo unico reconhece rodada no formato Única 01 (0.4048ms)
+✔ grupo unico com mais de 5 atletas ainda classifica por grupo (1.7065ms)
+✔ grupo unico ignora partidas pendentes para manter classificacao (0.5886ms)
+✔ grupo unico com mais de 5 atletas ignora eliminatoria BYE sem vencedor (0.8906ms)
+✔ T-U-01: rejeita JWT_SECRET customizado com menos de 32 caracteres (3.3875ms)
+✔ T-U-02: aceita JWT_SECRET customizado com exatamente 32 caracteres (0.7547ms)
+✔ T-U-03: rejeita JWT_SECRET customizado com exatamente 31 caracteres (0.7363ms)
+✔ T-U-04: permite default de desenvolvimento quando autorizado (0.6657ms)
+✔ T-U-05: rejeita default de desenvolvimento sem autorizacao (0.505ms)
+✔ T-U-01: rejeita JWT default sem flag mesmo com NODE_ENV ausente (2.7191ms)
+✔ T-U-02: flag explicita permite defaults apenas no desenvolvimento (419.9296ms)
+✔ T-U-03: NODE_ENV development sozinho nao autoriza JWT default (0.7703ms)
+✔ rejeita hash configurado da senha default sem flag explicita (5.4203ms)
+✔ aceita segredo e hash customizados sem depender de NODE_ENV (5.4417ms)
+✔ PP-034 T-I-03: endpoint revoga as sessoes do admin autenticado (2.6263ms)
+✔ PP-034: endpoint de revogacao exige JWT e role ADMIN (0.3929ms)
+✔ bloqueia login apos 3 tentativas invalidas (29.9821ms)
+✔ PP-042 T-U-02: login preserva role ADMIN na resposta e reseta falhas (25.7584ms)
+✔ permite login com credencial administrativa legada persistida no banco (10.5028ms)
+✔ permite novo login apos expiracao do bloqueio (13.8188ms)
+✔ forgot password cria token com expiracao e resposta generica (5.4513ms)
+✔ reset password invalida token e impede reuso (434.551ms)
+✔ reset password falha com token expirado (5.3675ms)
+✔ PP-042 T-U-01: login assina payload sem role (8.8508ms)
+✔ T-U-01: payload de login inclui tokenVersion atual (11.3389ms)
+✔ T-U-02: reset password incrementa tokenVersion na mesma atualizacao (421.72ms)
+✔ T-I-03/T-I-04: revogacao incrementa somente o proprio admin (6.5222ms)
+✔ T-I-03: o token usado para revogar deixa de ser valido (11.6535ms)
+✔ quadro de medalhas inicia com zeros (2.7815ms)
+✔ quadro de medalhas agrega ouro/prata/bronze por nivel (0.6863ms)
+✔ quadro de medalhas ignora classificacao ausente e nivel nulo (0.3915ms)
+✔ COBRA distribui em snake deterministico (4.6027ms)
+✔ schedule do grupo prioriza confronto de mesmo clube quando existir (0.6833ms)
+✔ desempate para 2 atletas usa confronto direto (1.0391ms)
+✔ desempate 3 atletas usa razao de sets quando partidas empatam (1.449ms)
+✔ desempate absoluto cai em sorteio deterministico (1.4403ms)
+✔ ranking points usa tabela configuravel (1.6132ms)
+✔ rating delta aplica bucket e peso do evento (0.7954ms)
+✔ loader valida configs CBTM (0.5488ms)
+✔ loader falha com erro orientativo quando tabela básica de rating está ausente (1.8913ms)
+✔ detecta estrutura oficial de grupos por fase ou rodada (3.8255ms)
+✔ resolve status de listagem para homepage (0.6438ms)
+✔ simulador so pode ser usado sem grupos definidos e em situacao elegivel (0.7497ms)
+✔ breakdown conta status de inscricao por categoria (3.6735ms)
+✔ scope confirmed inclui apenas inscritos (0.5116ms)
+✔ scope confirmed_and_pre inclui inscritos e pre-inscritos (0.3129ms)
+✔ scope confirmed nao usa atletas com status desconhecido (0.2996ms)
+✔ categoria precisa de no minimo 3 atletas para simulacao (0.4112ms)
+✔ simulador distribui tamanhos de grupos de forma balanceada (7.2769ms)
+✔ categorias rating com formato K1 simulam confrontos iniciais sem grupos (3.4671ms)
+✔ PP-025 T-U-05 formato K1 do evento gera eliminatoria para categoria nao rating (0.7073ms)
+✔ PP-025 T-U-06 formato AUTO preserva simulacao por grupos (0.8666ms)
+✔ simulador usa distribuicao em zigue-zague invertido (A-B-C-C-B-A) (2.2ms)
+✔ com 10 atletas em 3 grupos a sobra fica no ultimo grupo e mantem COBRA no final (1.2517ms)
+✔ simulador aplica swap para reduzir colisoes quando possivel (1.0685ms)
+✔ simulador mantem colisoes quando cenario e insolavel e gera warning (2.5505ms)
+✔ simulador e deterministico para mesma entrada (1.5433ms)
+✔ simulador preserva estritamente o conjunto de atletas da categoria (1.222ms)
+✔ simulador descarta duplicidade de athleteId na entrada (0.5051ms)
+✔ categoria com um unico grupo usa rotulo Unico (0.4027ms)
+✔ regra de quantidade de grupos por faixa de atletas (2.7701ms)
+✔ preferencia historica invalida e ignorada para respeitar a regra (0.634ms)
+✔ categoria iniciando com R ordena por ratingPoints (0.4632ms)
+✔ categoria nao R ordena por rankingPoints (0.3274ms)
+✔ ordenacao aplica fallback para campo alternativo quando principal ausente (0.4934ms)
+✔ categoria de ranking desempata por rating quando ranking empata (0.3402ms)
+✔ categoria de rating desempata por ranking quando rating empata (0.3769ms)
+✔ atletas dentro do grupo ficam ordenados por pontos de forma decrescente (0.3153ms)
+✔ quando colisao e inevitavel, mantem distribuicao cobra da categoria (0.4427ms)
+✔ RGM remaneja TOMAZ e ADRIAN sem trocar cabecas de chave (0.6301ms)
+✔ health monitor aciona recovery por warning operacional persistido (2.1812ms)
+✔ health monitor ignora warning diagnostico ruidoso sem auditoria (0.555ms)
+✔ health monitor continua acionando recovery por extractionStats quando warnings foram filtrados (0.3132ms)
+✔ stage 2 de recuperacao nao deve ser usado em evento com grades ou em andamento (0.2403ms)
+✔ stage 2 de recuperacao so pode ser usado antes da fase de jogo (0.2368ms)
+✔ T-I-01: rejeita token quando AdminCredential nao existe (4.1333ms)
+✔ T-I-02: credencial existente autoriza fluxo administrativo legitimo (1.0414ms)
+✔ T-I-03: role da sessao vem do banco e ignora role do payload (0.5311ms)
+✔ T-I-04: rejeita payload com sub e username divergentes (0.8112ms)
+✔ PP-034 T-I-01 / PP-042 T-U-04: rejeita tokenVersion desatualizado sem role (0.5601ms)
+✔ PP-034 T-I-02 / PP-042 T-U-03: aceita payload atual sem role (0.4488ms)
+✔ PP-034: rejeita token legado sem tokenVersion (0.5327ms)
+✔ fixture real gera podio coerente sem depender de ELIMINATORIA operacional (347.4158ms)
+✔ normaliza podio com no maximo 1 ouro, 1 prata e 2 bronzes (43.6908ms)
+✔ prioriza menor posicao e nome para desempate deterministico (0.6517ms)
+✔ mantem podio valido sem alterar quantidade (1.8744ms)
+✔ deduplica medalhistas pela unidade competitiva quando informado (0.8886ms)
+✔ deduplica alias de dupla com nomes equivalentes no mesmo podio (0.9828ms)
+✔ deduplica dupla por unitKey equivalente quando o alias acrescenta sobrenome (0.4865ms)
+✔ PP-040 T-U-01: override aplica prazo apenas na chamada sem alterar a env (3.3783ms)
+✔ PP-040 T-U-02: sem override preserva o comportamento configurado na env (0.8043ms)
+✔ PP-040 T-U-03: override de um evento nao vaza para a chamada seguinte (0.7893ms)
+✔ PP-040 T-U-04: dry-run com override contabiliza sem deletar (1.4703ms)
+✔ PP-040 T-U-05: rota aceita override inteiro nao negativo e rejeita invalidos antes do servico (16.1862ms)
+✔ T-U-08 comparador adota progressao de placar (6.438ms)
+✔ T-U-09 comparador preserva partida ausente e adota placar novo (0.6735ms)
+✔ CB-2 comparador casa partida por matchKey estavel mesmo quando id muda (0.4604ms)
+✔ T-U-10 comparador preserva conteudo quando adversario ou placar regridem (1.8205ms)
+✔ CB-3 comparador all-or-nothing protege efficiency e medalists (1.1939ms)
+✔ T-U-11 comparador all-or-nothing mantem N em queda brusca (0.744ms)
+✔ T-U-12 modo replace ignora regressao (0.5625ms)
+✔ T-U-13 publishedAt avanca apenas quando publica ou mergeia (0.5342ms)
+✔ PP-046 T-U-01: RolesGuard autoriza ADMIN com metadata real (2.5705ms)
+✔ PP-046 T-U-02: compilador aceita ADMIN e rejeita USER em AuthUser.role (3537.8417ms)
+✔ PP-015 T-I-03 controller rejeita year invalido em GET /efficiency (2.5813ms)
+✔ PP-025 T-I-04 agregado resolve competitionFormat por category.eventId (9.1938ms)
+✔ athlete career inclui confrontos de dupla quando a chave representa um par (19.4329ms)
+✔ athlete career de par prioriza categoria oficial quando existe duplicidade no mesmo evento (6.1116ms)
+✔ athlete career de par nao projeta confronto de dupla errada quando apenas um integrante coincide (2.773ms)
+✔ athlete career de par reconhece confronto quando um integrante aparece com alias legado no scorePlayers (4.2202ms)
+✔ athlete career de par calcula pontos, classificacao e medalha com alias legado no grupo unico (8.5712ms)
+✔ athlete summary persiste read model e reutiliza cache valido no mesmo scrape run (9.1189ms)
+✔ athlete summary usa cache stale quando recomputacao falha (3.6027ms)
+✔ PP-037 T-I-01 athlete summary mantém jogos projetados de dupla sem poluir performance por categoria do atleta individual (13.2094ms)
+✔ PP-006 T-U-01 buildAthleteSummaryMatch projeta atleta em par com separador hifen (1.3561ms)
+✔ PP-006 T-U-02 buildAthleteNameKeys reconhece membro de par separado por hifen (0.7872ms)
+✔ PP-006 T-I-01 athlete summary retorna matches de par com separador hifen (3.088ms)
+✔ PP-006 T-I-02 athlete summary nao duplica matches apos incluir hifen (2.1108ms)
+✔ PP-006 T-I-03 athlete summary preserva atleta somente individual (2.2582ms)
+✔ club efficiency career ignora dupla sintetica de outro clube ao projetar medalhistas (12.7756ms)
+✔ club efficiency career deduplica a mesma dupla no mesmo evento e prioriza categoria oficial (3.3014ms)
+✔ club efficiency career preserva nome canonico da dupla ao recomputar athletesContribution (2.0003ms)
+✔ club efficiency career usa contagem de atletas unicos com inscricao confirmada no resumo do evento (1.9507ms)
+✔ T-U-01 listAthletes inclui pares de duplas no evento (4.5187ms)
+✔ T-U-02 listAthleteDirectory mantem filtro de pares no diretorio global (1.4982ms)
+✔ T-U-03 listClubs inclui pares na contagem de atletas do clube (1.1118ms)
+✔ T-U-04 listClubAthletes retorna pares do clube (2.4761ms)
+✔ T-U-05 listEventSchedule retorna partidas agrupadas por categoria com sufixo e ordenacao (4.5171ms)
+✔ T-U-06 listEventSchedule ignora categorias sem partidas e categorias ignoradas (0.7006ms)
+✔ T-I-01 controller GET events/:id/athletes inclui pares (0.3962ms)
+✔ T-I-02 controller GET events/:id/schedule retorna estrutura correta (0.3571ms)
+✔ event efficiency persiste read model e reutiliza cache valido no mesmo scrape run (14.3697ms)
+✔ event efficiency usa cache stale quando recomputacao falha (4.483ms)
+✔ event efficiency deduplica medalhistas de dupla no mesmo evento e prioriza categoria oficial (5.7455ms)
+✔ event efficiency ignora categoria completamente vazia (3.3744ms)
+✔ event efficiency usa athleteCount por atletas unicos com inscricao confirmada (0.8474ms)
+✔ event efficiency em escopo agregado deduplica atleta individual repetido entre eventIds (0.7419ms)
+✔ PP-015 T-U-01 resolve pesos pela vigencia da data exata (1.4226ms)
+✔ PP-015 T-U-02 usa registro mais antigo como fallback retroativo (0.2633ms)
+✔ PP-015 T-U-03 getEfficiencyWeights retorna default quando versoes estao vazias (0.4128ms)
+✔ PP-015 T-I-01 ranking global filtra eventos pelo ano de dataInicio (4.6554ms)
+✔ PP-015 T-I-02 ranking global sem ano inclui dataInicio nulo e usa peso por evento (3.5715ms)
+✔ PP-015 T-I-05 carrega versoes de peso uma unica vez por ranking (1.318ms)
+✔ PP-022 T-U-01 podio incompleto retorna diagnostico especifico (2.6665ms)
+✔ PP-022 T-U-02 podio completo permanece ok (0.3835ms)
+✔ PP-022 T-U-03 expectativa zero ou nula nao sinaliza podio incompleto (0.3242ms)
+✔ PP-022 T-U-04 preserva diagnosticos preexistentes (0.3258ms)
+✔ event medalists persiste read model e reutiliza cache valido no mesmo scrape run (6.7406ms)
+✔ event medalists usa cache stale quando recomputacao falha (1.1018ms)
+✔ PP-025 T-I-02b ignora cache v3 e recompila read model sob chave v4 (1.198ms)
+✔ event medalists resolve clube de dupla quando atleta placeholder pode ser reconciliado por atletas canonicos (17.0867ms)
+✔ event medalists inclui dupla projetada por scorePlayers quando vinculo de participante esta parcial (9.546ms)
+✔ event medalists aplica sufixo do child event no evento agregado (3.0564ms)
+✔ event summary persiste read model e reutiliza cache valido no mesmo scrape run (12.1203ms)
+✔ PP-016 T-I-02 event summary usa fonte observada quando publicado supera teorico (2.3049ms)
+✔ PP-016 T-I-03 event summary agregado usa fonte observada quando filho foi calibrado (1.7182ms)
+✔ PP-025 T-I-02b event summary usa cache v14 e ignora payload v13 (1.5283ms)
+✔ event list e event summary usam a mesma agregacao para o mesmo evento (3.7884ms)
+✔ escopo de evento agregado inclui filhos em vinculos encadeados (1.9911ms)
+✔ escopo de evento agregado usa fallback deterministico em vinculo ciclico (0.9789ms)
+✔ official category audit seleciona o ultimo run com auditoria por evento sem depender do tamanho do lote (0.915ms)
+✔ historical group preferences exclui todos os eventIds do agregado atual (2.6737ms)
+✔ simulateGroups em evento agregado aplica sufixo do child event nas categorias simuladas (6.1549ms)
+✔ PP-025 T-I-03 rota real do simulador propaga competitionFormat K1 (7.131ms)
+✔ PP-016 T-U-01 mantem partidas previstas quando teorico supera publicado (1.6497ms)
+✔ PP-016 T-U-02 calibra partidas previstas para publicado maior que teorico (0.3941ms)
+✔ PP-016 T-U-03 mantem fallback teorico quando nao ha partidas publicadas (0.277ms)
+✔ T-U-01 run ativo serve espelho stale sem compute (2.1827ms)
+✔ CB-1 run ativo em evento filho serve espelho stale sem compute (0.559ms)
+✔ T-I-02 ciclo pos-run publica payload em chave canonica (1.2448ms)
+✔ T-U-02 run ativo sem espelho retorna building sem compute (1.1399ms)
+✔ T-U-03 lock vazado permite compute (0.6312ms)
+✔ T-U-04 cache fresco sem run preserva fluxo atual (0.8226ms)
+✔ CB-7 publishMode replace anonimo via query cai para compare (2.7361ms)
+✔ CB-7 publishMode replace interno exige token compartilhado (0.7433ms)
+✔ PP-037 T-U-01 ranking soma somente o ouro individual (6.1562ms)
+✔ PP-037 T-U-02 carreira soma somente a prata individual (7.3416ms)
+✔ PP-037 T-U-03 duplas mistas por categoria, evento ou nome nao contaminam o ranking (1.3355ms)
+✔ PP-037 T-U-03 carreira preserva prata mista somente na estrutura interna (1.6058ms)
+✔ PP-037 T-U-04 individuais preservam medalhas, pesos e pontos (1.6037ms)
+✔ listAthletes exige registrationStatus INSCRITO (4.7328ms)
+✔ listAthletes busca por nome normalizado sem depender de acentos (0.7512ms)
+✔ listClubs exige registrationStatus INSCRITO no filtro principal e na contagem por clube (1.2989ms)
+✔ listClubs conta atleta agregado apenas uma vez por clube e nome normalizado (1.9145ms)
+✔ listClubs busca por nome normalizado sem depender de acentos (0.5397ms)
+✔ listClubAthletes exige registrationStatus INSCRITO no lookup do clube e dos atletas (1.8526ms)
+✔ listClubAthletes agrega categorias de child events com sufixo no evento canonico (2.1888ms)
+✔ listCategories aplica sufixo de child event no evento agregado (2.2329ms)
+✔ listAthleteDirectory preserva nome reduzido de duplas sem colapsar os dois integrantes (2.6645ms)
+✔ listAthleteDirectory busca por nome normalizado sem depender de acentos (1.0811ms)
+✔ listAthleteDirectory oculta par sem lastro competitivo publicado (0.7477ms)
+✔ listAthleteDirectory mantem par com resultado publicado como lastro competitivo (0.9556ms)
+✔ T-U-05 selector de atletas preserva busca, ordenacao e paginacao (6.9306ms)
+✔ T-U-06 selector de clubes conta atleta multi-categoria uma vez (2.2735ms)
+✔ T-I-01 endpoints migrados servem espelho N durante mutacao simulada (1.8053ms)
+✔ T-U-07 listClubAthletes usa snapshot e preserva NotFound (1.5645ms)
+ℹ tests 225
+ℹ suites 0
+ℹ pass 225
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14959.9899
+
+> npm run build --workspace apps-api
+
+> apps-api@1.0.0 build
+> tsc -p tsconfig.json
+

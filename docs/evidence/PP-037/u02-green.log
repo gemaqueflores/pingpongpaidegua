@@ -1,0 +1,15 @@
+✔ athlete career inclui confrontos de dupla quando a chave representa um par (8.256ms)
+✔ athlete career de par prioriza categoria oficial quando existe duplicidade no mesmo evento (2.3797ms)
+✔ athlete career de par nao projeta confronto de dupla errada quando apenas um integrante coincide (0.8565ms)
+✔ athlete career de par reconhece confronto quando um integrante aparece com alias legado no scorePlayers (1.3343ms)
+✔ athlete career de par calcula pontos, classificacao e medalha com alias legado no grupo unico (2.5798ms)
+✔ PP-037 T-U-01 ranking soma somente o ouro individual (3.7995ms)
+✔ PP-037 T-U-02 carreira soma somente a prata individual (5.744ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1984.0799

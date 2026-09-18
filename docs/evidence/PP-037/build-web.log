@@ -1,0 +1,68 @@
+
+> apps-web@1.0.0 build
+> next build
+
+   ▲ Next.js 15.5.12
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 11.2s
+   Linting and checking validity of types ...
+   Collecting page data ...
+node.exe :  ⚠ Using edge runtime on a page currently disables static generation for that page
+No linha:1 caractere:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( ⚠ Using edge r...n for that page:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+   Generating static pages (0/23) ...
+   Generating static pages (5/23) 
+   Generating static pages (11/23) 
+   Generating static pages (17/23) 
+ ✓ Generating static pages (23/23)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                    Size  First Load JS
+┌ ○ /                                       5.11 kB         118 kB
+├ ○ /_not-found                               989 B         103 kB
+├ ○ /admin                                  10.3 kB         113 kB
+├ ○ /admin/login                            2.73 kB         105 kB
+├ ○ /admin/reset-password                   2.57 kB         105 kB
+├ ƒ /api/pix-qrcode                           152 B         102 kB
+├ ○ /apoie                                  3.16 kB         105 kB
+├ ○ /athletes                                 160 B         107 kB
+├ ○ /atletas                                  159 B         107 kB
+├ ƒ /career/[athleteKey]                     1.2 kB         113 kB
+├ ○ /colabore                               3.14 kB         105 kB
+├ ○ /contato                                1.21 kB         109 kB
+├ ○ /eficiencia                             5.13 kB         107 kB
+├ ƒ /eficiencia/[clubId]                    1.85 kB         109 kB
+├ ○ /events                                 1.69 kB         109 kB
+├ ƒ /events/[id]                            1.26 kB         117 kB
+├ ƒ /events/[id]/athletes/[athleteId]       1.25 kB         110 kB
+├ ƒ /events/[id]/group-simulator            1.24 kB         114 kB
+├ ○ /icon.png                                   0 B            0 B
+├ ƒ /opengraph-image                          152 B         102 kB
+├ ○ /privacidade                            1.21 kB         109 kB
+├ ○ /reportar-problema                      1.33 kB         107 kB
+├ ○ /reporte                                1.35 kB         107 kB
+├ ○ /sobre                                  1.21 kB         109 kB
+├ ○ /user                                     152 B         102 kB
+├ ƒ /user/career/[athleteKey]                 162 B         112 kB
+├ ○ /user/colabore                          2.16 kB         104 kB
+├ ○ /user/eficiencia                          152 B         102 kB
+├ ƒ /user/eficiencia/[clubId]                 916 B         108 kB
+├ ƒ /user/events/[id]                         164 B         116 kB
+├ ƒ /user/events/[id]/athletes/[athleteId]    162 B         109 kB
+├ ƒ /user/events/[id]/group-simulator         158 B         113 kB
+└ ○ /user/reportar-problema                   159 B         106 kB
++ First Load JS shared by all                102 kB
+  ├ chunks/18-b339bcfc88586b9e.js             46 kB
+  ├ chunks/87c73c54-24122e7b92478d00.js     54.2 kB
+  └ other shared chunks (total)                2 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
