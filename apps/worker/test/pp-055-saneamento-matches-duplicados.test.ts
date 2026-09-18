@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { randomInt } from "node:crypto";
 import test, { after } from "node:test";
-import { runDuplicateMatchCleanup } from "../../../scripts/pp-055-saneamento-matches-duplicados";
+import {
+  parseArgs,
+  runDuplicateMatchCleanup,
+} from "../../../scripts/pp-055-saneamento-matches-duplicados";
 import { prisma } from "../src/prisma";
 
 const testEventIds: number[] = [];
@@ -103,6 +106,17 @@ async function createTestAthletes(eventId: number): Promise<number[]> {
   ]);
   return athletes.map((athlete) => athlete.id);
 }
+
+test("CLI usa dry-run por padrao e exige event-id explicito", () => {
+  assert.deepEqual(parseArgs(["--event-id", "59"]), { eventId: 59, execute: false });
+  assert.deepEqual(parseArgs(["--event-id=59", "--execute"]), {
+    eventId: 59,
+    execute: true,
+  });
+  assert.throws(() => parseArgs([]), /--event-id|Uso:/i);
+  assert.throws(() => parseArgs(["--event-id", "0"]), /--event-id|Uso:/i);
+  assert.throws(() => parseArgs(["--event-id", "59", "--desconhecido"]), /desconhecido/i);
+});
 
 test("T-I-02 grupo com uma linha permanece intacto", async () => {
   const eventId = await createTestEvent();
