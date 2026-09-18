@@ -47,7 +47,7 @@ export class AppController {
 
   private async checkDatabase(): Promise<{ status: "ok" | "error"; error?: string }> {
     try {
-      await this.prismaRead.$queryRawUnsafe("SELECT 1");
+      await this.prismaRead.$queryRaw`SELECT 1`;
       return { status: "ok" };
     } catch (error) {
       return {
