@@ -18,7 +18,7 @@ import { prisma } from "../prisma";
 import { buildResolverCandidates, resolveByCategoryHistory } from "./athlete-resolution";
 import { inferAthleteFederationFromClub } from "./athlete-federation";
 import { canonicalizeDatasetCategoryNames, canonicalizeEventScopedCategoryName } from "./category-labels";
-import { mergeMatchesAcrossSources } from "./match-merge";
+import { extractCbtmMatchId, mergeMatchesAcrossSources } from "./match-merge";
 import { applyParenseEligibilityScopeToDataset, DatasetScopeStats } from "./parense-scope";
 import {
   computeEventRegistrationPairRemovals,
@@ -1645,6 +1645,35 @@ export class UpsertService {
               ...legacyMatch,
             };
             inc(updated, "matches_key_scoped_migrated");
+          }
+        }
+      }
+
+      if (!existingMatch) {
+        const normalizedCbtmMatchId = extractCbtmMatchId(parsedMatch);
+        if (normalizedCbtmMatchId) {
+          const cbtmMatchCandidates = await prisma.match.findMany({
+            where: {
+              eventId,
+              cbtmMatchId: normalizedCbtmMatchId,
+            },
+            select: {
+              id: true,
+              eventId: true,
+              categoryId: true,
+              scoreRaw: true,
+              setsJson: true,
+              p1Sets: true,
+              p2Sets: true,
+              winnerIndex: true,
+              cbtmMatchId: true,
+              scoreFinal: true,
+              scoreSets: true,
+              sourceFlags: true,
+            },
+          });
+          if (cbtmMatchCandidates.length === 1) {
+            existingMatch = cbtmMatchCandidates[0];
           }
         }
       }

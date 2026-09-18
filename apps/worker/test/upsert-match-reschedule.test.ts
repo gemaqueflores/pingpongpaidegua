@@ -78,7 +78,8 @@ test("T-I-02 preserva criacao de nova linha sem cbtmMatchId", async () => {
     eventId,
     buildDataset(
       buildMatch(null, {
-        matchKey: "sem-id-mesa-17",
+        matchKey: `evento-${eventId}-sem-id-mesa-17`,
+        round: "Grupo A",
         tableNumber: "17",
         matchDatetime: "2026-09-18T14:30:00.000Z",
       }),
@@ -89,7 +90,8 @@ test("T-I-02 preserva criacao de nova linha sem cbtmMatchId", async () => {
     eventId,
     buildDataset(
       buildMatch(null, {
-        matchKey: "sem-id-mesa-19",
+        matchKey: `evento-${eventId}-sem-id-mesa-19`,
+        round: "Grupo A",
         tableNumber: "19",
         matchDatetime: "2026-09-18T15:30:00.000Z",
       }),
@@ -110,7 +112,7 @@ test("T-I-01 reagendamento atualiza a linha preservando id e matchKey", async ()
     eventId,
     buildDataset(
       buildMatch({ jogo: "2" }, {
-        matchKey: "jogo-2-original",
+        matchKey: `evento-${eventId}-jogo-2-original`,
         tableNumber: "17",
         matchDatetime: originalDatetime,
       }),
@@ -127,7 +129,7 @@ test("T-I-01 reagendamento atualiza a linha preservando id e matchKey", async ()
     eventId,
     buildDataset(
       buildMatch({ jogo: "2" }, {
-        matchKey: "jogo-2-reagendado",
+        matchKey: `evento-${eventId}-jogo-2-reagendado`,
         tableNumber: "17",
         matchDatetime: rescheduledDatetime,
       }),
