@@ -14,9 +14,9 @@
 test at apps\api\test\user-service.pp037-modalities.test.ts:2:4548
 ✖ PP-037 T-U-02 carreira soma somente a prata individual (6.8081ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   2 !== 1
-  
+
       at TestContext.<anonymous> (C:\Users\LeonardoMuriloGemaqu\Documents\estudos\appcbtmeventos\apps\api\test\user-service.pp037-modalities.test.ts:76:10)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {

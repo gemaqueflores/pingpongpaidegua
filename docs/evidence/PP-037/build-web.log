@@ -14,11 +14,11 @@ No linha:1 caractere:1
 + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     + CategoryInfo          : NotSpecified: ( ⚠ Using edge r...n for that page:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
- 
+
    Generating static pages (0/23) ...
-   Generating static pages (5/23) 
-   Generating static pages (11/23) 
-   Generating static pages (17/23) 
+   Generating static pages (5/23)
+   Generating static pages (11/23)
+   Generating static pages (17/23)
  ✓ Generating static pages (23/23)
    Finalizing page optimization ...
    Collecting build traces ...
@@ -65,4 +65,3 @@ Route (app)                                    Size  First Load JS
 
 ○  (Static)   prerendered as static content
 ƒ  (Dynamic)  server-rendered on demand
-

@@ -16,9 +16,9 @@
 test at apps\api\test\user-service.pp037-modalities.test.ts:2:5489
 ✖ PP-037 T-U-03 duplas mistas por categoria, evento ou nome nao contaminam o ranking (2.7709ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   1 !== 0
-  
+
       at TestContext.<anonymous> (C:\Users\LeonardoMuriloGemaqu\Documents\estudos\appcbtmeventos\apps\api\test\user-service.pp037-modalities.test.ts:92:10)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {

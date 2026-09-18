@@ -13,9 +13,9 @@
 test at apps\api\test\user-service.pp037-modalities.test.ts:2:2427
 ✖ PP-037 T-U-01 ranking soma somente o ouro individual (4.3922ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   2 !== 1
-  
+
       at TestContext.<anonymous> (C:\Users\LeonardoMuriloGemaqu\Documents\estudos\appcbtmeventos\apps\api\test\user-service.pp037-modalities.test.ts:38:10)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
