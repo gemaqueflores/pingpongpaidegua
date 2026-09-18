@@ -9,6 +9,7 @@ import {
   computeEventSituation,
   normalizeRegistrationStatus,
   normalizeAthleteName,
+  normalizeClubName,
   normalizeText,
   resolveAthleteCandidate,
 } from "@cbtm/shared";
@@ -1109,7 +1110,9 @@ export class UpsertService {
 
         const clubNameDisplay = compactWhitespace(registration.clubName) || "SEM CLUBE";
         const clubNameNormalized =
-          normalizeText(registration.clubNormalizedName) || normalizeText(clubNameDisplay) || "sem clube";
+          normalizeClubName(registration.clubNormalizedName) ||
+          normalizeClubName(clubNameDisplay) ||
+          "sem clube";
         const categoryNameDisplay = compactWhitespace(registration.categoryName);
         const categoryNameNormalized =
           normalizeText(registration.categoryNormalizedName) || normalizeText(categoryNameDisplay);
@@ -4434,7 +4437,7 @@ export class UpsertService {
     aliasToAthleteIds: Map<string, Set<number>>;
   }): Promise<CachedAthlete> {
     const clubNameDisplay = compactWhitespace(input.clubNormalizedName ?? "") || "SEM CLUBE";
-    const clubNameNormalized = normalizeText(clubNameDisplay) || "sem clube";
+    const clubNameNormalized = normalizeClubName(clubNameDisplay) || "sem clube";
     const club = await this.ensureClub(
       clubNameDisplay,
       clubNameNormalized,
