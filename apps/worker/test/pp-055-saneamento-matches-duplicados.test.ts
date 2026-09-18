@@ -196,3 +196,35 @@ test("T-I-01 dry-run relata duplicatas sem alterar o banco", async () => {
     },
   ]);
 });
+
+test("T-I-05 bloqueia remocao quando linha obsoleta possui placar", async () => {
+  const eventId = await createTestEvent();
+  const categoryId = await createTestCategory(eventId);
+  await Promise.all([
+    createMatch({
+      eventId,
+      categoryId,
+      cbtmMatchId: "2",
+      key: `pp055-${eventId}-placar-antigo`,
+      fetchedAt: "2026-09-18T10:00:00.000Z",
+      tableNumber: "17",
+      scoreRaw: "3-1",
+    }),
+    createMatch({
+      eventId,
+      categoryId,
+      cbtmMatchId: "2",
+      key: `pp055-${eventId}-sem-placar-novo`,
+      fetchedAt: "2026-09-18T12:00:00.000Z",
+      tableNumber: "19",
+      scoreRaw: "",
+    }),
+  ]);
+
+  const report = await runDuplicateMatchCleanup({ prisma, eventId, execute: true });
+
+  assert.equal(await prisma.match.count({ where: { eventId, categoryId } }), 2);
+  assert.deepEqual(report.removedMatchIds, []);
+  assert.equal(report.groups[0]?.status, "ambiguous");
+  assert.match(report.groups[0]?.reason ?? "", /decisao manual/i);
+});
