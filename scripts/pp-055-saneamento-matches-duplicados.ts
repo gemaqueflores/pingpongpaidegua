@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { normalizeCbtmMatchId } from "../apps/worker/src/pipeline/match-merge";
 import { prismaRead, prismaWrite } from "../apps/worker/src/prisma";
 
 export interface CleanupArgs {
@@ -71,19 +72,69 @@ export async function runDuplicateMatchCleanup(input: {
     throw new Error(`Evento id=${input.eventId} nao encontrado.`);
   }
 
-  const beforeTotal = await input.prisma.match.count({
+  const matches = await input.prisma.match.findMany({
     where: { eventId: input.eventId },
+    select: {
+      id: true,
+      categoryId: true,
+      cbtmMatchId: true,
+      fetchedAt: true,
+      updatedAt: true,
+    },
   });
+  const groups = new Map<string, typeof matches>();
+  for (const match of matches) {
+    const normalizedCbtmMatchId = normalizeCbtmMatchId(match.cbtmMatchId);
+    if (!normalizedCbtmMatchId) {
+      continue;
+    }
+    const key = `${match.categoryId}|${normalizedCbtmMatchId}`;
+    const bucket = groups.get(key) ?? [];
+    bucket.push(match);
+    groups.set(key, bucket);
+  }
+
+  const candidateRemovalMatchIds: number[] = [];
+  for (const group of groups.values()) {
+    if (group.length < 2) {
+      continue;
+    }
+    const ordered = [...group].sort((left, right) => {
+      const leftTimestamp = (left.fetchedAt ?? left.updatedAt).getTime();
+      const rightTimestamp = (right.fetchedAt ?? right.updatedAt).getTime();
+      return (
+        rightTimestamp - leftTimestamp ||
+        right.updatedAt.getTime() - left.updatedAt.getTime() ||
+        right.id - left.id
+      );
+    });
+    candidateRemovalMatchIds.push(...ordered.slice(1).map((match) => match.id));
+  }
+
+  let removedMatchIds: number[] = [];
+  if (input.execute && candidateRemovalMatchIds.length > 0) {
+    await input.prisma.match.deleteMany({
+      where: {
+        eventId: input.eventId,
+        id: { in: candidateRemovalMatchIds },
+      },
+    });
+    removedMatchIds = [...candidateRemovalMatchIds];
+  }
+
+  const afterTotal = input.execute
+    ? await input.prisma.match.count({ where: { eventId: input.eventId } })
+    : matches.length;
 
   return {
     mode: input.execute ? "execute" : "dry-run",
     eventId: input.eventId,
-    beforeTotal,
-    afterTotal: beforeTotal,
+    beforeTotal: matches.length,
+    afterTotal,
     categories: [],
     groups: [],
-    candidateRemovalMatchIds: [],
-    removedMatchIds: [],
+    candidateRemovalMatchIds,
+    removedMatchIds,
     cacheInvalidated: false,
   };
 }
