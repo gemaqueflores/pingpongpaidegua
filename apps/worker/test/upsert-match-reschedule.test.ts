@@ -1,10 +1,23 @@
 import assert from "node:assert/strict";
 import { randomInt } from "node:crypto";
-import test from "node:test";
+import test, { after } from "node:test";
 import type { ParsedDataset, ParsedMatch } from "@cbtm/shared";
 import { extractCbtmMatchId } from "../src/pipeline/match-merge";
 import { UpsertService } from "../src/pipeline/upsert.service";
 import { prisma } from "../src/prisma";
+
+const testEventIds: number[] = [];
+
+after(async () => {
+  for (const eventId of testEventIds) {
+    await prisma.matchParticipant.deleteMany({ where: { match: { eventId } } });
+    await prisma.athleteMatchConflict.deleteMany({ where: { eventId } });
+    await prisma.match.deleteMany({ where: { eventId } });
+    await prisma.category.deleteMany({ where: { eventId } });
+    await prisma.event.delete({ where: { id: eventId } });
+  }
+  await prisma.$disconnect();
+});
 
 function buildMatch(
   metadata: ParsedMatch["metadata"],
@@ -62,6 +75,7 @@ async function createTestEvent(): Promise<number> {
     },
     select: { id: true },
   });
+  testEventIds.push(event.id);
   return event.id;
 }
 
