@@ -45,12 +45,6 @@ a {
   text-decoration: none;
 }
 
-.container {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 24px;
-}
-
 .product-shell {
   min-height: 100vh;
 }
@@ -522,6 +516,7 @@ a {
   font-size: clamp(1.9rem, 5.8vw, 2.35rem);
   font-weight: 800;
   color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
 }
 
 .compact-summary-meta {
@@ -642,6 +637,7 @@ a {
 .career-kpi-card strong {
   font-size: 1.2rem;
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 .career-medal-bars {
@@ -660,7 +656,8 @@ a {
   font-weight: 700;
 }
 
-.career-medal-bar-track {
+.career-medal-bar-track,
+.club-medal-bar-track {
   height: 10px;
   border-radius: 999px;
   background: rgba(18, 42, 110, 0.75);
@@ -668,20 +665,24 @@ a {
   overflow: hidden;
 }
 
-.career-medal-bar-fill {
+.career-medal-bar-fill,
+.club-medal-bar-fill {
   height: 100%;
   border-radius: inherit;
 }
 
-.career-medal-bar-fill.gold {
+.career-medal-bar-fill.gold,
+.club-medal-bar-fill.gold {
   background: linear-gradient(90deg, #c99922, #f2d276);
 }
 
-.career-medal-bar-fill.silver {
+.career-medal-bar-fill.silver,
+.club-medal-bar-fill.silver {
   background: linear-gradient(90deg, #8d97b6, #cad1e6);
 }
 
-.career-medal-bar-fill.bronze {
+.career-medal-bar-fill.bronze,
+.club-medal-bar-fill.bronze {
   background: linear-gradient(90deg, #98633e, #d99b6b);
 }
 
@@ -755,6 +756,7 @@ a {
   font-size: 1.02rem;
   font-weight: 800;
   color: #fff;
+  font-variant-numeric: tabular-nums;
 }
 
 .match-card-vs {
@@ -1221,21 +1223,21 @@ a {
 .user-theme .data-table tbody tr.classification-row-ouro td,
 .user-theme .data-table tbody tr.classification-row-ouro:nth-child(even) td,
 .user-theme .data-table tbody tr.classification-row-ouro:hover td {
-  background: rgba(255, 211, 77, 0.34);
+  background: rgba(255, 212, 59, 0.34);
   color: #fff9e8;
 }
 
 .user-theme .data-table tbody tr.classification-row-prata td,
 .user-theme .data-table tbody tr.classification-row-prata:nth-child(even) td,
 .user-theme .data-table tbody tr.classification-row-prata:hover td {
-  background: rgba(214, 226, 245, 0.34);
+  background: rgba(220, 230, 246, 0.34);
   color: #f7fbff;
 }
 
 .user-theme .data-table tbody tr.classification-row-bronze td,
 .user-theme .data-table tbody tr.classification-row-bronze:nth-child(even) td,
 .user-theme .data-table tbody tr.classification-row-bronze:hover td {
-  background: rgba(235, 149, 78, 0.34);
+  background: rgba(255, 184, 106, 0.34);
   color: #fff4ec;
 }
 
@@ -1636,6 +1638,7 @@ a {
 
 .event-efficiency-total {
   font-size: 1.12rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .event-efficiency-podium {
@@ -1688,6 +1691,7 @@ a {
 .event-efficiency-podium-total {
   font-size: 1.08rem;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .event-athlete-stats-grid {
@@ -1748,6 +1752,7 @@ a {
 
 .performance-bar-value {
   font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .event-athlete-secondary-link {
@@ -2095,6 +2100,7 @@ a {
   font-size: 1.4rem;
   font-weight: 800;
   color: var(--text-main);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-block-label {
@@ -2256,12 +2262,7 @@ a {
   color: var(--text-main);
   font-size: 1.05rem;
   font-weight: 800;
-}
-
-.home-club-medal-legend {
-  margin: -2px 0 0;
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .club-efficiency-button {
@@ -2270,32 +2271,6 @@ a {
 
 .next-event-actions button {
   min-height: 44px;
-}
-
-.athlete-summary-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 14px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.athlete-summary-head h2 {
-  margin: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.athlete-summary-head > div:first-child {
-  flex: 1 1 280px;
-  min-width: 0;
-}
-
-.athlete-summary-share {
-  flex: 0 1 100%;
-  max-width: 100%;
-  min-width: 0;
 }
 
 .career-medal-matrix h3 {
@@ -2489,14 +2464,6 @@ a {
   .hero-actions-row > *,
   .user-theme .event-actions > * {
     flex: 1 1 100%;
-  }
-
-  .athlete-summary-share .share-actions-row {
-    width: 100%;
-  }
-
-  .athlete-summary-share .share-actions-row > * {
-    flex: 0 1 auto;
   }
 
   .career-hero-stats-scroll {
@@ -3218,6 +3185,7 @@ a {
   line-height: 1.15;
   font-weight: 800;
   color: #fff;
+  font-variant-numeric: tabular-nums;
 }
 
 .club-medal-bars {
@@ -3237,35 +3205,11 @@ a {
   font-weight: 700;
 }
 
-.club-medal-bar-track {
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(18, 42, 110, 0.75);
-  border: 1px solid rgba(73, 118, 233, 0.35);
-  overflow: hidden;
-}
-
-.club-medal-bar-fill {
-  height: 100%;
-  border-radius: inherit;
-}
-
-.club-medal-bar-fill.gold {
-  background: linear-gradient(90deg, #c99922, #f2d276);
-}
-
-.club-medal-bar-fill.silver {
-  background: linear-gradient(90deg, #8d97b6, #cad1e6);
-}
-
-.club-medal-bar-fill.bronze {
-  background: linear-gradient(90deg, #98633e, #d99b6b);
-}
-
 .club-medal-bar-value {
   min-width: 24px;
   text-align: right;
   font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .page-header-compact {
@@ -3362,29 +3306,6 @@ a {
   }
 }
 
-/* Responsive system foundation */
-:root {
-  --surface: rgba(6, 24, 60, 0.92);
-  --surface-2: rgba(4, 18, 58, 0.72);
-  --border-strong: rgba(117, 161, 255, 0.48);
-  --text: #ffffff;
-  --muted-2: #b7c6e9;
-  --success: #2ecc71;
-  --danger: #e74c3c;
-  --warning: #ffc300;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --radius-1: 12px;
-  --radius-2: 16px;
-  --radius-3: 20px;
-  --shadow-1: 0 8px 18px rgba(0, 0, 0, 0.24);
-  --shadow-2: 0 16px 34px rgba(0, 0, 0, 0.36);
-}
-
 .container {
   max-width: 1200px;
   margin-inline: auto;
@@ -3447,9 +3368,9 @@ a {
 }
 
 .event-empty-state {
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-1);
-  background: var(--surface-2);
+  border: 1px dashed rgba(117, 161, 255, 0.48);
+  border-radius: var(--token-radius-component, 12px);
+  background: rgba(4, 18, 58, 0.72);
   padding: 14px;
   display: grid;
   gap: 8px;
