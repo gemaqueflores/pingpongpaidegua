@@ -44,6 +44,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException("Sessao administrativa invalida");
     }
 
+    // Design single-admin: role deriva da credencial administrativa no banco, nao do payload JWT.
     return {
       userId: credential.username,
       username: credential.username,
