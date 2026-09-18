@@ -35,29 +35,54 @@ async function createTestEvent(): Promise<number> {
   return event.id;
 }
 
-test("T-I-02 grupo com uma linha permanece intacto", async () => {
-  const eventId = await createTestEvent();
+async function createTestCategory(eventId: number, suffix = "A"): Promise<number> {
   const category = await prisma.category.create({
     data: {
       eventId,
-      name: "ABSOLUTO A FEM",
-      normalizedName: "absoluto a fem",
-      cbtmCategoryId: "67",
+      name: `ABSOLUTO ${suffix} FEM`,
+      normalizedName: `absoluto ${suffix.toLowerCase()} fem`,
+      cbtmCategoryId: suffix === "A" ? "67" : "68",
     },
+    select: { id: true },
   });
-  const original = await prisma.match.create({
+  return category.id;
+}
+
+async function createMatch(input: {
+  eventId: number;
+  categoryId: number;
+  cbtmMatchId: string;
+  key: string;
+  fetchedAt: string;
+  tableNumber: string;
+  scoreRaw?: string;
+}) {
+  return prisma.match.create({
     data: {
-      eventId,
-      categoryId: category.id,
-      cbtmMatchId: "2",
+      eventId: input.eventId,
+      categoryId: input.categoryId,
+      cbtmMatchId: input.cbtmMatchId,
       phase: "RESULTADOS",
       round: "Final",
-      tableNumber: "17",
-      matchDatetime: new Date("2026-09-18T14:30:00.000Z"),
-      scoreRaw: "",
-      fetchedAt: new Date("2026-09-18T12:00:00.000Z"),
-      matchKey: `pp055-${eventId}-unico`,
+      tableNumber: input.tableNumber,
+      matchDatetime: new Date(input.fetchedAt),
+      scoreRaw: input.scoreRaw ?? "",
+      fetchedAt: new Date(input.fetchedAt),
+      matchKey: input.key,
     },
+  });
+}
+
+test("T-I-02 grupo com uma linha permanece intacto", async () => {
+  const eventId = await createTestEvent();
+  const categoryId = await createTestCategory(eventId);
+  const original = await createMatch({
+    eventId,
+    categoryId,
+    cbtmMatchId: "2",
+    key: `pp055-${eventId}-unico`,
+    fetchedAt: "2026-09-18T12:00:00.000Z",
+    tableNumber: "17",
   });
 
   await runDuplicateMatchCleanup({ prisma, eventId, execute: true });
@@ -65,4 +90,54 @@ test("T-I-02 grupo com uma linha permanece intacto", async () => {
   const persisted = await prisma.match.findUniqueOrThrow({ where: { id: original.id } });
   assert.equal(persisted.id, original.id);
   assert.equal(persisted.updatedAt.toISOString(), original.updatedAt.toISOString());
+});
+
+test("T-I-04 execucao fica isolada ao evento solicitado", async () => {
+  const [targetEventId, otherEventId] = await Promise.all([
+    createTestEvent(),
+    createTestEvent(),
+  ]);
+  const [targetCategoryId, otherCategoryId] = await Promise.all([
+    createTestCategory(targetEventId),
+    createTestCategory(otherEventId),
+  ]);
+  await Promise.all([
+    createMatch({
+      eventId: targetEventId,
+      categoryId: targetCategoryId,
+      cbtmMatchId: "2",
+      key: `pp055-${targetEventId}-antigo`,
+      fetchedAt: "2026-09-18T10:00:00.000Z",
+      tableNumber: "17",
+    }),
+    createMatch({
+      eventId: targetEventId,
+      categoryId: targetCategoryId,
+      cbtmMatchId: "2",
+      key: `pp055-${targetEventId}-novo`,
+      fetchedAt: "2026-09-18T12:00:00.000Z",
+      tableNumber: "19",
+    }),
+    createMatch({
+      eventId: otherEventId,
+      categoryId: otherCategoryId,
+      cbtmMatchId: "2",
+      key: `pp055-${otherEventId}-antigo`,
+      fetchedAt: "2026-09-18T10:00:00.000Z",
+      tableNumber: "17",
+    }),
+    createMatch({
+      eventId: otherEventId,
+      categoryId: otherCategoryId,
+      cbtmMatchId: "2",
+      key: `pp055-${otherEventId}-novo`,
+      fetchedAt: "2026-09-18T12:00:00.000Z",
+      tableNumber: "19",
+    }),
+  ]);
+
+  await runDuplicateMatchCleanup({ prisma, eventId: targetEventId, execute: true });
+
+  assert.equal(await prisma.match.count({ where: { eventId: targetEventId } }), 1);
+  assert.equal(await prisma.match.count({ where: { eventId: otherEventId } }), 2);
 });
