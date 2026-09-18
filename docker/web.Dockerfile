@@ -8,6 +8,9 @@ RUN npm install
 
 COPY apps/web ./apps/web
 
+ARG NEXT_PUBLIC_API_URL=https://api-pingpongpaidegua.duckdns.org
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 RUN npm run build --workspace apps-web
 
 EXPOSE 3000

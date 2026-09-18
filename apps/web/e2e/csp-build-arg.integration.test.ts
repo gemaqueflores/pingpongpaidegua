@@ -13,17 +13,12 @@ const repoRoot = path.resolve(__dirname, "..", "..", "..");
 const IMAGE_TAG = "appcbtmeventos-web-csp-test";
 
 function runDockerBuild(): void {
+  // Sem --build-arg explícito: valida o caminho real de aceitação — o default do docker-compose.yml
+  // (${NEXT_PUBLIC_API_URL:-http://localhost:4000}) deve propagar sozinho quando a variável não está no
+  // ambiente/.env, como é o caso desta sessão local.
   execFileSync(
     "docker",
-    [
-      "compose",
-      "--profile",
-      "local-ui",
-      "build",
-      "--build-arg",
-      "NEXT_PUBLIC_API_URL=http://localhost:4000",
-      "frontend",
-    ],
+    ["compose", "--profile", "local-ui", "build", "frontend"],
     { cwd: repoRoot, stdio: "pipe" },
   );
 }
