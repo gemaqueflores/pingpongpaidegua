@@ -207,7 +207,8 @@ test("athlete summary usa cache stale quando recomputacao falha", async () => {
   assert.equal(harness.getAthleteFindFirstCalls(), 1);
 });
 
-test("athlete summary mantém jogos projetados de dupla sem poluir performance por categoria do atleta individual", async () => {
+// PP-037: GREEN de caracterizacao autorizado; expectativas existentes preservadas.
+test("PP-037 T-I-01 athlete summary mantém jogos projetados de dupla sem poluir performance por categoria do atleta individual", async () => {
   const harness = createAthleteSummaryHarness();
 
   let phase = 0;
