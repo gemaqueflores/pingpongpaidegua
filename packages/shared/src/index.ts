@@ -779,6 +779,14 @@ export function normalizeText(input: string | null | undefined): string {
     .trim();
 }
 
+const CLUB_UF_SUFFIX_PATTERN = /\s*[-(]\s*[a-z]{2}\s*\)?\s*$/;
+
+export function normalizeClubName(input: string | null | undefined): string {
+  const base = normalizeText(input);
+  const withoutUfSuffix = base.replace(CLUB_UF_SUFFIX_PATTERN, "");
+  return withoutUfSuffix.trim() || base;
+}
+
 export function normalizeAthleteName(input: string | null | undefined): string {
   return (input ?? "")
     .normalize("NFD")
