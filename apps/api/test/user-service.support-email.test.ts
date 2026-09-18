@@ -1,0 +1,59 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import test from "node:test";
+import { UserService } from "../src/user/user.service";
+
+const require = createRequire(import.meta.url);
+
+async function captureSupportEmail(title: string, description: string): Promise<Record<string, unknown>> {
+  const nodemailer = require("nodemailer") as {
+    createTransport: (config: Record<string, unknown>) => {
+      sendMail: (mail: Record<string, unknown>) => Promise<unknown>;
+    };
+  };
+  const originalCreateTransport = nodemailer.createTransport;
+  const originalEnv = {
+    SMTP_HOST: process.env.SMTP_HOST,
+    SMTP_PORT: process.env.SMTP_PORT,
+    SMTP_USER: process.env.SMTP_USER,
+    SMTP_PASS: process.env.SMTP_PASS,
+    SMTP_FROM: process.env.SMTP_FROM,
+  };
+  let sentMail: Record<string, unknown> | undefined;
+
+  process.env.SMTP_HOST = "smtp.example.test";
+  process.env.SMTP_PORT = "587";
+  process.env.SMTP_USER = "test-user";
+  process.env.SMTP_PASS = "test-pass";
+  process.env.SMTP_FROM = "noreply@example.test";
+  nodemailer.createTransport = (() => ({
+    async sendMail(mail: Record<string, unknown>) {
+      sentMail = mail;
+      return {};
+    },
+  })) as typeof nodemailer.createTransport;
+
+  try {
+    const service = new UserService({} as never, {} as never);
+    await service.reportProblem(title, description);
+  } finally {
+    nodemailer.createTransport = originalCreateTransport;
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+
+  assert.ok(sentMail, "sendMail deve receber o e-mail de suporte");
+  return sentMail;
+}
+
+test("T-U-01 escapa HTML no subject do e-mail de suporte", async () => {
+  const sentMail = await captureSupportEmail("<b>Bug</b> no ranking", "texto normal");
+
+  assert.equal(sentMail.subject, "Bug Site: &lt;b&gt;Bug&lt;/b&gt; no ranking");
+  assert.doesNotMatch(String(sentMail.subject), /<b>/);
+});
