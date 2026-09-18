@@ -22,6 +22,8 @@
     "verify:api": "npm run test --workspace apps-api && npm run build --workspace apps-api",
     "verify:worker": "npm run test --workspace apps-worker && npm run build --workspace apps-worker",
     "verify:web": "npm run test --workspace apps-web && npm run build --workspace apps-web",
+    "test:e2e": "npx tsx --tsconfig apps/web/tsconfig.json --test apps/web/e2e/*.spec.ts",
+    "test:e2e:integration": "npx tsx --tsconfig apps/web/tsconfig.json --test apps/web/e2e/*.integration.test.ts",
     "smoke:fixture": "npm run build --workspace @cbtm/shared && npm run build --workspace @cbtm/parser && cross-env SMOKE_MODE=fixture tsx scripts/smoke-test.ts",
     "smoke:live": "npm run build --workspace @cbtm/shared && npm run build --workspace @cbtm/parser && cross-env SMOKE_MODE=live tsx scripts/smoke-test.ts",
     "audit:event": "tsx scripts/audit-event-integrity.ts",

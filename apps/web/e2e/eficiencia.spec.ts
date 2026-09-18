@@ -28,7 +28,10 @@ test("T-E-01 — /eficiencia carrega sem erro de CSP e exibe clube real", async 
     });
     page.on("requestfailed", (request) => {
       const failure = request.failure();
-      if (failure?.errorText) {
+      // net::ERR_ABORTED cobre também requisições canceladas por navegação/duplicidade legítima do
+      // React (StrictMode) e não é, por si só, evidência de bloqueio de CSP — o sinal confiável de CSP é
+      // a mensagem de console capturada acima ("Refused to connect"/"Content Security Policy").
+      if (failure?.errorText && failure.errorText !== "net::ERR_ABORTED") {
         cspErrors.push(`${request.url()} — ${failure.errorText}`);
       }
     });
