@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { normalizeCbtmMatchId } from "../apps/worker/src/pipeline/match-merge";
 import { prismaRead, prismaWrite } from "../apps/worker/src/prisma";
+import { clearEventReadModelCaches } from "../apps/worker/src/pipeline/read-model-cache";
 
 export interface CleanupArgs {
   eventId: number;
@@ -182,14 +183,30 @@ export async function runDuplicateMatchCleanup(input: {
   }
 
   let removedMatchIds: number[] = [];
+  let cacheInvalidated = false;
   if (input.execute && candidateRemovalMatchIds.length > 0) {
-    await input.prisma.match.deleteMany({
-      where: {
-        eventId: input.eventId,
-        id: { in: candidateRemovalMatchIds },
-      },
+    await input.prisma.$transaction(async (tx) => {
+      await tx.matchParticipant.deleteMany({
+        where: {
+          matchId: { in: candidateRemovalMatchIds },
+          match: { eventId: input.eventId },
+        },
+      });
+      const deleted = await tx.match.deleteMany({
+        where: {
+          eventId: input.eventId,
+          id: { in: candidateRemovalMatchIds },
+        },
+      });
+      if (deleted.count !== candidateRemovalMatchIds.length) {
+        throw new Error(
+          `Saneamento abortado: esperadas ${candidateRemovalMatchIds.length} remocoes, realizadas ${deleted.count}.`,
+        );
+      }
+      await clearEventReadModelCaches(tx, input.eventId);
     });
     removedMatchIds = [...candidateRemovalMatchIds];
+    cacheInvalidated = true;
   }
 
   const afterTotal = input.execute
@@ -224,7 +241,7 @@ export async function runDuplicateMatchCleanup(input: {
     groups: duplicateGroups,
     candidateRemovalMatchIds,
     removedMatchIds,
-    cacheInvalidated: false,
+    cacheInvalidated,
   };
 }
 

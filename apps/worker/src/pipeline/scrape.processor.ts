@@ -15,6 +15,7 @@ import { config } from "../config";
 import { log } from "../logger";
 import { prisma } from "../prisma";
 import { CaptureService } from "../scraper/capture.service";
+import { clearEventReadModelCaches as deleteEventReadModelCaches } from "./read-model-cache";
 import { UpsertService } from "./upsert.service";
 
 type ManualForceStage = "full" | "stage-1-reset" | "stage-2-inscricoes" | "stage-3-resultados";
@@ -2705,9 +2706,7 @@ export class ScrapeProcessor {
   }
 
   private async clearEventReadModelCaches(eventId: number): Promise<unknown> {
-    return prisma.readModelCache.deleteMany({
-      where: { eventId },
-    });
+    return deleteEventReadModelCaches(prisma, eventId);
   }
 
   private async clearEventMatchesData(eventId: number): Promise<EventMatchesCleanupSummary> {
