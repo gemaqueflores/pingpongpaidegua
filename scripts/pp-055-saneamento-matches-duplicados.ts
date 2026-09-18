@@ -43,6 +43,19 @@ export interface DuplicateMatchGroupReport {
   reason: string | null;
 }
 
+function hasPersistedResultSignal(match: { scoreRaw: string; setsJson: unknown }): boolean {
+  if (match.scoreRaw.trim().length > 0) {
+    return true;
+  }
+  if (Array.isArray(match.setsJson)) {
+    return match.setsJson.length > 0;
+  }
+  if (match.setsJson && typeof match.setsJson === "object") {
+    return Object.keys(match.setsJson).length > 0;
+  }
+  return typeof match.setsJson === "string" && match.setsJson.trim().length > 0;
+}
+
 export function parseArgs(argv: string[]): CleanupArgs {
   let eventId: number | null = null;
   let execute = false;
@@ -147,19 +160,24 @@ export async function runDuplicateMatchCleanup(input: {
       fetchedAt: match.fetchedAt?.toISOString() ?? null,
       updatedAt: match.updatedAt.toISOString(),
     });
-    candidateRemovalMatchIds.push(...obsolete.map((match) => match.id));
-    removalCountByCategoryId.set(
-      kept.categoryId,
-      (removalCountByCategoryId.get(kept.categoryId) ?? 0) + obsolete.length,
-    );
+    const ambiguous = obsolete.some(hasPersistedResultSignal);
+    if (!ambiguous) {
+      candidateRemovalMatchIds.push(...obsolete.map((match) => match.id));
+      removalCountByCategoryId.set(
+        kept.categoryId,
+        (removalCountByCategoryId.get(kept.categoryId) ?? 0) + obsolete.length,
+      );
+    }
     duplicateGroups.push({
       categoryId: kept.categoryId,
       categoryName: kept.category.name,
       cbtmMatchId: normalizedCbtmMatchId,
-      status: "eligible",
+      status: ambiguous ? "ambiguous" : "eligible",
       kept: toSummary(kept),
       obsolete: obsolete.map(toSummary),
-      reason: null,
+      reason: ambiguous
+        ? "Linha obsoleta possui sinal de resultado persistido; requer decisao manual."
+        : null,
     });
   }
 
