@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomInt } from "node:crypto";
 import test, { after } from "node:test";
 import type { ParsedDataset } from "@cbtm/shared";
+import { normalizeClubName } from "@cbtm/shared";
 import { UpsertService } from "../src/pipeline/upsert.service";
 import { prisma } from "../src/prisma";
 
@@ -225,4 +226,17 @@ test("T-I-04 reproducao do cenario real do evento 59 com multiplos atletas e clu
     });
     assert.ok(link.athleteKey.startsWith("atleta") && link.athleteKey.includes("|pa "));
   }
+});
+
+test("T-U-01 matching de clube via partida ignora variacao de sufixo UF", () => {
+  // Exercita a mesma funcao real (normalizeClubName, de @cbtm/shared) que
+  // upsert.service.ts usa nas linhas 1557/1583 para calcular clubNormalizedName
+  // a partir de parsedMatch.athleteA/BClubNormalizedName. Duas variacoes de sufixo
+  // de UF para o mesmo clube fisico nao devem produzir valores normalizados
+  // divergentes — caso contrario resolveMatchAthlete trataria como clubes distintos.
+  const withDash = normalizeClubName("Clube X - PA");
+  const withParens = normalizeClubName("Clube X (PA)");
+
+  assert.equal(withDash, withParens);
+  assert.equal(withDash, "clube x");
 });
