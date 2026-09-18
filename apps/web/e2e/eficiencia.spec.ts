@@ -38,13 +38,9 @@ test("T-E-01 — /eficiencia carrega sem erro de CSP e exibe clube real", async 
 
     await page.goto(TARGET_URL, { waitUntil: "networkidle" });
 
-    // Aguarda o carregamento sair do estado de skeleton/loading para o conteudo real ou o empty state.
-    await page.waitForFunction(
-      () => !document.querySelector(".athlete-list-grid .skeleton, [class*='Skeleton']"),
-      { timeout: 15000 },
-    ).catch(() => {
-      // se o seletor de skeleton nao existir no DOM renderizado, segue — o teste valida pelo conteudo abaixo
-    });
+    // Aguarda o carregamento sair do estado de skeleton (classe real: "ui-skeleton", ver
+    // apps/web/components/ui/Skeleton.tsx) para o conteudo real ou o empty state.
+    await page.waitForFunction(() => !document.querySelector(".ui-skeleton"), { timeout: 15000 });
 
     const bodyText = await page.textContent("body");
 
