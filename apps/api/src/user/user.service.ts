@@ -537,9 +537,12 @@ function resolveMedalFromPosition(
   return null;
 }
 
-function isEfficiencyEligibleCategoryName(categoryName: string | null | undefined): boolean {
+function isEfficiencyEligibleCategoryName(
+  categoryName: string | null | undefined,
+  context?: { eventName?: string | null; athleteName?: string | null },
+): boolean {
   // Rating permanece elegivel; duplas pertencem a um total separado.
-  return !isDoublesEntry({ categoryName });
+  return !isDoublesEntry({ categoryName, ...context });
 }
 
 function pushUniqueCategoryAthlete(
@@ -3392,7 +3395,10 @@ export class UserService {
           medalists,
         );
         for (const medalist of dedupedMedalists) {
-          const target = isEfficiencyEligibleCategoryName(medalist.categoryName)
+          const target = isEfficiencyEligibleCategoryName(medalist.categoryName, {
+            eventName: event?.nome,
+            athleteName: medalist.athleteName,
+          })
             ? row : doublesRowsByClubId.get(clubId)!;
           target[medalist.medalha] += 1;
           target.pontuacao[medalist.medalha] += this.getEfficiencyMedalWeight(medalist.medalha, eventMedalWeights) * eventWeight;
