@@ -45,3 +45,33 @@ test("PP-037 T-U-01 ranking soma somente o ouro individual", async () => {
   assert.equal(separated.doubles[0].ouro, 1);
   assert.equal(separated.doubles[0].totalPontuacao, 390);
 });
+
+async function careerFor(pairCategoryName = "ABSOLUTO B", pairEventName = "ETAPA TESTE", includePair = true) {
+  const athlete = { id: 1, eventId: 1, nameDisplay: "ALICE", nameNormalized: "alice", aliases: [] };
+  const event = { id: 1, nome: "ETAPA TESTE", nivel: "ESTADUAL", dataInicio: new Date("2026-01-01") };
+  const matches = [false, ...(includePair ? [true] : [])].map((pair, index) => ({
+    id: index + 1, eventId: 1, categoryId: index + 1,
+    event: { ...event, nome: pair ? pairEventName : event.nome },
+    category: { id: index + 1, name: pair ? pairCategoryName : "RATING A", cbtmCategoryId: String(index + 1) },
+    phase: "RESULTADOS", round: "Final", matchKey: `final-${index}`,
+    scoreRaw: "1-3", scoreFinal: { setsA: 1, setsB: 3 }, winnerIndex: 1,
+    scoreSets: [{ set: 1, a: 11, b: 9 }, { set: 2, a: 8, b: 11 }, { set: 3, a: 7, b: 11 }, { set: 4, a: 6, b: 11 }],
+    scorePlayers: [{ athleteId: 1, name: pair ? "ALICE # BIA" : "ALICE" }, { athleteId: 2, name: pair ? "CARLA # DORA" : "CARLA" }],
+    participants: [
+      { athleteId: 1, athlete: { ...athlete, nameDisplay: pair ? "ALICE # BIA" : "ALICE", club: { id: 1, name: "CLUBE TESTE" } } },
+      { athleteId: 2, athlete: { id: 2, nameDisplay: pair ? "CARLA # DORA" : "CARLA", club: { id: 2, name: "OUTRO CLUBE" } } },
+    ],
+  }));
+  const prisma = {
+    athlete: { findMany: async () => [athlete] },
+    athleteCategory: { findMany: async () => matches.map((match) => ({ categoryId: match.categoryId })) },
+    match: { findMany: async () => matches },
+  };
+  const service = new UserService(prisma as never, prisma as never);
+  return service.getAthleteCareer("alice");
+}
+
+test("PP-037 T-U-02 carreira soma somente a prata individual", async () => {
+  const result = await careerFor();
+  assert.equal(result.medalTable.ESTADUAL.prata, 1);
+});
