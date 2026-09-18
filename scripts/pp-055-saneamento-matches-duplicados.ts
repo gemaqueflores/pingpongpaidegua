@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { normalizeCbtmMatchId } from "../apps/worker/src/pipeline/match-merge";
 import { prismaRead, prismaWrite } from "../apps/worker/src/prisma";
 import { clearEventReadModelCaches } from "../apps/worker/src/pipeline/read-model-cache";
@@ -92,8 +92,10 @@ export function parseArgs(argv: string[]): CleanupArgs {
   return { eventId: Number(eventId), execute };
 }
 
-export async function runDuplicateMatchCleanup(input: {
-  prisma: PrismaClient;
+type CleanupClient = PrismaClient | Prisma.TransactionClient;
+
+async function runDuplicateMatchCleanupInternal(input: {
+  prisma: CleanupClient;
   eventId: number;
   execute: boolean;
 }): Promise<DuplicateMatchCleanupReport> {
@@ -185,26 +187,24 @@ export async function runDuplicateMatchCleanup(input: {
   let removedMatchIds: number[] = [];
   let cacheInvalidated = false;
   if (input.execute && candidateRemovalMatchIds.length > 0) {
-    await input.prisma.$transaction(async (tx) => {
-      await tx.matchParticipant.deleteMany({
-        where: {
-          matchId: { in: candidateRemovalMatchIds },
-          match: { eventId: input.eventId },
-        },
-      });
-      const deleted = await tx.match.deleteMany({
-        where: {
-          eventId: input.eventId,
-          id: { in: candidateRemovalMatchIds },
-        },
-      });
-      if (deleted.count !== candidateRemovalMatchIds.length) {
-        throw new Error(
-          `Saneamento abortado: esperadas ${candidateRemovalMatchIds.length} remocoes, realizadas ${deleted.count}.`,
-        );
-      }
-      await clearEventReadModelCaches(tx, input.eventId);
+    await input.prisma.matchParticipant.deleteMany({
+      where: {
+        matchId: { in: candidateRemovalMatchIds },
+        match: { eventId: input.eventId },
+      },
     });
+    const deleted = await input.prisma.match.deleteMany({
+      where: {
+        eventId: input.eventId,
+        id: { in: candidateRemovalMatchIds },
+      },
+    });
+    if (deleted.count !== candidateRemovalMatchIds.length) {
+      throw new Error(
+        `Saneamento abortado: esperadas ${candidateRemovalMatchIds.length} remocoes, realizadas ${deleted.count}.`,
+      );
+    }
+    await clearEventReadModelCaches(input.prisma, input.eventId);
     removedMatchIds = [...candidateRemovalMatchIds];
     cacheInvalidated = true;
   }
@@ -243,6 +243,26 @@ export async function runDuplicateMatchCleanup(input: {
     removedMatchIds,
     cacheInvalidated,
   };
+}
+
+export async function runDuplicateMatchCleanup(input: {
+  prisma: PrismaClient;
+  eventId: number;
+  execute: boolean;
+}): Promise<DuplicateMatchCleanupReport> {
+  if (!input.execute) {
+    return runDuplicateMatchCleanupInternal(input);
+  }
+
+  return input.prisma.$transaction(
+    (tx) =>
+      runDuplicateMatchCleanupInternal({
+        prisma: tx,
+        eventId: input.eventId,
+        execute: true,
+      }),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
 
 async function main(): Promise<void> {
