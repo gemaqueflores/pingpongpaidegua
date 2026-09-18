@@ -5,6 +5,7 @@ import { runDuplicateMatchCleanup } from "../../../scripts/pp-055-saneamento-mat
 import { prisma } from "../src/prisma";
 
 const testEventIds: number[] = [];
+const testClubIds: number[] = [];
 
 after(async () => {
   for (const eventId of testEventIds) {
@@ -18,6 +19,7 @@ after(async () => {
     await prisma.category.deleteMany({ where: { eventId } });
     await prisma.event.delete({ where: { id: eventId } });
   }
+  await prisma.club.deleteMany({ where: { id: { in: testClubIds } } });
   await prisma.$disconnect();
 });
 
@@ -71,6 +73,35 @@ async function createMatch(input: {
       matchKey: input.key,
     },
   });
+}
+
+async function createTestAthletes(eventId: number): Promise<number[]> {
+  const club = await prisma.club.create({
+    data: {
+      name: `CLUBE PP055 ${eventId}`,
+      normalizedName: `clube pp055 ${eventId}`,
+    },
+  });
+  testClubIds.push(club.id);
+  const athletes = await Promise.all([
+    prisma.athlete.create({
+      data: {
+        eventId,
+        clubId: club.id,
+        nameDisplay: "ATLETA A",
+        nameNormalized: "atleta a",
+      },
+    }),
+    prisma.athlete.create({
+      data: {
+        eventId,
+        clubId: club.id,
+        nameDisplay: "ATLETA B",
+        nameNormalized: "atleta b",
+      },
+    }),
+  ]);
+  return athletes.map((athlete) => athlete.id);
 }
 
 test("T-I-02 grupo com uma linha permanece intacto", async () => {
@@ -227,4 +258,74 @@ test("T-I-05 bloqueia remocao quando linha obsoleta possui placar", async () => 
   assert.deepEqual(report.removedMatchIds, []);
   assert.equal(report.groups[0]?.status, "ambiguous");
   assert.match(report.groups[0]?.reason ?? "", /decisao manual/i);
+});
+
+test("T-I-03 remove obsoletas em transacao e invalida cache", async () => {
+  const eventId = await createTestEvent();
+  const categoryId = await createTestCategory(eventId);
+  const athleteIds = await createTestAthletes(eventId);
+  const [oldest, middle, latest] = await Promise.all([
+    createMatch({
+      eventId,
+      categoryId,
+      cbtmMatchId: "2",
+      key: `pp055-${eventId}-execute-oldest`,
+      fetchedAt: "2026-09-18T10:00:00.000Z",
+      tableNumber: "17",
+    }),
+    createMatch({
+      eventId,
+      categoryId,
+      cbtmMatchId: "2",
+      key: `pp055-${eventId}-execute-middle`,
+      fetchedAt: "2026-09-18T11:00:00.000Z",
+      tableNumber: "18",
+    }),
+    createMatch({
+      eventId,
+      categoryId,
+      cbtmMatchId: "2",
+      key: `pp055-${eventId}-execute-latest`,
+      fetchedAt: "2026-09-18T12:00:00.000Z",
+      tableNumber: "19",
+    }),
+  ]);
+  await prisma.matchParticipant.createMany({
+    data: [oldest.id, middle.id, latest.id].flatMap((matchId) =>
+      athleteIds.map((athleteId) => ({ matchId, athleteId })),
+    ),
+  });
+  await prisma.readModelCache.create({
+    data: {
+      key: `pp055-event-${eventId}`,
+      kind: "event-schedule-v1",
+      eventId,
+      payload: { matches: [oldest.id, middle.id, latest.id] },
+    },
+  });
+  const keeperParticipantsBefore = await prisma.matchParticipant.findMany({
+    where: { matchId: latest.id },
+    orderBy: { athleteId: "asc" },
+  });
+
+  const report = await runDuplicateMatchCleanup({ prisma, eventId, execute: true });
+
+  const remaining = await prisma.match.findMany({ where: { eventId, categoryId } });
+  assert.deepEqual(remaining.map((match) => match.id), [latest.id]);
+  assert.equal(
+    await prisma.matchParticipant.count({
+      where: { matchId: { in: [oldest.id, middle.id] } },
+    }),
+    0,
+  );
+  assert.deepEqual(
+    await prisma.matchParticipant.findMany({
+      where: { matchId: latest.id },
+      orderBy: { athleteId: "asc" },
+    }),
+    keeperParticipantsBefore,
+  );
+  assert.equal(await prisma.readModelCache.count({ where: { eventId } }), 0);
+  assert.deepEqual(report.removedMatchIds.sort((a, b) => a - b), [oldest.id, middle.id].sort((a, b) => a - b));
+  assert.equal(report.cacheInvalidated, true);
 });
