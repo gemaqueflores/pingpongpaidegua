@@ -538,9 +538,8 @@ function resolveMedalFromPosition(
 }
 
 function isEfficiencyEligibleCategoryName(categoryName: string | null | undefined): boolean {
-  void categoryName;
-  // Regra vigente: categorias de rating (R*) tambem participam dos quadros/listas de eficiencia.
-  return true;
+  // Rating permanece elegivel; duplas pertencem a um total separado.
+  return !isDoublesEntry({ categoryName });
 }
 
 function pushUniqueCategoryAthlete(
@@ -677,17 +676,22 @@ function areCompetitiveEntryNamesEquivalent(left: string | null | undefined, rig
   return false;
 }
 
+function isDoublesEntry(input: {
+  eventName?: string | null;
+  categoryName?: string | null;
+  athleteName?: string | null;
+}): boolean {
+  return isCompositePairName(input.athleteName ?? "") ||
+    isDoublesCategoryName(input.categoryName) || isDoublesEventName(input.eventName);
+}
+
 function buildMedalistUnitKey(input: {
   eventName?: string | null;
   categoryName: string | null | undefined;
   athleteId: number;
   athleteName: string;
 }): string {
-  if (
-    isCompositePairName(input.athleteName) ||
-    isDoublesCategoryName(input.categoryName) ||
-    isDoublesEventName(input.eventName)
-  ) {
+  if (isDoublesEntry(input)) {
     return `pair:${normalizeAthleteName(normalizeCompositePairName(input.athleteName))}`;
   }
   return `athlete:${input.athleteId}`;
@@ -3022,16 +3026,22 @@ export class UserService {
   }
 
   private async computeEfficiencyRanking(input: { eventIds?: number[]; year?: number }) {
+    const result = await this.computeEfficiencyRankingByModality(input);
+    return { weights: result.weights, ranking: result.individual };
+  }
+
+  // Mantem ambos os calculos disponiveis sem ampliar o contrato publico.
+  private async computeEfficiencyRankingByModality(input: { eventIds?: number[]; year?: number }) {
     const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
     if (eligibleClubIds.size === 0) {
-      return { weights: await this.getEfficiencyWeights(), ranking: [] as ClubEfficiencyRow[] };
+      return { weights: await this.getEfficiencyWeights(), individual: [] as ClubEfficiencyRow[], doubles: [] as ClubEfficiencyRow[] };
     }
 
     const scopedEventIds = typeof input.year === "number"
       ? await this.listEfficiencyEventIdsForYear(input.year, input.eventIds)
       : input.eventIds;
     if (typeof input.year === "number" && (scopedEventIds?.length ?? 0) === 0) {
-      return { weights: await this.getEfficiencyWeights(), ranking: [] as ClubEfficiencyRow[] };
+      return { weights: await this.getEfficiencyWeights(), individual: [] as ClubEfficiencyRow[], doubles: [] as ClubEfficiencyRow[] };
     }
 
     const hasScopedEvents = Array.isArray(scopedEventIds) && scopedEventIds.length > 0;
@@ -3167,11 +3177,12 @@ export class UserService {
       }
     }
 
-    const categoryIds = categories
-      .filter((category) => isEfficiencyEligibleCategoryName(category.name))
-      .map((category) => category.id);
+    const doublesRowsByClubId = new Map([...rowsByClubId].map(([id, row]) => [
+      id, { ...row, pontuacao: { ...row.pontuacao } },
+    ]));
+    const categoryIds = categories.map((category) => category.id);
     if (categoryIds.length === 0 || rowsByClubId.size === 0) {
-      return { weights, ranking: [...rowsByClubId.values()] };
+      return { weights, individual: [...rowsByClubId.values()], doubles: [...doublesRowsByClubId.values()] };
     }
 
     const [athleteCategories, fullCategoryMatchesRaw] = await Promise.all([
@@ -3381,19 +3392,21 @@ export class UserService {
           medalists,
         );
         for (const medalist of dedupedMedalists) {
-          row[medalist.medalha] += 1;
-          row.pontuacao[medalist.medalha] += this.getEfficiencyMedalWeight(medalist.medalha, eventMedalWeights) * eventWeight;
+          const target = isEfficiencyEligibleCategoryName(medalist.categoryName)
+            ? row : doublesRowsByClubId.get(clubId)!;
+          target[medalist.medalha] += 1;
+          target.pontuacao[medalist.medalha] += this.getEfficiencyMedalWeight(medalist.medalha, eventMedalWeights) * eventWeight;
         }
       }
     }
 
-    for (const row of rowsByClubId.values()) {
+    for (const row of [...rowsByClubId.values(), ...doublesRowsByClubId.values()]) {
       row.totalQuantidade = row.ouro + row.prata + row.bronze;
       row.pontuacao.total = row.pontuacao.ouro + row.pontuacao.prata + row.pontuacao.bronze;
       row.totalPontuacao = row.pontuacao.total;
     }
 
-    const ranking = [...rowsByClubId.values()].sort((left, right) => {
+    const compareRows = (left: ClubEfficiencyRow, right: ClubEfficiencyRow) => {
       if (left.totalPontuacao !== right.totalPontuacao) {
         return right.totalPontuacao - left.totalPontuacao;
       }
@@ -3407,9 +3420,13 @@ export class UserService {
         return right.bronze - left.bronze;
       }
       return left.clubName.localeCompare(right.clubName, "pt-BR", { sensitivity: "base" });
-    });
+    };
 
-    return { weights, ranking };
+    return {
+      weights,
+      individual: [...rowsByClubId.values()].sort(compareRows),
+      doubles: [...doublesRowsByClubId.values()].sort(compareRows),
+    };
   }
 
   private async listEfficiencyEventIdsForYear(year: number, baseEventIds?: number[]): Promise<number[]> {
@@ -3586,7 +3603,6 @@ export class UserService {
 
     const eventById = new Map(events.map((event) => [event.id, event]));
     const eligibleCategories = categories
-      .filter((category) => isEfficiencyEligibleCategoryName(category.name))
       .sort((left, right) => {
         const leftOfficial = left.cbtmCategoryId ? 1 : 0;
         const rightOfficial = right.cbtmCategoryId ? 1 : 0;

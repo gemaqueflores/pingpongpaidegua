@@ -3,7 +3,7 @@ import test from "node:test";
 import { UserService } from "../src/user/user.service";
 
 // Synthetic unit fixtures; no claim about official event totals.
-async function rankingFor(categoryNames: string[]) {
+async function rankingFor(categoryNames: string[], internal = false) {
   const categories = categoryNames.map((name, index) => ({
     id: index + 1, name, eventId: 1, cbtmCategoryId: String(index + 1),
   }));
@@ -30,12 +30,18 @@ async function rankingFor(categoryNames: string[]) {
     getEfficiencyWeights: async () => ({ pesoOuro: 130, pesoPrata: 80, pesoBronze: 50 }),
     computeCategoryPositionByAthleteId: () => new Map(athletes.map((athlete) => [athlete.id, 1])),
   });
-  return (service as any).computeEfficiencyRanking({ eventIds: [1] });
+  return internal
+    ? (service as any).computeEfficiencyRankingByModality({ eventIds: [1] })
+    : (service as any).computeEfficiencyRanking({ eventIds: [1] });
 }
 
 test("PP-037 T-U-01 ranking soma somente o ouro individual", async () => {
   const result = await rankingFor(["RATING A", "DUPLAS MASCULINAS"]);
   assert.equal(result.ranking[0].ouro, 1);
   assert.equal(result.ranking[0].totalQuantidade, 1);
-  assert.equal(result.ranking[0].totalPontuacao, 130);
+  assert.equal(result.ranking[0].totalPontuacao, 390); // 1 ouro x 130 x estadual 3.
+  assert.deepEqual(Object.keys(result).sort(), ["ranking", "weights"]);
+  const separated = await rankingFor(["RATING A", "DUPLAS MASCULINAS"], true);
+  assert.equal(separated.doubles[0].ouro, 1);
+  assert.equal(separated.doubles[0].totalPontuacao, 390);
 });
