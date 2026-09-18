@@ -18,10 +18,29 @@ export interface DuplicateMatchCleanupReport {
     before: number;
     after: number;
   }>;
-  groups: Array<unknown>;
+  groups: DuplicateMatchGroupReport[];
   candidateRemovalMatchIds: number[];
   removedMatchIds: number[];
   cacheInvalidated: boolean;
+}
+
+export interface CleanupMatchSummary {
+  id: number;
+  cbtmMatchId: string;
+  tableNumber: string | null;
+  matchDatetime: string | null;
+  fetchedAt: string | null;
+  updatedAt: string;
+}
+
+export interface DuplicateMatchGroupReport {
+  categoryId: number;
+  categoryName: string;
+  cbtmMatchId: string;
+  status: "eligible" | "ambiguous";
+  kept: CleanupMatchSummary;
+  obsolete: CleanupMatchSummary[];
+  reason: string | null;
 }
 
 export function parseArgs(argv: string[]): CleanupArgs {
@@ -77,25 +96,32 @@ export async function runDuplicateMatchCleanup(input: {
     select: {
       id: true,
       categoryId: true,
+      category: { select: { name: true } },
       cbtmMatchId: true,
+      tableNumber: true,
+      matchDatetime: true,
+      scoreRaw: true,
+      setsJson: true,
       fetchedAt: true,
       updatedAt: true,
     },
   });
-  const groups = new Map<string, typeof matches>();
+  const matchesByGroup = new Map<string, typeof matches>();
   for (const match of matches) {
     const normalizedCbtmMatchId = normalizeCbtmMatchId(match.cbtmMatchId);
     if (!normalizedCbtmMatchId) {
       continue;
     }
     const key = `${match.categoryId}|${normalizedCbtmMatchId}`;
-    const bucket = groups.get(key) ?? [];
+    const bucket = matchesByGroup.get(key) ?? [];
     bucket.push(match);
-    groups.set(key, bucket);
+    matchesByGroup.set(key, bucket);
   }
 
   const candidateRemovalMatchIds: number[] = [];
-  for (const group of groups.values()) {
+  const duplicateGroups: DuplicateMatchGroupReport[] = [];
+  const removalCountByCategoryId = new Map<number, number>();
+  for (const group of matchesByGroup.values()) {
     if (group.length < 2) {
       continue;
     }
@@ -108,7 +134,33 @@ export async function runDuplicateMatchCleanup(input: {
         right.id - left.id
       );
     });
-    candidateRemovalMatchIds.push(...ordered.slice(1).map((match) => match.id));
+    const [kept, ...obsolete] = ordered;
+    const normalizedCbtmMatchId = normalizeCbtmMatchId(kept.cbtmMatchId);
+    if (!normalizedCbtmMatchId) {
+      continue;
+    }
+    const toSummary = (match: (typeof matches)[number]): CleanupMatchSummary => ({
+      id: match.id,
+      cbtmMatchId: normalizedCbtmMatchId,
+      tableNumber: match.tableNumber,
+      matchDatetime: match.matchDatetime?.toISOString() ?? null,
+      fetchedAt: match.fetchedAt?.toISOString() ?? null,
+      updatedAt: match.updatedAt.toISOString(),
+    });
+    candidateRemovalMatchIds.push(...obsolete.map((match) => match.id));
+    removalCountByCategoryId.set(
+      kept.categoryId,
+      (removalCountByCategoryId.get(kept.categoryId) ?? 0) + obsolete.length,
+    );
+    duplicateGroups.push({
+      categoryId: kept.categoryId,
+      categoryName: kept.category.name,
+      cbtmMatchId: normalizedCbtmMatchId,
+      status: "eligible",
+      kept: toSummary(kept),
+      obsolete: obsolete.map(toSummary),
+      reason: null,
+    });
   }
 
   let removedMatchIds: number[] = [];
@@ -125,14 +177,33 @@ export async function runDuplicateMatchCleanup(input: {
   const afterTotal = input.execute
     ? await input.prisma.match.count({ where: { eventId: input.eventId } })
     : matches.length;
+  const categoryCounts = new Map<number, { categoryName: string; before: number }>();
+  for (const match of matches) {
+    const current = categoryCounts.get(match.categoryId) ?? {
+      categoryName: match.category.name,
+      before: 0,
+    };
+    current.before += 1;
+    categoryCounts.set(match.categoryId, current);
+  }
+  const categories = [...categoryCounts.entries()]
+    .map(([categoryId, count]) => ({
+      categoryId,
+      categoryName: count.categoryName,
+      before: count.before,
+      after: input.execute
+        ? count.before - (removalCountByCategoryId.get(categoryId) ?? 0)
+        : count.before,
+    }))
+    .sort((left, right) => left.categoryId - right.categoryId);
 
   return {
     mode: input.execute ? "execute" : "dry-run",
     eventId: input.eventId,
     beforeTotal: matches.length,
     afterTotal,
-    categories: [],
-    groups: [],
+    categories,
+    groups: duplicateGroups,
     candidateRemovalMatchIds,
     removedMatchIds,
     cacheInvalidated: false,
