@@ -1994,24 +1994,47 @@ export class UpsertService {
       seenKeys.set(athleteKey, athlete.id);
       activeAthleteIds.push(athlete.id);
 
-      await eventAthleteLinks.upsert({
+      const existingLinkForAthlete = await eventAthleteLinks.findUnique({
         where: {
-          eventId_athleteKey: {
+          eventId_athleteId: {
             eventId: input.eventId,
-            athleteKey,
+            athleteId: athlete.id,
           },
         },
-        create: {
-          eventId: input.eventId,
-          athleteId: athlete.id,
-          athleteKey,
-          athleteName: athlete.nameDisplay,
-        },
-        update: {
-          athleteId: athlete.id,
-          athleteName: athlete.nameDisplay,
-        },
+        select: { id: true, athleteKey: true },
       });
+
+      if (existingLinkForAthlete && existingLinkForAthlete.athleteKey !== athleteKey) {
+        // A chave salva anteriormente ficou desatualizada (ex.: clubs.normalized_name mudou depois
+        // que o link foi criado). Atualizar a linha existente por id evita que o upsert abaixo tente
+        // um `create` para uma athleteKey inedita e viole a constraint unica (event_id, athlete_id).
+        await eventAthleteLinks.update({
+          where: { id: existingLinkForAthlete.id },
+          data: {
+            athleteKey,
+            athleteName: athlete.nameDisplay,
+          },
+        });
+      } else {
+        await eventAthleteLinks.upsert({
+          where: {
+            eventId_athleteKey: {
+              eventId: input.eventId,
+              athleteKey,
+            },
+          },
+          create: {
+            eventId: input.eventId,
+            athleteId: athlete.id,
+            athleteKey,
+            athleteName: athlete.nameDisplay,
+          },
+          update: {
+            athleteId: athlete.id,
+            athleteName: athlete.nameDisplay,
+          },
+        });
+      }
       inc(input.updated, "event_athlete_links_synced");
     }
 
