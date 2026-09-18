@@ -1,5 +1,9 @@
 # Knowledge — Padrões do Revisor (Claude) — PingPong PaiD'egua
 
+## Contador de arquivamento
+Entregas encerradas desde a última revisão de arquivamento: 0
+Limiar: 10
+
 ## Desvios registrados
 
 ### 2026-05-21 — Sessão infra/PP-002 — Expansão de papel
