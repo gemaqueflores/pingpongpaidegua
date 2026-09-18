@@ -57,3 +57,9 @@ test("T-U-01 escapa HTML no subject do e-mail de suporte", async () => {
   assert.equal(sentMail.subject, "Bug Site: &lt;b&gt;Bug&lt;/b&gt; no ranking");
   assert.doesNotMatch(String(sentMail.subject), /<b>/);
 });
+
+test("T-U-02 preserva subject sem caracteres especiais", async () => {
+  const sentMail = await captureSupportEmail("Erro no ranking", "texto normal");
+
+  assert.equal(sentMail.subject, "Bug Site: Erro no ranking");
+});
