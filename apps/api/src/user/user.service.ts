@@ -537,10 +537,12 @@ function resolveMedalFromPosition(
   return null;
 }
 
-function isEfficiencyEligibleCategoryName(categoryName: string | null | undefined): boolean {
-  void categoryName;
-  // Regra vigente: categorias de rating (R*) tambem participam dos quadros/listas de eficiencia.
-  return true;
+function isEfficiencyEligibleCategoryName(
+  categoryName: string | null | undefined,
+  context?: { eventName?: string | null; athleteName?: string | null },
+): boolean {
+  // Rating permanece elegivel; duplas pertencem a um total separado.
+  return !isDoublesEntry({ categoryName, ...context });
 }
 
 function pushUniqueCategoryAthlete(
@@ -677,17 +679,22 @@ function areCompetitiveEntryNamesEquivalent(left: string | null | undefined, rig
   return false;
 }
 
+function isDoublesEntry(input: {
+  eventName?: string | null;
+  categoryName?: string | null;
+  athleteName?: string | null;
+}): boolean {
+  return isCompositePairName(input.athleteName ?? "") ||
+    isDoublesCategoryName(input.categoryName) || isDoublesEventName(input.eventName);
+}
+
 function buildMedalistUnitKey(input: {
   eventName?: string | null;
   categoryName: string | null | undefined;
   athleteId: number;
   athleteName: string;
 }): string {
-  if (
-    isCompositePairName(input.athleteName) ||
-    isDoublesCategoryName(input.categoryName) ||
-    isDoublesEventName(input.eventName)
-  ) {
+  if (isDoublesEntry(input)) {
     return `pair:${normalizeAthleteName(normalizeCompositePairName(input.athleteName))}`;
   }
   return `athlete:${input.athleteId}`;
@@ -3022,16 +3029,22 @@ export class UserService {
   }
 
   private async computeEfficiencyRanking(input: { eventIds?: number[]; year?: number }) {
+    const result = await this.computeEfficiencyRankingByModality(input);
+    return { weights: result.weights, ranking: result.individual };
+  }
+
+  // Mantem ambos os calculos disponiveis sem ampliar o contrato publico.
+  private async computeEfficiencyRankingByModality(input: { eventIds?: number[]; year?: number }) {
     const eligibleClubIds = await this.getStateCircuitEligibleClubIds();
     if (eligibleClubIds.size === 0) {
-      return { weights: await this.getEfficiencyWeights(), ranking: [] as ClubEfficiencyRow[] };
+      return { weights: await this.getEfficiencyWeights(), individual: [] as ClubEfficiencyRow[], doubles: [] as ClubEfficiencyRow[] };
     }
 
     const scopedEventIds = typeof input.year === "number"
       ? await this.listEfficiencyEventIdsForYear(input.year, input.eventIds)
       : input.eventIds;
     if (typeof input.year === "number" && (scopedEventIds?.length ?? 0) === 0) {
-      return { weights: await this.getEfficiencyWeights(), ranking: [] as ClubEfficiencyRow[] };
+      return { weights: await this.getEfficiencyWeights(), individual: [] as ClubEfficiencyRow[], doubles: [] as ClubEfficiencyRow[] };
     }
 
     const hasScopedEvents = Array.isArray(scopedEventIds) && scopedEventIds.length > 0;
@@ -3167,11 +3180,12 @@ export class UserService {
       }
     }
 
-    const categoryIds = categories
-      .filter((category) => isEfficiencyEligibleCategoryName(category.name))
-      .map((category) => category.id);
+    const doublesRowsByClubId = new Map([...rowsByClubId].map(([id, row]) => [
+      id, { ...row, pontuacao: { ...row.pontuacao } },
+    ]));
+    const categoryIds = categories.map((category) => category.id);
     if (categoryIds.length === 0 || rowsByClubId.size === 0) {
-      return { weights, ranking: [...rowsByClubId.values()] };
+      return { weights, individual: [...rowsByClubId.values()], doubles: [...doublesRowsByClubId.values()] };
     }
 
     const [athleteCategories, fullCategoryMatchesRaw] = await Promise.all([
@@ -3381,19 +3395,24 @@ export class UserService {
           medalists,
         );
         for (const medalist of dedupedMedalists) {
-          row[medalist.medalha] += 1;
-          row.pontuacao[medalist.medalha] += this.getEfficiencyMedalWeight(medalist.medalha, eventMedalWeights) * eventWeight;
+          const target = isEfficiencyEligibleCategoryName(medalist.categoryName, {
+            eventName: event?.nome,
+            athleteName: medalist.athleteName,
+          })
+            ? row : doublesRowsByClubId.get(clubId)!;
+          target[medalist.medalha] += 1;
+          target.pontuacao[medalist.medalha] += this.getEfficiencyMedalWeight(medalist.medalha, eventMedalWeights) * eventWeight;
         }
       }
     }
 
-    for (const row of rowsByClubId.values()) {
+    for (const row of [...rowsByClubId.values(), ...doublesRowsByClubId.values()]) {
       row.totalQuantidade = row.ouro + row.prata + row.bronze;
       row.pontuacao.total = row.pontuacao.ouro + row.pontuacao.prata + row.pontuacao.bronze;
       row.totalPontuacao = row.pontuacao.total;
     }
 
-    const ranking = [...rowsByClubId.values()].sort((left, right) => {
+    const compareRows = (left: ClubEfficiencyRow, right: ClubEfficiencyRow) => {
       if (left.totalPontuacao !== right.totalPontuacao) {
         return right.totalPontuacao - left.totalPontuacao;
       }
@@ -3407,9 +3426,13 @@ export class UserService {
         return right.bronze - left.bronze;
       }
       return left.clubName.localeCompare(right.clubName, "pt-BR", { sensitivity: "base" });
-    });
+    };
 
-    return { weights, ranking };
+    return {
+      weights,
+      individual: [...rowsByClubId.values()].sort(compareRows),
+      doubles: [...doublesRowsByClubId.values()].sort(compareRows),
+    };
   }
 
   private async listEfficiencyEventIdsForYear(year: number, baseEventIds?: number[]): Promise<number[]> {
@@ -3586,7 +3609,6 @@ export class UserService {
 
     const eventById = new Map(events.map((event) => [event.id, event]));
     const eligibleCategories = categories
-      .filter((category) => isEfficiencyEligibleCategoryName(category.name))
       .sort((left, right) => {
         const leftOfficial = left.cbtmCategoryId ? 1 : 0;
         const rightOfficial = right.cbtmCategoryId ? 1 : 0;
@@ -4982,6 +5004,10 @@ export class UserService {
   }
 
   async getAthleteCareer(athleteKey: string) {
+    return (await this.getAthleteCareerByModality(athleteKey)).individual;
+  }
+
+  private async getAthleteCareerByModality(athleteKey: string) {
     const normalizedKey = normalizeAthleteName(athleteKey);
     const legacyNormalizedKey = normalizeText(athleteKey);
     if (!normalizedKey) {
@@ -5136,10 +5162,6 @@ export class UserService {
 
     const summaries: AthleteSummaryMatch[] = [];
     for (const match of matches) {
-      // Carreira de pares precisa manter confrontos de duplas e duplas mistas.
-      if (!pairCareer && (isDoublesEventName(match.event?.nome) || isDoublesCategoryName(match.category?.name))) {
-        continue;
-      }
       const participantIds = match.participants.map((participant) => participant.athleteId);
       const matchedAthleteIds = participantIds.filter((id) => athleteIds.includes(id));
       if (!pairCareer && matchedAthleteIds.length === 0) {
@@ -5160,147 +5182,165 @@ export class UserService {
       summaries.push(summary);
     }
 
-    const deduplicated = this.deduplicateMatches(summaries);
-    this.sortMatches(deduplicated.matches, "phase_hierarchy_datetime");
+    // Particionar antes das agregacoes preserva medalhas, pontos e categorias
+    // de ambas as modalidades, inclusive para consumidores que recalculam a UI.
+    const buildCareer = async (modalityMatches: AthleteSummaryMatch[]) => {
+      const deduplicated = this.deduplicateMatches(modalityMatches);
+      this.sortMatches(deduplicated.matches, "phase_hierarchy_datetime");
 
-    const eventBuckets = new Map<
-      number,
-      {
-        event: AthleteSummaryMatch["event"];
-        categories: Map<number, { id: number; name: string }>;
-        matches: AthleteSummaryMatch[];
+      const eventBuckets = new Map<
+        number,
+        {
+          event: AthleteSummaryMatch["event"];
+          categories: Map<number, { id: number; name: string }>;
+          matches: AthleteSummaryMatch[];
+        }
+      >();
+
+      for (const match of deduplicated.matches) {
+        const bucket = eventBuckets.get(match.event.id) ?? {
+          event: match.event,
+          categories: new Map<number, { id: number; name: string }>(),
+          matches: [],
+        };
+        bucket.matches.push(match);
+        bucket.categories.set(match.category.id, {
+          id: match.category.id,
+          name: match.category.name,
+        });
+        eventBuckets.set(match.event.id, bucket);
       }
-    >();
 
-    for (const match of deduplicated.matches) {
-      const bucket = eventBuckets.get(match.event.id) ?? {
-        event: match.event,
-        categories: new Map<number, { id: number; name: string }>(),
-        matches: [],
-      };
-      bucket.matches.push(match);
-      bucket.categories.set(match.category.id, {
-        id: match.category.id,
-        name: match.category.name,
-      });
-      eventBuckets.set(match.event.id, bucket);
-    }
-
-    const events = (
-      await Promise.all(
-        [...eventBuckets.values()].map(async (bucket) => {
-          const bucketMatches =
-            pairCareer && bucket.matches.some((match) => Boolean(match.category.cbtmCategoryId))
-              ? bucket.matches.filter((match) => Boolean(match.category.cbtmCategoryId))
-              : bucket.matches;
-          const bucketCategories = new Map<number, { id: number; name: string }>();
-          for (const match of bucketMatches) {
-            bucketCategories.set(match.category.id, {
-              id: match.category.id,
-              name: match.category.name,
-            });
-          }
-          const categoryIdsForClassification = [...bucketCategories.keys()];
-          const fullCategoryMatchesRaw =
-            categoryIdsForClassification.length > 0
-              ? await this.prisma.match.findMany({
-                  where: {
-                    eventId: bucket.event.id,
-                    categoryId: {
-                      in: categoryIdsForClassification,
+      const events = (
+        await Promise.all(
+          [...eventBuckets.values()].map(async (bucket) => {
+            const bucketMatches =
+              pairCareer && bucket.matches.some((match) => Boolean(match.category.cbtmCategoryId))
+                ? bucket.matches.filter((match) => Boolean(match.category.cbtmCategoryId))
+                : bucket.matches;
+            const bucketCategories = new Map<number, { id: number; name: string }>();
+            for (const match of bucketMatches) {
+              bucketCategories.set(match.category.id, {
+                id: match.category.id,
+                name: match.category.name,
+              });
+            }
+            const categoryIdsForClassification = [...bucketCategories.keys()];
+            const fullCategoryMatchesRaw =
+              categoryIdsForClassification.length > 0
+                ? await this.prisma.match.findMany({
+                    where: {
+                      eventId: bucket.event.id,
+                      categoryId: {
+                        in: categoryIdsForClassification,
+                      },
                     },
-                  },
-                  include: {
-                    category: true,
-                    participants: {
-                      include: {
-                        athlete: {
-                          include: {
-                            club: true,
+                    include: {
+                      category: true,
+                      participants: {
+                        include: {
+                          athlete: {
+                            include: {
+                              club: true,
+                            },
                           },
                         },
                       },
                     },
-                  },
-                })
-              : [];
-          const fullCategoryMatches = fullCategoryMatchesRaw
-            .map((match) => this.buildCategoryAnalyticsMatchFromRaw(match))
-            .filter((item): item is CategoryAnalyticsMatch => Boolean(item));
+                  })
+                : [];
+            const fullCategoryMatches = fullCategoryMatchesRaw
+              .map((match) => this.buildCategoryAnalyticsMatchFromRaw(match))
+              .filter((item): item is CategoryAnalyticsMatch => Boolean(item));
 
-          const categoryMatches = bucketMatches.map((match) => this.toCategoryAnalyticsMatch(match));
-          const perf = computeCategoryPerformanceSummaries(categoryMatches, {
-            athleteIds,
-            athleteName: canonicalName,
-            athleteNameNormalized: normalizedKey,
-          });
-          const classification = computeCategoryClassificationSummaries(fullCategoryMatches, {
-            athleteIds,
-            athleteName: canonicalName,
-            athleteNameNormalized: normalizedKey,
-          });
-          const classificationMap = new Map<number, (typeof classification)[number]>(
-            classification.map((item) => [item.categoryId, item]),
-          );
+            const categoryMatches = bucketMatches.map((match) => this.toCategoryAnalyticsMatch(match));
+            const perf = computeCategoryPerformanceSummaries(categoryMatches, {
+              athleteIds,
+              athleteName: canonicalName,
+              athleteNameNormalized: normalizedKey,
+            });
+            const classification = computeCategoryClassificationSummaries(fullCategoryMatches, {
+              athleteIds,
+              athleteName: canonicalName,
+              athleteNameNormalized: normalizedKey,
+            });
+            const classificationMap = new Map<number, (typeof classification)[number]>(
+              classification.map((item) => [item.categoryId, item]),
+            );
 
-          return {
-            ...bucket.event,
-            categories: [...bucketCategories.values()].sort((a, b) =>
-              a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
-            ),
-            matches: bucketMatches,
-            performance: calculateAthletePointPerformance(
-              bucketMatches.map((match) => this.toMatchPerformanceInput(match)),
-              {
-                athleteIds,
-                athleteName: canonicalName,
-                athleteNameNormalized: normalizedKey,
-              },
-            ),
-            performanceByCategory: perf.map((item) => ({
-              ...item,
-              classification: classificationMap.get(item.categoryId) ?? null,
-            })),
-          };
-        }),
-      )
-    ).sort((a, b) => {
-        const aTime = a.dataInicio ? new Date(a.dataInicio).getTime() : Number.MIN_SAFE_INTEGER;
-        const bTime = b.dataInicio ? new Date(b.dataInicio).getTime() : Number.MIN_SAFE_INTEGER;
-        if (aTime !== bTime) {
-          return bTime - aTime;
-        }
-        return a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" });
-      });
+            return {
+              ...bucket.event,
+              categories: [...bucketCategories.values()].sort((a, b) =>
+                a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
+              ),
+              matches: bucketMatches,
+              performance: calculateAthletePointPerformance(
+                bucketMatches.map((match) => this.toMatchPerformanceInput(match)),
+                {
+                  athleteIds,
+                  athleteName: canonicalName,
+                  athleteNameNormalized: normalizedKey,
+                },
+              ),
+              performanceByCategory: perf.map((item) => ({
+                ...item,
+                classification: classificationMap.get(item.categoryId) ?? null,
+              })),
+            };
+          }),
+        )
+      ).sort((a, b) => {
+          const aTime = a.dataInicio ? new Date(a.dataInicio).getTime() : Number.MIN_SAFE_INTEGER;
+          const bTime = b.dataInicio ? new Date(b.dataInicio).getTime() : Number.MIN_SAFE_INTEGER;
+          if (aTime !== bTime) {
+            return bTime - aTime;
+          }
+          return a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" });
+        });
 
-    const totalPerformance = calculateAthletePointPerformance(
-      deduplicated.matches.map((match) => this.toMatchPerformanceInput(match)),
-      {
-        athleteIds,
-        athleteName: canonicalName,
-        athleteNameNormalized: normalizedKey,
-      },
-    );
-    const medalTable = buildCareerMedalTable(events);
+      const totalPerformance = calculateAthletePointPerformance(
+        deduplicated.matches.map((match) => this.toMatchPerformanceInput(match)),
+        {
+          athleteIds,
+          athleteName: canonicalName,
+          athleteNameNormalized: normalizedKey,
+        },
+      );
+      const medalTable = buildCareerMedalTable(events);
 
-    return {
-      athlete: {
-        athleteKey: normalizedKey,
-        nameDisplay: canonicalName,
-        nameReduced: toReducedName(canonicalName),
-        stateCode: federation.stateCode,
-        stateName: federation.stateName,
-        region: federation.region,
-      },
-      totals: {
-        events: events.length,
-        matches: deduplicated.matches.length,
-        performance: totalPerformance,
-      },
-      medalTable,
-      events,
-      deduplicatedMatchesRemoved: deduplicated.removed,
+      return {
+        athlete: {
+          athleteKey: normalizedKey,
+          nameDisplay: canonicalName,
+          nameReduced: toReducedName(canonicalName),
+          stateCode: federation.stateCode,
+          stateName: federation.stateName,
+          region: federation.region,
+        },
+        totals: {
+          events: events.length,
+          matches: deduplicated.matches.length,
+          performance: totalPerformance,
+        },
+        medalTable,
+        events,
+        deduplicatedMatchesRemoved: deduplicated.removed,
+      };
     };
+    const individualMatches: AthleteSummaryMatch[] = [];
+    const doublesMatches: AthleteSummaryMatch[] = [];
+    for (const match of summaries) {
+      const doubles = isDoublesEntry({
+        categoryName: match.category.name,
+        eventName: match.event.nome,
+        athleteName: match.athlete?.name,
+      });
+      (doubles ? doublesMatches : individualMatches).push(match);
+    }
+    const [individual, doubles] = await Promise.all([
+      buildCareer(individualMatches), buildCareer(doublesMatches),
+    ]);
+    return { individual, doubles };
   }
 
   async getAthleteIdentity(eventId: number, athleteId: number) {

@@ -1,0 +1,31 @@
+✔ PP-037 T-U-01 ranking soma somente o ouro individual (3.9434ms)
+✔ PP-037 T-U-02 carreira soma somente a prata individual (5.9346ms)
+✖ PP-037 T-U-03 duplas mistas por categoria, evento ou nome nao contaminam o ranking (2.7709ms)
+✔ PP-037 T-U-03 carreira preserva prata mista somente na estrutura interna (0.8454ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 3
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1793.0388
+
+✖ failing tests:
+
+test at apps\api\test\user-service.pp037-modalities.test.ts:2:5489
+✖ PP-037 T-U-03 duplas mistas por categoria, evento ou nome nao contaminam o ranking (2.7709ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  1 !== 0
+
+      at TestContext.<anonymous> (C:\Users\LeonardoMuriloGemaqu\Documents\estudos\appcbtmeventos\apps\api\test\user-service.pp037-modalities.test.ts:92:10)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

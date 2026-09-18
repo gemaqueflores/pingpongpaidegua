@@ -1,0 +1,13 @@
+✔ PP-037 T-U-01 ranking soma somente o ouro individual (3.8942ms)
+✔ PP-037 T-U-02 carreira soma somente a prata individual (6.4266ms)
+✔ PP-037 T-U-03 duplas mistas por categoria, evento ou nome nao contaminam o ranking (0.9649ms)
+✔ PP-037 T-U-03 carreira preserva prata mista somente na estrutura interna (0.7894ms)
+✔ PP-037 T-U-04 individuais preservam medalhas, pesos e pontos (0.7524ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1716.5925

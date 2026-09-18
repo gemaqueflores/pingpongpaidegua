@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { UserService } from "../src/user/user.service";
 
+// PP-037: a carreira publica e individual; o calculo de pares segue disponivel internamente.
+async function getDoublesCareer(service: UserService, key: string) {
+  const publicCareer = await service.getAthleteCareer(key);
+  assert.equal(publicCareer.totals.matches, 0);
+  assert.equal(publicCareer.medalTable.ESTADUAL.ouro, 0);
+  assert.equal(publicCareer.medalTable.ESTADUAL.prata, 0);
+  return (await (service as any).getAthleteCareerByModality(key)).doubles;
+}
+
 test("athlete career inclui confrontos de dupla quando a chave representa um par", async () => {
   const pairAthlete = {
     id: 100,
@@ -87,7 +96,7 @@ test("athlete career inclui confrontos de dupla quando a chave representa um par
   };
 
   const service = new UserService(prisma as never, prisma as never);
-  const result = await service.getAthleteCareer("alexandre batista leonardo flores");
+  const result = await getDoublesCareer(service, "alexandre batista leonardo flores");
 
   assert.equal(result.events.length, 1);
   assert.equal(result.events[0]?.matches.length, 1);
@@ -220,7 +229,7 @@ test("athlete career de par prioriza categoria oficial quando existe duplicidade
   };
 
   const service = new UserService(prisma as never, prisma as never);
-  const result = await service.getAthleteCareer("edson silva ludmilla lima");
+  const result = await getDoublesCareer(service, "edson silva ludmilla lima");
 
   assert.equal(result.events.length, 1);
   assert.equal(result.events[0]?.categories.length, 1);
@@ -321,7 +330,7 @@ test("athlete career de par nao projeta confronto de dupla errada quando apenas 
   };
 
   const service = new UserService(prisma as never, prisma as never);
-  const result = await service.getAthleteCareer("alexandre batista leonardo flores");
+  const result = await getDoublesCareer(service, "alexandre batista leonardo flores");
 
   assert.equal(result.events.length, 0);
   assert.equal(result.totals.matches, 0);
@@ -405,7 +414,7 @@ test("athlete career de par reconhece confronto quando um integrante aparece com
   };
 
   const service = new UserService(prisma as never, prisma as never);
-  const result = await service.getAthleteCareer("almyr samuel almeida");
+  const result = await getDoublesCareer(service, "almyr samuel almeida");
 
   assert.equal(result.events.length, 1);
   assert.equal(result.events[0]?.matches.length, 1);
@@ -537,7 +546,7 @@ test("athlete career de par calcula pontos, classificacao e medalha com alias le
   };
 
   const service = new UserService(prisma as never, prisma as never);
-  const result = await service.getAthleteCareer("adonis isabela oliveira");
+  const result = await getDoublesCareer(service, "adonis isabela oliveira");
 
   assert.equal(result.events.length, 1);
   assert.equal(result.events[0]?.matches.length, 2);
