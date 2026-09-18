@@ -225,3 +225,66 @@ test("T-I-04 mantem o mesmo cbtmMatchId independente entre categorias", async ()
   assert.equal(persistedB.matchDatetime?.toISOString(), originalB.matchDatetime?.toISOString());
   assert.equal(persistedB.updatedAt.toISOString(), originalB.updatedAt.toISOString());
 });
+
+test("T-I-03 ambiguidade gera warning e nao escolhe linha arbitrariamente", async () => {
+  const eventId = await createTestEvent();
+  const service = new UpsertService();
+  const category = await prisma.category.create({
+    data: {
+      eventId,
+      name: "SUB-21 FEM",
+      normalizedName: "sub-21 fem",
+      cbtmCategoryId: "67",
+    },
+  });
+  await Promise.all([
+    prisma.match.create({
+      data: {
+        eventId,
+        categoryId: category.id,
+        cbtmMatchId: "2",
+        phase: "RESULTADOS",
+        round: "Final",
+        tableNumber: "17",
+        matchDatetime: new Date("2026-09-16T21:30:00.000Z"),
+        scoreRaw: "3-1",
+        matchKey: `evento-${eventId}-ambiguo-jogo-2-a`,
+      },
+    }),
+    prisma.match.create({
+      data: {
+        eventId,
+        categoryId: category.id,
+        cbtmMatchId: "2",
+        phase: "RESULTADOS",
+        round: "Final",
+        tableNumber: "18",
+        matchDatetime: new Date("2026-09-17T21:30:00.000Z"),
+        scoreRaw: "3-2",
+        matchKey: `evento-${eventId}-ambiguo-jogo-2-b`,
+      },
+    }),
+  ]);
+
+  const result = await service.upsert(
+    eventId,
+    buildDataset(
+      buildMatch({ jogo: "2" }, {
+        matchKey: `evento-${eventId}-ambiguo-jogo-2-novo`,
+        tableNumber: "19",
+        matchDatetime: "2026-09-18T16:30:00.000Z",
+      }),
+    ),
+    { processRegistrations: false },
+  );
+
+  assert.ok(
+    result.warnings.some(
+      (warning) => warning.includes("Ambiguidade") && warning.includes("cbtmMatchId=2"),
+    ),
+  );
+  assert.equal(
+    await prisma.match.count({ where: { eventId, categoryId: category.id, cbtmMatchId: "2" } }),
+    3,
+  );
+});
