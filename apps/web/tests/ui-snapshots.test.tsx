@@ -361,3 +361,131 @@ test("PP-004 T-U-05 career/[athleteKey] nao exibe error diretamente na UI", () =
 
   assert.doesNotMatch(source, /<p>\{error\}<\/p>/);
 });
+
+test("PP-051 T-U-01 .container renderiza com classe unica, sem regressao de padding", () => {
+  const html = renderToStaticMarkup(<div className="container">conteudo</div>);
+
+  const matches = html.match(/class="container"/g) ?? [];
+  assert.equal(matches.length, 1);
+});
+
+test("PP-051 T-U-02 numeros de destaque com tabular-nums", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  const selectors = [
+    ".group-athlete-points",
+    ".score-badge",
+    ".count-value",
+    ".compact-summary-total",
+    ".career-kpi-card strong",
+    ".match-card-result",
+    ".event-efficiency-total",
+    ".event-efficiency-podium-total",
+    ".performance-bar-value",
+    ".stat-block-value",
+    ".efficiency-club-total strong",
+    ".club-hero-stat-value",
+    ".club-medal-bar-value",
+  ];
+
+  for (const selector of selectors) {
+    const escaped = selector.replace(/[.[\]]/g, "\\$&");
+    const pattern = new RegExp(`${escaped}\\s*\\{[^}]*font-variant-numeric:\\s*tabular-nums`, "s");
+    assert.match(css, pattern, `${selector} deve ter font-variant-numeric: tabular-nums`);
+  }
+});
+
+test("PP-051 T-U-03 ClubEfficiencyCareerPanel e AthleteSummaryCard renderizam classes de barra de medalha", () => {
+  const clubHtml = renderToStaticMarkup(
+    <ClubEfficiencyCareerPanel
+      expandedEvents={{}}
+      onToggleEvent={() => undefined}
+      data={{
+        club: { id: 77, name: "PARA CLUBE - PA" },
+        weights: { pesoOuro: 400, pesoPrata: 240, pesoBronze: 120 },
+        summary: {
+          nEventos: 1,
+          ultimoEventoNome: "1TMB26",
+          ultimoEventoId: 11,
+          nAtletasUltimoEvento: 1,
+          proximoEventoNome: null,
+          proximoEventoId: null,
+          nAtletasProximoEvento: null,
+          medalhasTotais: { ouro: 1, prata: 1, bronze: 1, total: 3 },
+        },
+        broadcastByType: {
+          BRASILEIRAO: { ouro: 0, prata: 0, bronze: 0, total: 0 },
+          COPA: { ouro: 0, prata: 0, bronze: 0, total: 0 },
+          ESTADUAL: { ouro: 1, prata: 1, bronze: 1, total: 3 },
+          OPEN: { ouro: 0, prata: 0, bronze: 0, total: 0 },
+        },
+        scoreCard: {
+          quantidade: { ouro: 1, prata: 1, bronze: 1, total: 3 },
+          pontuacao: { ouro: 400, prata: 240, bronze: 120, total: 760 },
+        },
+        history: [],
+        athletesContribution: [],
+      }}
+    />,
+  );
+
+  assert.match(clubHtml, /club-medal-bar-fill gold/);
+  assert.match(clubHtml, /club-medal-bar-fill silver/);
+  assert.match(clubHtml, /club-medal-bar-fill bronze/);
+
+  const athleteHtml = renderToStaticMarkup(
+    <AthleteSummaryCard
+      athleteName="ATLETA EXEMPLO"
+      athleteReducedName="ATLETA EXEMPLO"
+      federationText="PA (Pará) - Norte"
+      nextEventName="1TMB26"
+      kpis={{
+        ratio: "61.22%",
+        pointsDetail: "412/673",
+        wins: 12,
+        losses: 8,
+        recent: "W W L W L",
+        totalEvents: 5,
+        totalMatches: 20,
+      }}
+      medalMatrix={{
+        ouro: { estadual: 2, copa: 0, brasileirao: 1, open: 1, total: 4 },
+        prata: { estadual: 1, copa: 1, brasileirao: 0, open: 0, total: 2 },
+        bronze: { estadual: 3, copa: 1, brasileirao: 1, open: 2, total: 7 },
+      }}
+    />,
+  );
+
+  assert.match(athleteHtml, /career-medal-bar-fill gold/);
+  assert.match(athleteHtml, /career-medal-bar-fill silver/);
+  assert.match(athleteHtml, /career-medal-bar-fill bronze/);
+});
+
+test("PP-051 T-U-04 globals.css sem variaveis de token duplicadas", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.doesNotMatch(css, /--radius-2:/);
+  assert.doesNotMatch(css, /--radius-3:/);
+  assert.doesNotMatch(css, /--space-1:/);
+  assert.doesNotMatch(css, /--space-2:/);
+  assert.doesNotMatch(css, /--space-3:/);
+  assert.doesNotMatch(css, /--space-4:/);
+  assert.doesNotMatch(css, /--space-5:/);
+  assert.doesNotMatch(css, /--space-6:/);
+  assert.doesNotMatch(css, /--muted-2:/);
+});
+
+test("PP-051 T-U-05 .classification-row-* com os mesmos valores RGB de .eff-row-*", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(css, /classification-row-ouro[\s\S]{0,80}rgba\(255,\s*212,\s*59/);
+  assert.match(css, /classification-row-prata[\s\S]{0,80}rgba\(220,\s*230,\s*246/);
+  assert.match(css, /classification-row-bronze[\s\S]{0,80}rgba\(255,\s*184,\s*106/);
+});
+
+test("PP-051 T-U-06 CSS morto ausente", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.doesNotMatch(css, /\.home-club-medal-legend/);
+  assert.doesNotMatch(css, /\.athlete-summary-head/);
+  assert.doesNotMatch(css, /\.athlete-summary-share/);
+});
