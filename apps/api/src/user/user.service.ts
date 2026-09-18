@@ -4998,6 +4998,10 @@ export class UserService {
   }
 
   async getAthleteCareer(athleteKey: string) {
+    return (await this.getAthleteCareerByModality(athleteKey)).individual;
+  }
+
+  private async getAthleteCareerByModality(athleteKey: string) {
     const normalizedKey = normalizeAthleteName(athleteKey);
     const legacyNormalizedKey = normalizeText(athleteKey);
     if (!normalizedKey) {
@@ -5152,10 +5156,6 @@ export class UserService {
 
     const summaries: AthleteSummaryMatch[] = [];
     for (const match of matches) {
-      // Carreira de pares precisa manter confrontos de duplas e duplas mistas.
-      if (!pairCareer && (isDoublesEventName(match.event?.nome) || isDoublesCategoryName(match.category?.name))) {
-        continue;
-      }
       const participantIds = match.participants.map((participant) => participant.athleteId);
       const matchedAthleteIds = participantIds.filter((id) => athleteIds.includes(id));
       if (!pairCareer && matchedAthleteIds.length === 0) {
@@ -5176,7 +5176,10 @@ export class UserService {
       summaries.push(summary);
     }
 
-    const deduplicated = this.deduplicateMatches(summaries);
+    // Particionar antes das agregacoes preserva medalhas, pontos e categorias
+    // de ambas as modalidades, inclusive para consumidores que recalculam a UI.
+    const buildCareer = async (modalityMatches: AthleteSummaryMatch[]) => {
+    const deduplicated = this.deduplicateMatches(modalityMatches);
     this.sortMatches(deduplicated.matches, "phase_hierarchy_datetime");
 
     const eventBuckets = new Map<
@@ -5317,6 +5320,21 @@ export class UserService {
       events,
       deduplicatedMatchesRemoved: deduplicated.removed,
     };
+    };
+    const individualMatches: AthleteSummaryMatch[] = [];
+    const doublesMatches: AthleteSummaryMatch[] = [];
+    for (const match of summaries) {
+      const doubles = isDoublesEntry({
+        categoryName: match.category.name,
+        eventName: match.event.nome,
+        athleteName: match.athlete?.name,
+      });
+      (doubles ? doublesMatches : individualMatches).push(match);
+    }
+    const [individual, doubles] = await Promise.all([
+      buildCareer(individualMatches), buildCareer(doublesMatches),
+    ]);
+    return { individual, doubles };
   }
 
   async getAthleteIdentity(eventId: number, athleteId: number) {

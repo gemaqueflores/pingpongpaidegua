@@ -46,7 +46,7 @@ test("PP-037 T-U-01 ranking soma somente o ouro individual", async () => {
   assert.equal(separated.doubles[0].totalPontuacao, 390);
 });
 
-async function careerFor(pairCategoryName = "ABSOLUTO B", pairEventName = "ETAPA TESTE", includePair = true) {
+async function careerFor(pairCategoryName = "ABSOLUTO B", pairEventName = "ETAPA TESTE", includePair = true, internal = false) {
   const athlete = { id: 1, eventId: 1, nameDisplay: "ALICE", nameNormalized: "alice", aliases: [] };
   const event = { id: 1, nome: "ETAPA TESTE", nivel: "ESTADUAL", dataInicio: new Date("2026-01-01") };
   const matches = [false, ...(includePair ? [true] : [])].map((pair, index) => ({
@@ -68,10 +68,19 @@ async function careerFor(pairCategoryName = "ABSOLUTO B", pairEventName = "ETAPA
     match: { findMany: async () => matches },
   };
   const service = new UserService(prisma as never, prisma as never);
-  return service.getAthleteCareer("alice");
+  return internal ? (service as any).getAthleteCareerByModality("alice") : service.getAthleteCareer("alice");
 }
 
 test("PP-037 T-U-02 carreira soma somente a prata individual", async () => {
   const result = await careerFor();
   assert.equal(result.medalTable.ESTADUAL.prata, 1);
+  assert.equal(result.events[0].performanceByCategory.length, 1);
+  assert.equal(result.totals.matches, 1);
+  assert.equal(result.totals.performance.pointsWon, 32);
+  assert.equal(result.totals.performance.pointsPlayed, 74);
+  const separated = await careerFor("ABSOLUTO B", "ETAPA TESTE", true, true);
+  assert.equal(separated.doubles.medalTable.ESTADUAL.prata, 1);
+  assert.equal(separated.doubles.totals.matches, 1);
+  assert.equal(separated.doubles.totals.performance.pointsWon, 32);
+  assert.equal("doubles" in result, false);
 });
