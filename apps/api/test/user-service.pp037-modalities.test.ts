@@ -3,12 +3,12 @@ import test from "node:test";
 import { UserService } from "../src/user/user.service";
 
 // Synthetic unit fixtures; no claim about official event totals.
-async function rankingFor(categoryNames: string[], internal = false) {
+async function rankingFor(categoryNames: string[], internal = false, context: { eventName?: string; athleteNames?: string[] } = {}) {
   const categories = categoryNames.map((name, index) => ({
     id: index + 1, name, eventId: 1, cbtmCategoryId: String(index + 1),
   }));
   const athletes = categories.map((category) => ({
-    id: category.id, nameDisplay: `ATLETA ${category.id}`, clubId: 1,
+    id: category.id, nameDisplay: context.athleteNames?.[category.id - 1] ?? `ATLETA ${category.id}`, clubId: 1,
   }));
   const prisma = {
     club: { findMany: async () => [{ id: 1, name: "CLUBE TESTE", athletes }] },
@@ -17,7 +17,7 @@ async function rankingFor(categoryNames: string[], internal = false) {
     })) },
     category: { findMany: async () => categories },
     event: { findMany: async () => [{
-      id: 1, nome: "ETAPA TESTE", nivel: "ESTADUAL", dataInicio: new Date("2026-01-01"),
+      id: 1, nome: context.eventName ?? "ETAPA TESTE", nivel: "ESTADUAL", dataInicio: new Date("2026-01-01"),
     }] },
     athleteCategory: { findMany: async (query: { where: { categoryId: { in: number[] } } }) =>
       categories.filter((category) => query.where.categoryId.in.includes(category.id))
@@ -83,4 +83,21 @@ test("PP-037 T-U-02 carreira soma somente a prata individual", async () => {
   assert.equal(separated.doubles.totals.matches, 1);
   assert.equal(separated.doubles.totals.performance.pointsWon, 32);
   assert.equal("doubles" in result, false);
+});
+
+test("PP-037 T-U-03 duplas mistas por categoria, evento ou nome nao contaminam o ranking", async () => {
+  const named = await rankingFor(["RATING A", "DUPLA MISTA SUB-13"]);
+  assert.equal(named.ranking[0].ouro, 1);
+  const eventOnly = await rankingFor(["ABSOLUTO A"], true, { eventName: "ETAPA DUPLAS MISTAS" });
+  assert.equal(eventOnly.individual[0].ouro, 0);
+  assert.equal(eventOnly.doubles[0].ouro, 1);
+  const pairOnly = await rankingFor(["ABSOLUTO A"], true, { athleteNames: ["ALICE # BRUNO"] });
+  assert.equal(pairOnly.individual[0].ouro, 0);
+  assert.equal(pairOnly.doubles[0].ouro, 1);
+});
+
+test("PP-037 T-U-03 carreira preserva prata mista somente na estrutura interna", async () => {
+  const result = await careerFor("DUPLA MISTA SUB-13", "ETAPA TESTE", true, true);
+  assert.equal(result.individual.medalTable.ESTADUAL.prata, 1);
+  assert.equal(result.doubles.medalTable.ESTADUAL.prata, 1);
 });
