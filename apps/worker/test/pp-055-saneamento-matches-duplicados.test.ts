@@ -141,3 +141,58 @@ test("T-I-04 execucao fica isolada ao evento solicitado", async () => {
   assert.equal(await prisma.match.count({ where: { eventId: targetEventId } }), 1);
   assert.equal(await prisma.match.count({ where: { eventId: otherEventId } }), 2);
 });
+
+test("T-I-01 dry-run relata duplicatas sem alterar o banco", async () => {
+  const eventId = await createTestEvent();
+  const categoryId = await createTestCategory(eventId);
+  const [oldest, middle, latest] = await Promise.all([
+    createMatch({
+      eventId,
+      categoryId,
+      cbtmMatchId: "2",
+      key: `pp055-${eventId}-dry-oldest`,
+      fetchedAt: "2026-09-18T10:00:00.000Z",
+      tableNumber: "17",
+    }),
+    createMatch({
+      eventId,
+      categoryId,
+      cbtmMatchId: "002",
+      key: `pp055-${eventId}-dry-middle`,
+      fetchedAt: "2026-09-18T11:00:00.000Z",
+      tableNumber: "18",
+    }),
+    createMatch({
+      eventId,
+      categoryId,
+      cbtmMatchId: "2",
+      key: `pp055-${eventId}-dry-latest`,
+      fetchedAt: "2026-09-18T12:00:00.000Z",
+      tableNumber: "19",
+    }),
+  ]);
+  const before = await prisma.match.count({ where: { eventId } });
+
+  const report = await runDuplicateMatchCleanup({ prisma, eventId, execute: false });
+
+  assert.equal(await prisma.match.count({ where: { eventId } }), before);
+  assert.equal(report.mode, "dry-run");
+  assert.deepEqual(report.candidateRemovalMatchIds.sort((a, b) => a - b), [oldest.id, middle.id].sort((a, b) => a - b));
+  assert.deepEqual(report.removedMatchIds, []);
+  assert.equal(report.groups.length, 1);
+  assert.equal(report.groups[0]?.status, "eligible");
+  assert.equal(report.groups[0]?.cbtmMatchId, "2");
+  assert.equal(report.groups[0]?.kept.id, latest.id);
+  assert.deepEqual(
+    report.groups[0]?.obsolete.map((match) => match.id).sort((a, b) => a - b),
+    [oldest.id, middle.id].sort((a, b) => a - b),
+  );
+  assert.deepEqual(report.categories, [
+    {
+      categoryId,
+      categoryName: "ABSOLUTO A FEM",
+      before: 3,
+      after: 3,
+    },
+  ]);
+});
