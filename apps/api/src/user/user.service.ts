@@ -1045,7 +1045,7 @@ export class UserService {
       },
     });
 
-    const safeTitle = title.replace(/\r?\n/g, " ").trim();
+    const safeTitle = escapeHtml(title.replace(/\r?\n/g, " ").trim());
     const safeDescription = description.replace(/\r\n/g, "\n");
     const safeDescriptionHtml = escapeHtml(safeDescription).replace(/\n/g, "<br/>");
     await transporter.sendMail({
