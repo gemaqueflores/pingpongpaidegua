@@ -167,6 +167,35 @@ function resolveMatchTimestamp(match: SummaryMatch): number | null {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
+function compareSummaryMatches(left: SummaryMatch, right: SummaryMatch, sortMode: SortMode, now: number): number {
+  const leftHasResult = hasMatchResult(left);
+  const rightHasResult = hasMatchResult(right);
+  if (leftHasResult !== rightHasResult) {
+    return leftHasResult ? 1 : -1;
+  }
+
+  const leftTimestamp = resolveMatchTimestamp(left);
+  const rightTimestamp = resolveMatchTimestamp(right);
+  if (leftTimestamp !== null && rightTimestamp !== null && leftTimestamp !== rightTimestamp) {
+    const bothAreFuture = leftTimestamp >= now && rightTimestamp >= now;
+    if (sortMode === "recent" && bothAreFuture) {
+      return leftTimestamp - rightTimestamp;
+    }
+    return sortMode === "recent" ? rightTimestamp - leftTimestamp : leftTimestamp - rightTimestamp;
+  }
+  if (leftTimestamp !== null || rightTimestamp !== null) {
+    return leftTimestamp !== null ? -1 : 1;
+  }
+
+  const leftGameId = resolveGameOrderId(left);
+  const rightGameId = resolveGameOrderId(right);
+  if (leftGameId !== rightGameId) {
+    return sortMode === "recent" ? rightGameId - leftGameId : leftGameId - rightGameId;
+  }
+
+  return sortMode === "recent" ? right.id - left.id : left.id - right.id;
+}
+
 function toReducedName(name: string | null | undefined): string {
   const raw = String(name ?? "").trim();
   const pairParts = raw
@@ -366,30 +395,8 @@ export default function AthleteSummaryPage() {
 
   const groups = useMemo<MatchGroup[]>(() => {
     const baseMatches = summary?.matches ?? [];
-    const matches = [...baseMatches].sort((left, right) => {
-      const leftHasResult = hasMatchResult(left);
-      const rightHasResult = hasMatchResult(right);
-      if (leftHasResult !== rightHasResult) {
-        return leftHasResult ? 1 : -1;
-      }
-
-      const leftTimestamp = resolveMatchTimestamp(left);
-      const rightTimestamp = resolveMatchTimestamp(right);
-      if (leftTimestamp !== null && rightTimestamp !== null && leftTimestamp !== rightTimestamp) {
-        return sortMode === "recent" ? rightTimestamp - leftTimestamp : leftTimestamp - rightTimestamp;
-      }
-      if (leftTimestamp !== null || rightTimestamp !== null) {
-        return leftTimestamp !== null ? -1 : 1;
-      }
-
-      const leftGameId = resolveGameOrderId(left);
-      const rightGameId = resolveGameOrderId(right);
-      if (leftGameId !== rightGameId) {
-        return sortMode === "recent" ? rightGameId - leftGameId : leftGameId - rightGameId;
-      }
-
-      return sortMode === "recent" ? right.id - left.id : left.id - right.id;
-    });
+    const now = Date.now();
+    const matches = [...baseMatches].sort((left, right) => compareSummaryMatches(left, right, sortMode, now));
 
     if (matches.length === 0) {
       return [];
@@ -629,3 +636,7 @@ export default function AthleteSummaryPage() {
     </main>
   );
 }
+
+const __testables = { compareSummaryMatches };
+
+(AthleteSummaryPage as typeof AthleteSummaryPage & { __testables: typeof __testables }).__testables = __testables;
