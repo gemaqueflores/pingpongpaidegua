@@ -178,8 +178,8 @@ function compareSummaryMatches(left: SummaryMatch, right: SummaryMatch, sortMode
   const rightTimestamp = resolveMatchTimestamp(right);
   if (leftTimestamp !== null && rightTimestamp !== null && leftTimestamp !== rightTimestamp) {
     const bothAreFuture = leftTimestamp >= now && rightTimestamp >= now;
-    if (sortMode === "recent" && bothAreFuture) {
-      return leftTimestamp - rightTimestamp;
+    if (bothAreFuture) {
+      return sortMode === "recent" ? leftTimestamp - rightTimestamp : rightTimestamp - leftTimestamp;
     }
     return sortMode === "recent" ? rightTimestamp - leftTimestamp : leftTimestamp - rightTimestamp;
   }
