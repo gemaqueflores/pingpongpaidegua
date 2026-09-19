@@ -70,3 +70,16 @@ test('PP-061 T-U-02 ordena jogos futuros do mais distante no modo "oldest"', () 
     [3, 2, 1],
   );
 });
+
+test('PP-061 T-U-03 preserva jogos passados do mais recente no modo "recent"', () => {
+  const matches = [
+    buildMatch(1, "2026-09-18T18:30:00-03:00"),
+    buildMatch(3, "2026-09-18T20:30:00-03:00"),
+    buildMatch(2, "2026-09-18T20:00:00-03:00"),
+  ];
+
+  assert.deepEqual(
+    sortMatches(matches, "recent").map((match) => match.id),
+    [3, 2, 1],
+  );
+});
