@@ -2173,20 +2173,21 @@ export class UpsertService {
       return cached;
     }
 
-    const found = await prisma.club.findUnique({
-      where: { normalizedName },
-    });
+    const found =
+      (await prisma.club.findUnique({
+        where: { normalizedName },
+      })) ?? (await this.findClubByTolerantNormalization(name, normalizedName));
 
     if (found) {
       const record =
-        found.name === name
+        found.name === name && found.normalizedName === normalizedName
           ? found
           : await prisma.club.update({
               where: { id: found.id },
-              data: { name },
+              data: { name, normalizedName },
             });
 
-      if (found.name === name) {
+      if (found.name === name && found.normalizedName === normalizedName) {
         inc(updated, "clubs_cache_hits");
       } else {
         inc(updated, "clubs");
@@ -2218,6 +2219,29 @@ export class UpsertService {
 
     clubsByNormalized.set(normalizedName, cachedClub);
     return cachedClub;
+  }
+
+  private async findClubByTolerantNormalization(
+    name: string,
+    normalizedName: string,
+  ): Promise<{ id: number; name: string; normalizedName: string } | null> {
+    // Clube legado pode ter normalizedName persistido pela regra anterior à PP-053 (com sufixo de
+    // UF). Busca exata por `normalizedName` já falhou nesse caso — recalcular o valor atual de cada
+    // clube existente é a única forma de encontrar esse registro sem depender de backfill prévio.
+    // Tabela pequena (dezenas de clubes por escopo Pará): varredura completa é aceitável aqui.
+    const candidates = await prisma.club.findMany({
+      select: { id: true, name: true, normalizedName: true, createdAt: true },
+    });
+    const matches = candidates.filter(
+      (candidate) => normalizeClubName(candidate.name) === normalizedName,
+    );
+    if (matches.length === 0) {
+      return null;
+    }
+    matches.sort(
+      (left, right) => left.createdAt.getTime() - right.createdAt.getTime() || left.id - right.id,
+    );
+    return matches[0];
   }
 
   private async syncMutableRegistrationCategories(input: {
