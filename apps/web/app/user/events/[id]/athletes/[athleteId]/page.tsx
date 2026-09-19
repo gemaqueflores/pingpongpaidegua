@@ -177,8 +177,12 @@ function compareSummaryMatches(left: SummaryMatch, right: SummaryMatch, sortMode
   const leftTimestamp = resolveMatchTimestamp(left);
   const rightTimestamp = resolveMatchTimestamp(right);
   if (leftTimestamp !== null && rightTimestamp !== null && leftTimestamp !== rightTimestamp) {
-    const bothAreFuture = leftTimestamp >= now && rightTimestamp >= now;
-    if (bothAreFuture) {
+    const leftIsFuture = leftTimestamp >= now;
+    const rightIsFuture = rightTimestamp >= now;
+    if (leftIsFuture !== rightIsFuture) {
+      return sortMode === "recent" ? (leftIsFuture ? -1 : 1) : leftIsFuture ? 1 : -1;
+    }
+    if (leftIsFuture) {
       return sortMode === "recent" ? leftTimestamp - rightTimestamp : rightTimestamp - leftTimestamp;
     }
     return sortMode === "recent" ? rightTimestamp - leftTimestamp : leftTimestamp - rightTimestamp;
