@@ -251,5 +251,3 @@ Spec derivada da investigação de causa raiz completa da PP-056 v2
 de Leo sobre por que não migrar/consolidar o ID do atleta em vez de só corrigir o sintoma. A investigação
 confirmou que a consolidação de fato nunca aconteceu (clube e 15 atletas ficaram duplicados) e que a
 correção de código sozinha (PP-056) não desfaz esse dado já existente — daí esta Spec de saneamento.
-
-

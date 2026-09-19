@@ -152,5 +152,3 @@ ENTÃO nenhum desses clubes aparece nas seções de "a ser alterado" do relatór
 Decorrente do fechamento de PP-053 Item 2 (PR #56, fechado sem merge) e PP-057 (fechada sem
 implementação) — ver `docs/specs/PP-058-reconciliacao-pp053-pp057.md` para a investigação completa
 que levou a esta Spec.
-
-

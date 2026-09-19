@@ -120,5 +120,3 @@ essa é restrita ao evento 59 — não é inconsistência, é escopo diferente p
 **Fechamento do ciclo:** ✅ aguardando aprovação explícita de Leo para: (a) fechar PR #56 e a Spec
 PP-057 sem merge/implementação, (b) abrir nova Spec (PP-059) de saneamento retroativo dos 10 pares
 atuais.
-
-
