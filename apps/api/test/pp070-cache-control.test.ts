@@ -1,10 +1,14 @@
+import "reflect-metadata";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
 import test from "node:test";
 import express from "express";
+import { of } from "rxjs";
 import { defaultNoStoreMiddleware } from "../src/common/default-no-store.middleware";
+import { PUBLIC_CACHE_TTL_KEY } from "../src/common/public-cache.decorator";
+import { PublicReadCacheInterceptor } from "../src/common/public-read-cache.interceptor";
 
 test("PP-070 T-I-03: rota nao publica responde no-store", async () => {
   const app = express();
@@ -29,4 +33,47 @@ test("PP-070 T-I-03: rota nao publica responde no-store", async () => {
 
   const mainSource = readFileSync(resolve(__dirname, "../src/main.ts"), "utf8");
   assert.match(mainSource, /app\.use\(defaultNoStoreMiddleware\)/);
+});
+
+test("PP-070 T-I-04: rota publica bem-sucedida mantem cache publico", async () => {
+  const app = express();
+  const interceptor = new PublicReadCacheInterceptor();
+  const publicHandler = () => undefined;
+  Reflect.defineMetadata(PUBLIC_CACHE_TTL_KEY, 37, publicHandler);
+
+  app.use(defaultNoStoreMiddleware);
+  app.get("/public", (req, res, next) => {
+    const context = {
+      switchToHttp: () => ({
+        getRequest: () => req,
+        getResponse: () => res,
+      }),
+      getHandler: () => publicHandler,
+      getClass: () => publicHandler,
+    };
+
+    interceptor.intercept(context as never, { handle: () => of({ public: true }) }).subscribe({
+      next: (body) => res.json(body),
+      error: next,
+    });
+  });
+
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolveListening, reject) => {
+    server.once("listening", resolveListening);
+    server.once("error", reject);
+  });
+
+  try {
+    const address = server.address() as AddressInfo;
+    const response = await fetch(`http://127.0.0.1:${address.port}/public`);
+    assert.equal(
+      response.headers.get("Cache-Control"),
+      "public, s-maxage=37, stale-while-revalidate=37",
+    );
+  } finally {
+    await new Promise<void>((resolveClose, reject) => {
+      server.close((error) => (error ? reject(error) : resolveClose()));
+    });
+  }
 });
