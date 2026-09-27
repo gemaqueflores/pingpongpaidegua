@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
 
@@ -28,3 +28,32 @@ test("PP-070 T-S-01: nginx ignora cache autenticado e sobrescreve XFF", () => {
   assert.doesNotMatch(runbook, /\$proxy_add_x_forwarded_for/);
   assert.match(nginxConfig, /proxy_set_header X-Forwarded-For \$remote_addr;/);
 });
+
+test("PP-070 T-S-02: RATE_LIMIT_TRUST_PROXY foi removida", () => {
+  const files = [
+    resolve(repositoryRoot, "docker-compose.yml"),
+    resolve(repositoryRoot, "apps/api/.env.example"),
+    ...listTypeScriptFiles(resolve(repositoryRoot, "apps/api/src")),
+  ];
+
+  for (const file of files) {
+    assert.doesNotMatch(
+      readFileSync(file, "utf8"),
+      /RATE_LIMIT_TRUST_PROXY/,
+      `variavel obsoleta encontrada em ${file}`,
+    );
+  }
+});
+
+function listTypeScriptFiles(directory: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listTypeScriptFiles(path));
+    } else if (entry.isFile() && entry.name.endsWith(".ts")) {
+      files.push(path);
+    }
+  }
+  return files;
+}
