@@ -34,3 +34,27 @@ test("PP-034: endpoint de revogacao exige JWT e role ADMIN", () => {
   assert.deepEqual(roles, ["ADMIN"]);
   assert.deepEqual(guards, [JwtAuthGuard, RolesGuard]);
 });
+
+test("PP-070 T-U-02: login usa request.ip e ignora XFF recebido", async () => {
+  const calls: Array<{ username: string; password: string; clientIp: string }> = [];
+  const service = {
+    login: async (username: string, password: string, clientIp: string) => {
+      calls.push({ username, password, clientIp });
+      return { accessToken: "token", role: "ADMIN" as const };
+    },
+  };
+  const controller = new AuthController(service as any);
+
+  await controller.login(
+    { username: "admin", password: "senha" },
+    {
+      ip: "203.0.113.9",
+      headers: { "x-forwarded-for": "6.6.6.6" },
+      socket: { remoteAddress: "127.0.0.1" },
+    } as any,
+  );
+
+  assert.deepEqual(calls, [
+    { username: "admin", password: "senha", clientIp: "203.0.113.9" },
+  ]);
+});
