@@ -7,18 +7,18 @@ export function applyTrustProxy(
     return;
   }
 
-  if (raw === "1" || raw.toLowerCase() === "true") {
+  if (/^\d+$/.test(raw)) {
+    app.set("trust proxy", Number(raw));
+    return;
+  }
+
+  if (raw.toLowerCase() === "true") {
     app.set("trust proxy", true);
     return;
   }
 
-  if (raw === "0" || raw.toLowerCase() === "false") {
+  if (raw.toLowerCase() === "false") {
     app.set("trust proxy", false);
-    return;
-  }
-
-  if (/^\d+$/.test(raw)) {
-    app.set("trust proxy", Number(raw));
     return;
   }
 
