@@ -3,6 +3,7 @@ import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
+import { defaultNoStoreMiddleware } from "./common/default-no-store.middleware";
 import { SimpleRateLimitMiddleware } from "./common/simple-rate-limit.middleware";
 import { applyTrustProxy } from "./common/trust-proxy";
 
@@ -79,6 +80,7 @@ async function bootstrap(): Promise<void> {
     credentials: true,
   });
 
+  app.use(defaultNoStoreMiddleware);
   app.use((req: Request, res: Response, next: NextFunction) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "SAMEORIGIN");
