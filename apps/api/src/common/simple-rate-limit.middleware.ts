@@ -24,7 +24,6 @@ export class SimpleRateLimitMiddleware {
   private readonly heavyLimit = Number(process.env.RATE_LIMIT_HEAVY_LIMIT ?? "20");
   private readonly strictLimit = Number(process.env.RATE_LIMIT_STRICT_LIMIT ?? "30");
   private readonly useRedis = process.env.RATE_LIMIT_USE_REDIS !== "false";
-  private readonly trustProxyHeaders = process.env.RATE_LIMIT_TRUST_PROXY === "true";
   private redis: RedisClient | null = null;
   private redisInitAttempted = false;
 
@@ -144,18 +143,6 @@ return { current, ttl }
   }
 
   private extractIp(req: Request): string {
-    if (this.trustProxyHeaders) {
-      const forwarded = req.headers["x-forwarded-for"];
-      if (typeof forwarded === "string" && forwarded.trim()) {
-        return forwarded.split(",")[0].trim();
-      }
-      if (Array.isArray(forwarded) && forwarded.length > 0) {
-        return String(forwarded[0]);
-      }
-    }
-    if (Array.isArray(req.ips) && req.ips.length > 0) {
-      return req.ips[0] ?? "unknown";
-    }
     return req.ip || req.socket.remoteAddress || "unknown";
   }
 
