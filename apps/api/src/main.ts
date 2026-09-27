@@ -75,12 +75,12 @@ async function bootstrap(): Promise<void> {
     callback(new Error(`Origem nao permitida pelo CORS: ${requestOrigin}`), false);
   };
 
+  app.use(defaultNoStoreMiddleware);
   app.enableCors({
     origin: originDelegate,
     credentials: true,
   });
 
-  app.use(defaultNoStoreMiddleware);
   app.use((req: Request, res: Response, next: NextFunction) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "SAMEORIGIN");

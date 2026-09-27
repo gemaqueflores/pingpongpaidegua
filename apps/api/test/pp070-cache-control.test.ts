@@ -33,6 +33,10 @@ test("PP-070 T-I-03: rota nao publica responde no-store", async () => {
 
   const mainSource = readFileSync(resolve(__dirname, "../src/main.ts"), "utf8");
   assert.match(mainSource, /app\.use\(defaultNoStoreMiddleware\)/);
+  assert.ok(
+    mainSource.indexOf("app.use(defaultNoStoreMiddleware)") < mainSource.indexOf("app.enableCors"),
+    "no-store deve executar antes de respostas antecipadas do CORS",
+  );
 });
 
 test("PP-070 T-I-04: rota publica bem-sucedida mantem cache publico", async () => {
