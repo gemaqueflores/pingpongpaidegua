@@ -47,3 +47,11 @@ Para T-* de CORS: extrair `isOriginAllowed` de `main.ts` para `apps/api/src/comm
 
 #### Fora de escopo
 Captcha/serviço anti-bot externo; CSP (PP-059); token no Web Storage (PP-SEC-011).
+
+### CAT — Rodada 2 (2026-09-27) — contraponto técnico Codex
+
+**Posição:** implementável, com o desenho dos limitadores ajustado para reutilizar o Redis já operado pela API. O middleware existente comprova disponibilidade de `ioredis` e de operação atômica por Lua; portanto, os contadores de 5/IP/hora e 50/dia não precisam de nova dependência nem devem ficar somente em memória, onde reinícios e múltiplas réplicas reiniciariam/dividiriam o limite. A decisão de ORQ-004 fecha o preview como opt-in, com padrão `false`; `FRONTEND_URL` exato e localhost permanecem permitidos.
+
+**Riscos e correções de teste:** a chave por IP precisa receber o endereço já normalizado pela borda do PP-070, sem confiar diretamente em XFF. Os dois limites devem usar incremento/expiração atômicos, e a política para indisponibilidade do Redis deve ser explícita; fallback local preserva proteção parcial sem transformar falha de infraestrutura em indisponibilidade total. Acrescentar teste de concorrência/TTL e de duas instâncias compartilhando o mesmo Redis, além dos casos sequenciais já descritos. A prévia Vercel deve ser testada ausente, `false` e `true`, evitando verdade implícita por variável não vazia.
+
+**Claro para implementação:** alterar o controller para fornecer o IP confiável, criar chaves sem dados pessoais além do IP necessário e manter a resposta 429 genérica. Não registrar corpo, e-mail ou mensagem do suporte. Não há dependência de VM nesta entrega.

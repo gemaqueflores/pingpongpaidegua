@@ -35,3 +35,11 @@ Sem RED de comportamento (atualização de dependência não cria comportamento 
 
 #### Fora de escopo
 Upgrade major de framework (Next 16, Nest 12, Prisma 7); qualquer refatoração.
+
+### CAT — Rodada 2 (2026-09-27) — contraponto técnico Codex
+
+**Posição:** implementável com ressalvas de compatibilidade, e o major do Nodemailer está autorizado por ORQ-004. Em worktree descartável, `nodemailer@10.0.11` removeu a vulnerabilidade específica. O audit de produção ainda apontou 6 ocorrências (5 altas), concentradas em cadeias de Prisma, esbuild e Next/PostCSS que exigem majors fora deste escopo; elas devem ser registradas, não corrigidas com `--force`.
+
+**Riscos e correções de teste:** os dois testes de e-mail tentaram resolver `smtp.example.test`, indicando que o mock atual não intercepta a criação/transporte no Nodemailer 10. O ajuste precisa preservar um teste sem rede, injetando ou mockando o transporte no limite correto. O build experimental da API também falhou após a reinstalação por cliente Prisma não gerado/tipos ausentes; antes de atribuir isso ao upgrade, o ciclo deve executar a geração Prisma usada no CI e comparar com o baseline limpo. Worker e web avançaram, e o build web terminou verde. Não aceitar o audit como verde apenas porque a CVE do Nodemailer desapareceu.
+
+**Claro para implementação:** atualizar lockfile de forma focal, adaptar o mock SMTP, executar geração Prisma antes do build e entregar a tabela de vulnerabilidades remanescentes com pacote, cadeia, severidade e razão para adiamento. Os critérios 0 crítica e remanescentes altas justificadas são tecnicamente alcançáveis sem majors de framework.
