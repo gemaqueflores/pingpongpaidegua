@@ -48,6 +48,48 @@ test("PP-070 T-I-01: XFF forjado nao troca o balde de rate limit", async () => {
   }
 });
 
+test("PP-070 T-I-02: clientes reais distintos usam baldes separados", async () => {
+  const previousEnv = snapshotEnv([
+    "RATE_LIMIT_USE_REDIS",
+    "RATE_LIMIT_DEFAULT_LIMIT",
+  ]);
+  process.env.RATE_LIMIT_USE_REDIS = "false";
+  process.env.RATE_LIMIT_DEFAULT_LIMIT = "5";
+
+  const middleware = new SimpleRateLimitMiddleware();
+  const app = express();
+  app.set("trust proxy", 1);
+  app.use((req, res, next) => {
+    void middleware.use(req, res, next).catch(next);
+  });
+  app.get("/probe", (_req, res) => res.json({ ok: true }));
+
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+
+  try {
+    const address = server.address() as AddressInfo;
+    const first = await fetch(`http://127.0.0.1:${address.port}/probe`, {
+      headers: { "X-Forwarded-For": "203.0.113.1" },
+    });
+    const second = await fetch(`http://127.0.0.1:${address.port}/probe`, {
+      headers: { "X-Forwarded-For": "203.0.113.2" },
+    });
+
+    assert.equal(first.headers.get("X-RateLimit-Remaining"), "4");
+    assert.equal(second.headers.get("X-RateLimit-Remaining"), "4");
+  } finally {
+    await middleware.close();
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    restoreEnv(previousEnv);
+  }
+});
+
 function snapshotEnv(keys: string[]): Map<string, string | undefined> {
   return new Map(keys.map((key) => [key, process.env[key]]));
 }
