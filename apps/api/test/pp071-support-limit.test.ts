@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test, { after } from "node:test";
-import { TooManyRequestsException } from "@nestjs/common";
+import { HttpException } from "@nestjs/common";
 import {
   SupportReportLimiter,
   type SupportReportRedisClient,
@@ -80,6 +80,10 @@ function serviceWith(limiter: SupportReportLimiter): UserService {
   return new UserService({} as never, {} as never, limiter);
 }
 
+function isTooManyRequests(error: unknown): boolean {
+  return error instanceof HttpException && error.getStatus() === 429;
+}
+
 test("PP-071 T-U-01: sexta chamada do mesmo IP retorna 429 antes do SMTP", async () => {
   const restore = configureSmtp();
   sendCount = 0;
@@ -92,7 +96,7 @@ test("PP-071 T-U-01: sexta chamada do mesmo IP retorna 429 antes do SMTP", async
     }
     await assert.rejects(
       service.reportProblem("Falha", "Descricao", "203.0.113.10"),
-      TooManyRequestsException,
+      isTooManyRequests,
     );
     assert.equal(sendCount, 5);
   } finally {
@@ -112,7 +116,7 @@ test("PP-071 T-U-02: chamada 51 do dia retorna 429", async () => {
     }
     await assert.rejects(
       service.reportProblem("Falha", "Descricao", "198.51.100.1"),
-      TooManyRequestsException,
+      isTooManyRequests,
     );
     assert.equal(sendCount, 50);
   } finally {
@@ -124,7 +128,7 @@ test("PP-071 T-U-03: janela expirada volta a aceitar", async () => {
   let now = Date.UTC(2026, 8, 27, 10, 0, 0);
   const limiter = new SupportReportLimiter({ redis: new FakeRedis(() => now), now: () => now });
   for (let index = 0; index < 5; index += 1) await limiter.assertAllowed("203.0.113.20");
-  await assert.rejects(limiter.assertAllowed("203.0.113.20"), TooManyRequestsException);
+  await assert.rejects(limiter.assertAllowed("203.0.113.20"), isTooManyRequests);
 
   now += 60 * 60 * 1000;
   await limiter.assertAllowed("203.0.113.20");
@@ -136,11 +140,11 @@ test("PP-071 T-U-04: duas instancias somam o limite no Redis compartilhado", asy
   const second = new SupportReportLimiter({ redis });
   for (let index = 0; index < 3; index += 1) await first.assertAllowed("203.0.113.30");
   for (let index = 0; index < 2; index += 1) await second.assertAllowed("203.0.113.30");
-  await assert.rejects(second.assertAllowed("203.0.113.30"), TooManyRequestsException);
+  await assert.rejects(second.assertAllowed("203.0.113.30"), isTooManyRequests);
 });
 
 test("PP-071 T-U-05: Redis indisponivel usa fallback local sem 5xx", async () => {
   const limiter = new SupportReportLimiter({ redis: new FailingRedis() });
   for (let index = 0; index < 5; index += 1) await limiter.assertAllowed("203.0.113.40");
-  await assert.rejects(limiter.assertAllowed("203.0.113.40"), TooManyRequestsException);
+  await assert.rejects(limiter.assertAllowed("203.0.113.40"), isTooManyRequests);
 });
