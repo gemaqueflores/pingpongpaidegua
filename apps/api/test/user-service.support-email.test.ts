@@ -1,26 +1,21 @@
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
-import test, { after } from "node:test";
+import test, { after, mock } from "node:test";
 import { UserService } from "../src/user/user.service";
 
-const require = createRequire(import.meta.url);
-const nodemailer = require("nodemailer") as {
-  createTransport: (config: Record<string, unknown>) => {
-    sendMail: (mail: Record<string, unknown>) => Promise<unknown>;
-  };
-};
-const originalCreateTransport = nodemailer.createTransport;
 let captureMail: ((mail: Record<string, unknown>) => void) | undefined;
 
-nodemailer.createTransport = (() => ({
+const createTransport = () => ({
   async sendMail(mail: Record<string, unknown>) {
     captureMail?.(mail);
     return {};
   },
-})) as typeof nodemailer.createTransport;
+});
+const nodemailerMock = mock.module("nodemailer", {
+  namedExports: { createTransport },
+});
 
 after(() => {
-  nodemailer.createTransport = originalCreateTransport;
+  nodemailerMock.restore();
 });
 
 async function captureSupportEmail(title: string, description: string): Promise<Record<string, unknown>> {

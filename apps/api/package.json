@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "pretest": "npm --prefix ../.. run build --workspace @cbtm/shared",
-    "test": "tsx --test test/**/*.test.ts"
+    "test": "tsx --experimental-test-module-mocks --test test/**/*.test.ts"
   },
   "dependencies": {
     "@cbtm/shared": "1.0.0",
