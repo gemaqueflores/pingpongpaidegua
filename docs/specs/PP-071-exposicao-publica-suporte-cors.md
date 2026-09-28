@@ -1,7 +1,59 @@
 # PP-071 — Exposição pública: abuso do formulário de suporte e CORS de previews Vercel
 
-<!-- Spec unificada v7. Sem ## SPEC ATIVA: ciclo tripartite em andamento. Codex NÃO implementa a partir do HISTÓRICO. -->
-Estado: CAT RASCUNHO — Rodada 1 | Projeto: PingPong PaiD'egua | Backlog: PP-SEC-009, PP-SEC-010
+## SPEC ATIVA — PP-071 — v1
+<!-- Única seção de instrução. Codex implementa exclusivamente contra este bloco. -->
+ID: PP-071 | Projeto: PingPong PaiD'egua | Branch: `fix/pp-071-suporte-cors`
+Criada por: Claude | Data: 2026-09-27 | Versão da Spec: v1
+Aprovada por: Leo | Data: 2026-09-27 | Escopo: limite do suporte no Redis (5/IP/h, 50/dia) + previews Vercel desligados — aprovação em chat ("aprovo as 13 Specs", 2026-09-27), cobre a Versão da Spec v1 e as decisões embutidas
+Decisão embutida: previews do Vercel desligados por padrão (Leo não os usa — ORQ-004).
+
+## Skills Codex a ativar
+- florestech-implementacao — obrigatória. | security-review-agent: sim — rota pública, CORS, Redis.
+- e2e-playwright-agent: não. | report-builder-agent: não.
+
+## Objetivo
+Impedir flood de e-mail pelo formulário público de suporte e fechar o CORS para origens `*.vercel.app` arbitrárias.
+
+## Cenários
+- DADO um IP que já enviou 5 relatos na última hora QUANDO envia o 6º ENTÃO 429 genérico e nenhum e-mail.
+- DADO 50 relatos no dia (qualquer IP) QUANDO chega o 51º ENTÃO 429 e nenhum e-mail.
+- DADO origem `https://qualquer.vercel.app` e env ausente QUANDO faz preflight ENTÃO recusada.
+
+## Critérios de aceitação
+1. `UserController.reportProblem` passa `request.ip` (já confiável após PP-070) ao service.
+2. Limites 5/IP/hora e 50/dia com INCR+PEXPIRE atômico no Redis já usado pelo rate limit (mesmo cliente/padrão Lua
+   de `common/simple-rate-limit.middleware.ts`); Redis indisponível → fallback em memória (proteção parcial,
+   nunca derrubar a rota). Chave só com IP e janela — sem corpo, e-mail ou texto do relato; nada disso em log.
+3. Excedente → `429` com mensagem genérica, **antes** de montar o transporte SMTP.
+4. `isOriginAllowed` extraído para `apps/api/src/common/cors-origin.ts`; previews só com env exatamente `"true"`.
+5. `docker-compose.yml`: `FRONTEND_ALLOW_VERCEL_PREVIEWS: ${FRONTEND_ALLOW_VERCEL_PREVIEWS:-false}`; runbook §9
+   atualizado (`FRONTEND_URL=https://pingpongpaidegua.vercel.app`, previews `false`).
+6. Pré-condição de deploy (fora do PR, registrada no relatório): `.env` da VM com
+   `FRONTEND_URL=https://pingpongpaidegua.vercel.app` **antes** de subir a API nova — senão o site perde o CORS.
+
+## Fora de escopo
+Captcha/serviço externo; CSP (PP-059); token em Web Storage.
+
+## Impacto técnico
+`apps/api/src/user/user.controller.ts`, `apps/api/src/user/user.service.ts`, `apps/api/src/common/cors-origin.ts`
+(novo), `apps/api/src/main.ts`, `docker-compose.yml`, `docs/runbook-producao-oracle-vercel.md`. Testes:
+`apps/api/test/user-service.support-email.test.ts`, `apps/api/test/pp071-cors-origin.test.ts`,
+`apps/api/test/pp071-support-limit.test.ts`. Sem dependência nova.
+
+## Plano de testes
+COBERTURA: regressão=3 corretude=6
+- T-U-01 [corretude] 6ª chamada do mesmo IP na hora → 429; transporte chamado exatamente 5 vezes.
+- T-U-02 [corretude] 51ª do dia com IPs distintos → 429.
+- T-U-03 [corretude] janela expirada (relógio/TTL injetado) → volta a aceitar.
+- T-U-04 [corretude] Redis fake compartilhado por duas instâncias do service → limite somado (não dividido).
+- T-U-05 [regressão] Redis indisponível → fallback local continua limitando; rota não responde 5xx.
+- T-U-06 [regressão] chamada válida → 1 e-mail com HTML escapado (teste atual verde).
+- T-U-07 [corretude] `isOriginAllowed("https://x.vercel.app")` com env ausente e com `"false"` → `false`; com `"1"` → `false`.
+- T-U-08 [corretude] env `"true"` → `true`.
+- T-U-09 [regressão] `FRONTEND_URL` exato e localhost continuam permitidos.
+
+---
+Estado: CAT ENCERRADO (Rodada 3) — SPEC ATIVA v1 APROVADA por Leo (2026-09-27) | Projeto: PingPong PaiD'egua | Backlog: PP-SEC-009, PP-SEC-010
 Depende de: PP-070 mergeado (rate/limite por IP só é confiável depois que `req.ip` deixar de ser forjável)
 
 ---
@@ -55,3 +107,8 @@ Captcha/serviço anti-bot externo; CSP (PP-059); token no Web Storage (PP-SEC-01
 **Riscos e correções de teste:** a chave por IP precisa receber o endereço já normalizado pela borda do PP-070, sem confiar diretamente em XFF. Os dois limites devem usar incremento/expiração atômicos, e a política para indisponibilidade do Redis deve ser explícita; fallback local preserva proteção parcial sem transformar falha de infraestrutura em indisponibilidade total. Acrescentar teste de concorrência/TTL e de duas instâncias compartilhando o mesmo Redis, além dos casos sequenciais já descritos. A prévia Vercel deve ser testada ausente, `false` e `true`, evitando verdade implícita por variável não vazia.
 
 **Claro para implementação:** alterar o controller para fornecer o IP confiável, criar chaves sem dados pessoais além do IP necessário e manter a resposta 429 genérica. Não registrar corpo, e-mail ou mensagem do suporte. Não há dependência de VM nesta entrega.
+
+### CAT — Rodada 3 (2026-09-27) — Claude analista
+
+[RESOLVIDO: contadores no Redis já operado pela API, INCR+PEXPIRE atômico, fallback local se o Redis cair]. Incorporados testes de TTL, duas instâncias no mesmo Redis e env de preview ausente/`false`/`1`/`true`. Nada de corpo/e-mail em chave ou log.
+CAT encerrado → `## SPEC ATIVA` v1 no topo; `Aprovada por` aguarda Leo.
