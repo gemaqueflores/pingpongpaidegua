@@ -1,9 +1,24 @@
-import test from "node:test";
+import test, { after, mock } from "node:test";
 import assert from "node:assert/strict";
 import { hashSync } from "bcryptjs";
 import { JwtService } from "@nestjs/jwt";
 import { AuthService } from "../src/auth/auth.service";
 import { JwtStrategy } from "../src/auth/jwt.strategy";
+
+let capturedResetMail: Record<string, unknown> | undefined;
+const createTransport = () => ({
+  async sendMail(mail: Record<string, unknown>) {
+    capturedResetMail = mail;
+    return {};
+  },
+});
+const nodemailerMock = mock.module("nodemailer", {
+  namedExports: { createTransport },
+});
+
+after(() => {
+  nodemailerMock.restore();
+});
 
 type AdminRow = {
   id: number;
@@ -446,5 +461,30 @@ test("T-I-03: o token usado para revogar deixa de ser valido", async () => {
     ADMIN_USERNAME: "admin",
     ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),
     JWT_SECRET: "jwt-strategy-pp034-test-secret-32c",
+  });
+});
+
+test("PP-072 T-R-03: e-mail de reset preserva assunto e corpo sem rede", async () => {
+  await withEnv(async () => {
+    capturedResetMail = undefined;
+    const { authService } = createAuthService();
+
+    await (authService as any).sendResetEmail("token com espaços");
+
+    assert.ok(capturedResetMail, "sendMail deve receber o e-mail de reset");
+    assert.equal(capturedResetMail.subject, "Reset de senha - Admin appcbtmeventos");
+    assert.equal(capturedResetMail.to, "admin@example.test");
+    assert.match(String(capturedResetMail.text), /token%20com%20espa%C3%A7os/);
+    assert.match(String(capturedResetMail.html), /Clique aqui para redefinir sua senha/);
+  }, {
+    ADMIN_USERNAME: "admin",
+    ADMIN_PASSWORD_HASH: hashSync("senha-correta", 4),
+    ADMIN_RESET_EMAIL: "admin@example.test",
+    SMTP_HOST: "smtp.example.test",
+    SMTP_PORT: "587",
+    SMTP_USER: "test-user",
+    SMTP_PASS: "test-pass",
+    SMTP_FROM: "noreply@example.test",
+    FRONTEND_URL: "https://pingpong.example.test",
   });
 });

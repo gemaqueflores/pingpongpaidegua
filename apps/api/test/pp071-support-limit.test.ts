@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
-import test, { after } from "node:test";
+import test, { after, mock } from "node:test";
 import { HttpException } from "@nestjs/common";
 import {
   SupportReportLimiter,
@@ -8,24 +7,20 @@ import {
 } from "../src/common/support-report-limiter";
 import { UserService } from "../src/user/user.service";
 
-const require = createRequire(import.meta.url);
-const nodemailer = require("nodemailer") as {
-  createTransport: (config: Record<string, unknown>) => {
-    sendMail: (mail: Record<string, unknown>) => Promise<unknown>;
-  };
-};
-const originalCreateTransport = nodemailer.createTransport;
 let sendCount = 0;
 
-nodemailer.createTransport = (() => ({
+const createTransport = () => ({
   async sendMail() {
     sendCount += 1;
     return {};
   },
-})) as typeof nodemailer.createTransport;
+});
+const nodemailerMock = mock.module("nodemailer", {
+  namedExports: { createTransport },
+});
 
 after(() => {
-  nodemailer.createTransport = originalCreateTransport;
+  nodemailerMock.restore();
 });
 
 class FakeRedis implements SupportReportRedisClient {
