@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { after, mock } from "node:test";
+import { SupportReportLimiter } from "../src/common/support-report-limiter";
 import { UserService } from "../src/user/user.service";
 
 let captureMail: ((mail: Record<string, unknown>) => void) | undefined;
@@ -38,7 +39,11 @@ async function captureSupportEmail(title: string, description: string): Promise<
   };
 
   try {
-    const service = new UserService({} as never, {} as never);
+    const service = new UserService(
+      {} as never,
+      {} as never,
+      new SupportReportLimiter({ redis: null }),
+    );
     await service.reportProblem(title, description);
   } finally {
     captureMail = undefined;

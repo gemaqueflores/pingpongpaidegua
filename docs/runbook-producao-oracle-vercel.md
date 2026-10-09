@@ -181,12 +181,14 @@ Redeploy de producao apos salvar.
 
 Ja implementado:
 - aceita dominio principal configurado em `FRONTEND_URL`.
-- aceita previews da Vercel via regex seguro:
-  - `https://*.vercel.app` controlado internamente.
+- previews da Vercel (`https://*.vercel.app`) ficam desligados por padrao e exigem opt-in explicito.
 
 Variaveis recomendadas no container API:
 - `FRONTEND_URL=https://pingpongpaidegua.vercel.app`
-- `FRONTEND_ALLOW_VERCEL_PREVIEWS=true`
+- `FRONTEND_ALLOW_VERCEL_PREVIEWS=false`
+
+Antes de subir uma API com essa configuracao, confirme que o `.env` da VM contem exatamente
+`FRONTEND_URL=https://pingpongpaidegua.vercel.app`; sem isso, o frontend de producao perde acesso por CORS.
 
 ## 10) Runbook rapido de operacao
 

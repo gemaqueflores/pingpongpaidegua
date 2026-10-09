@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException, OnApplicationShutdown, Optional } from "@nestjs/common";
 import {
   buildEventScrapePolicy,
   computeEventCacheMaxAgeMs,
@@ -24,6 +24,7 @@ import {
 } from "@cbtm/shared";
 import { Prisma } from "@prisma/client";
 import { PrismaReadService, PrismaService } from "../common/prisma.service";
+import { SupportReportLimiter } from "../common/support-report-limiter";
 import { loadCbtmRulesConfig } from "../rules/cbtm-config-loader";
 import {
   collectWalkoverLoserAthleteIds,
@@ -954,9 +955,10 @@ function resolvePaginationWindow(pageRaw?: string, pageSizeRaw?: string): Pagina
 }
 
 @Injectable()
-export class UserService {
+export class UserService implements OnApplicationShutdown {
   private readonly prisma: PrismaReadService;
   private readonly prismaWrite: PrismaService;
+  private readonly supportReportLimiter: SupportReportLimiter;
   private globalEfficiencyCache = new Map<
     string,
     {
@@ -999,20 +1001,31 @@ export class UserService {
   constructor(
     @Inject(PrismaReadService) prisma: PrismaReadService,
     @Inject(PrismaService) prismaWrite: PrismaService,
+    @Optional() supportReportLimiter?: SupportReportLimiter,
   ) {
     this.prisma = prisma;
     this.prismaWrite = prismaWrite;
+    this.supportReportLimiter = supportReportLimiter ?? new SupportReportLimiter();
   }
 
-  async reportProblem(titleRaw: string, descriptionRaw: string): Promise<{ success: true }> {
+  async reportProblem(
+    titleRaw: string,
+    descriptionRaw: string,
+    ip: string = "unknown",
+  ): Promise<{ success: true }> {
     const title = String(titleRaw ?? "").trim();
     const description = String(descriptionRaw ?? "").trim();
     if (!title || !description) {
       throw new BadRequestException("Titulo e descricao sao obrigatorios.");
     }
 
+    await this.supportReportLimiter.assertAllowed(ip);
     await this.sendSupportEmail(title, description);
     return { success: true };
+  }
+
+  async onApplicationShutdown(): Promise<void> {
+    await this.supportReportLimiter.close();
   }
 
   private async sendSupportEmail(title: string, description: string): Promise<void> {

@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Get, Header, Inject, Param, ParseIntPipe, Post, Query, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Header, Inject, Param, ParseIntPipe, Post, Query, Req, UseInterceptors } from "@nestjs/common";
+import type { Request } from "express";
 import { UserService } from "./user.service";
 import { AthleteSummaryQueryDto } from "./dto/athlete-summary-query.dto";
 import { ReportProblemDto } from "./dto/report-problem.dto";
@@ -165,7 +166,7 @@ export class UserController {
   }
 
   @Post("support/report-problem")
-  async reportProblem(@Body() body: ReportProblemDto) {
-    return this.service.reportProblem(body.title, body.description);
+  async reportProblem(@Body() body: ReportProblemDto, @Req() request: Request) {
+    return this.service.reportProblem(body.title, body.description, request.ip);
   }
 }
