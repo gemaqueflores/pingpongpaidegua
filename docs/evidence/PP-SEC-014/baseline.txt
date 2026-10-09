@@ -1,0 +1,17 @@
+base=a9b84e95d0c833c45632cbdb6eff87f0abd3ab60
+node=v24.13.0
+vitest=3.2.7
+vite=7.3.6
+tinypool=1.1.1
+parser_files=11
+parser_tests=35
+parser_passed=35
+shared_files=10
+shared_tests=58
+shared_passed=58
+audit_info=0
+audit_low=1
+audit_moderate=2
+audit_high=5
+audit_critical=2
+audit_total=10
