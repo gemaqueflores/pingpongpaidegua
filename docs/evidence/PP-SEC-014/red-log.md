@@ -32,3 +32,21 @@ npm run test --workspace @cbtm/shared -> 10 arquivos, 58 testes, 58 passaram
 
 Após `npm ci`, `npm ls vitest vite tinypool` mostrou uma única instalação de `vitest@3.2.7`,
 `vite@7.3.6` e `tinypool@1.1.1`. `npx --no-install vitest --version` respondeu normalmente.
+
+## T-C-03 — alias exercido
+
+Após a migração para Vitest 5, o alias `@cbtm/shared` foi temporariamente apontado para
+`../shared/src/__pp_sec_014_missing__.ts`. O comando abaixo terminou com código 1 e informou que não encontrou
+`@cbtm/shared`, provando que o teste percorre o alias real:
+
+```text
+npm run test --workspace @cbtm/parser -- doubles-parser.test.ts
+```
+
+A mutação foi revertida imediatamente e não faz parte de nenhum commit.
+
+## T-C-04 — sentinela anti-vacuidade
+
+Foi criado temporariamente `packages/shared/test/zz-vitest5-sentinel.test.ts` com `expect(1).toBe(2)`.
+`npm run test --workspace @cbtm/shared` terminou com código 1, apontou explicitamente a sentinela e reportou
+`1 failed | 58 passed`. O arquivo foi removido imediatamente e não faz parte de nenhum commit.
