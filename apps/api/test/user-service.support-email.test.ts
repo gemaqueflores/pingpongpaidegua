@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test, { after } from "node:test";
+import { SupportReportLimiter } from "../src/common/support-report-limiter";
 import { UserService } from "../src/user/user.service";
 
 const require = createRequire(import.meta.url);
@@ -43,7 +44,11 @@ async function captureSupportEmail(title: string, description: string): Promise<
   };
 
   try {
-    const service = new UserService({} as never, {} as never);
+    const service = new UserService(
+      {} as never,
+      {} as never,
+      new SupportReportLimiter({ redis: null }),
+    );
     await service.reportProblem(title, description);
   } finally {
     captureMail = undefined;
