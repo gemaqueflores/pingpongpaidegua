@@ -1,11 +1,19 @@
 # PP-SEC-014 — Migração Vitest 3.2.x → Vitest 5 (críticas de dev no `npm audit` completo)
 
-## SPEC ATIVA — PP-SEC-014 — v2
+## SPEC ATIVA — PP-SEC-014 — v2.1 (correções do Parecer Rodada 1)
+<!-- v2.1 = v2 aprovada + 2 correções do Parecer Rodada 1 (ver ##### Correções obrigatórias da Rodada 1 no HISTÓRICO).
+     Como a versão mudou depois da aprovação, o implementador só age sobre v2.1 após Leo re-carimbar `Aprovada por` abaixo. -->
+**Correções obrigatórias (Parecer Rodada 1, 2026-10-09):** (1) regravar `docs/evidence/PP-SEC-014/audit-before.json` e `audit-after.json`
+em UTF-8 **sem BOM**, mesmo conteúdo, commit `docs:` separado, provando com `JSON.parse` do blob; (2) o relatório lista os majors
+transitivos (`@vitest/mocker`, `@vitest/spy`, `chai`, `es-module-lexer`, `magic-string`, `std-env`, `tinybench`, `why-is-node-running`).
+Nada mais muda. Escopo, fora de escopo e plano de testes abaixo permanecem os da v2.
+
+## (v2 base)
 <!-- Única seção de instrução. Codex implementa exclusivamente contra este bloco, e só após `Aprovada por` preenchido. -->
 ID: PP-SEC-014 | Projeto: PingPong PaiD'egua | Branch: `fix/pp-sec-014-vitest-5`
-Criada por: Claude | Data: 2026-10-09 | Versão da Spec: v2
-Aprovada por: Leo | Data: 2026-10-09 | Escopo: Migração Vitest 3.2.x → 5 em packages/parser e packages/shared, Vite 8.3.4 transitivo aceito, configs intactas; PP-SEC-015/016 apenas registradas no commit `docs:` final — aprovação em chat sobre a Versão da Spec v2
-Estado: `ATIVA` — implementador para se `Aprovada por` ficar em branco ou se a versão aprovada ≠ v2 (contrato §Campo `Aprovada por`).
+Criada por: Claude | Data: 2026-10-09 | Versão da Spec: v2.1
+Aprovada por: Leo | Data: 2026-10-09 | Escopo: Migração Vitest 3.2.x → 5 em packages/parser e packages/shared, Vite 8.3.4 transitivo aceito, configs intactas; PP-SEC-015/016 apenas registradas no commit `docs:` final; correções mecânicas da Rodada 1 — aprovação em chat sobre a Versão da Spec v2.1
+Estado: `ATIVA` — implementador para se `Aprovada por` ficar em branco ou se a versão aprovada ≠ v2.1 (contrato §Campo `Aprovada por`).
 CAT: ENCERRADO (Rodadas 1–3; ✅ de Leo em 2026-10-09). v2 incorpora a Rodada 2 do Codex e as decisões de Leo (Vite 8 aceito; PP-SEC-015/016 fora).
 Domínio instável: TDD Red-Green-Refactor verificável no Git — atenção redobrada (E01).
 
@@ -267,3 +275,62 @@ e vira item de backlog separado, se você concordar.)
 
 Próximo passo: com seu ✅ no CAT e as duas decisões acima, Claude grava a `## SPEC ATIVA` v2 (Self-review incluso) para
 sua aprovação final (`Aprovada por`). Nenhuma implementação antes disso.
+
+### Parecer — Rodada 1 (2026-10-09) — ❌ bloqueado (1 item trivial) — PR #65, topo `1ec8d9c`
+
+#### Pré-parecer
+- [x] Glob/diff: 13 arquivos (`git diff --stat origin/main...HEAD`, worktree `.codex-worktrees/pp-sec-014`, HEAD = `origin/fix/pp-sec-014-vitest-5`)
+- [x] Lido contra `origin/main`: `packages/{parser,shared}/package.json`, `CLAUDE.md`, backlog, `package-lock.json` (comparação programática pacote a pacote dos dois locks), `baseline.txt`, `npm-ls-*.txt`, `audit-{before,after}.json` (parseados), `red-log.md` do commit RED; Spec do PR comparada com a cópia aprovada (idêntica). `validation.md` (relatório do Codex) **não lido** antes do fechamento deste parecer
+- [x] Classes ativas relevantes: E01; domínio TDD Instável. Desvios que Leo repassou (2 críticas em vez de 4; aviso `configLoader`; falso positivo do scanner) tratados como sinal, cada um reverificado abaixo
+- [x] Execução própria na worktree do PR (Node v24.13.0; árvore limpa antes e depois)
+- [ ] `confere-citacoes.py` — ver linha final
+
+#### Score
+✅ 9 | ⚠️ 4 | ❌ 1 | Cobertura diff: 12/13 arquivos auditados (falta `validation.md`, relatório do Codex — lido só depois deste fechamento; só pode apertar)
+Domínio instável "TDD Red-Green" — itens extras verificados: commit RED `58fb74c` (só evidência: audit com 2 críticas) precede o GREEN `25bc958` (bump + lock); RED é falha real (`critical=2`), não erro de instalação nem "comando não encontrado".
+
+#### Itens ❌ (bloqueantes)
+- **[Q5] BOM UTF-8 nos dois JSON de evidência.** `docs/evidence/PP-SEC-014/audit-before.json` e `audit-after.json` começam com `EF BB BF` (verificação binária do blob em `1ec8d9c`; `git show` + leitura de bytes). Consequência observada: `JSON.parse` do conteúdo falha com `Unexpected token '﻿'` (rodei; só funcionou após remover o BOM). São os artefatos que a Spec manda anexar para T-C-01 e que servem de prova do audit; evidência que um parser estrito não lê. Provável origem: redirecionamento do PowerShell 5.1 (`>`/`Out-File`) — `INFERÊNCIA`. Os demais arquivos de texto alterados (CLAUDE.md, backlog, Spec, `red-log.md`, `validation.md`, `baseline.txt`, os dois `package.json`) estão sem BOM, LF e UTF-8 válido. — base: arquivos novos (sem equivalente em `origin/main`) vs PR: `docs/evidence/PP-SEC-014/audit-{before,after}.json:1` — rótulo: `EXECUTADA` (checagem binária + `JSON.parse`)
+  - Leitura literal do critério "BOM em arquivo que não deveria ter = Q5 ⛔". O escopo textual da Q5 é PT-BR em HTML/JS e estes JSON não têm PT-BR; mantive ❌ porque o defeito é funcional (artefato ilegível por parser estrito) e a correção é mecânica. Leo pode aceitar como waiver explícito se preferir não abrir nova rodada.
+
+#### Itens ⚠️ (ressalvas)
+- **Majors transitivos a declarar.** O lock troca de major, além de `vitest` 3.2.7→5.0.3 e `vite` 7.3.6→8.3.4 (aceito por Leo): `@vitest/mocker` e `@vitest/spy` →5.0.3, `chai` 5.3.3→6.3.0, `es-module-lexer` 1.7.0→2.3.2, `magic-string` 0.30.21→1.4.3, `std-env` 3.10.0→4.3.0, `tinybench` 2.9.0→6.2.1, `why-is-node-running` 2.3.0→3.2.1. Entram 33 pacotes e saem 46: o bundler do Vite passa de `rollup` para `rolldown` 1.2.13 e entram binários nativos (`rolldown-binding-*`, `lightningcss*`); saem `tinypool`, `vite-node`, `@rollup/*` e o opcional `@napi-rs/lzma-linux-x64-gnu` (era dependência opcional do `rollup`). Todos são cadeia de ferramenta de teste (devDependencies); nenhum atinge `apps/**`. A Spec exige que o relatório liste os majors; se a lista estiver ausente ou incompleta no relatório, vira ressalva ativa — rótulo: `ESTÁTICA` (lock) + `NÃO_VERIFICADA` (conteúdo do relatório)
+- **T-C-03 (alias exercido) e T-C-04 (sentinela falha) não reexecutados por mim.** São mutações temporárias que a Spec manda nunca commitar; confirmei só que nenhuma sentinela foi commitada. A prova indireta de que a suite não é vacuosa é a contagem executada (35 e 58, iguais ao baseline) — rótulo: `EXECUTADA` (contagem) / `NÃO_VERIFICADA` (T-C-03/T-C-04 em si)
+- **Altos remanescentes de produção.** `npm audit` completo no PR (rodado por mim): 7 vulnerabilidades — 0 críticas, 5 altas (`prisma`, `@prisma/config`, `deepmerge-ts`, `effect`, `postcss`), 1 moderada (`next`), 1 baixa (`esbuild`). São exatamente as da PP-SEC-013 (produção, exigem Prisma 7/Next 16) e a baixa de dev; nenhuma nova. Pela política Alto seria ❌, mas é limitação já aceita por Leo e rastreada, fora do escopo desta Spec — mantido ⚠️ registrado, não achado novo — rótulo: `EXECUTADA`
+- **Worker com banco/Redis não reexecutado.** A entrega não toca `apps/**` (diff vazio), então não há razão estática para regressão; a execução com banco continua `NÃO_VERIFICADA` por mim (esta máquina não tem PostgreSQL/Redis) — rótulo: `ESTÁTICA` (diff vazio) / `NÃO_VERIFICADA`
+
+#### Itens ✅ (verificados)
+1. `vitest` `^5.0.3` nos dois `package.json`; `npm ls vitest vite tinypool`: `vitest@5.0.3` único, `vite@8.3.4`, `tinypool` ausente; `npx vitest --version` = 5.0.3. — `EXECUTADA`
+2. **T-C-01 / critério 2:** meu `npm audit --json` sobre o HEAD: `critical=0` (total 7); `vitest`, `tinypool` e `@vitest/mocker` fora da lista; igual a `audit-after.json`. — `EXECUTADA`
+3. **Desvio 1 (2 críticas, não 4):** `audit-before.json` e `baseline.txt` mostram `critical=2` (`vitest`, `tinypool`) sobre `origin/main` (`a9b84e9`); `red-log.md` explica advisories temporais. Consistente entre os três artefatos e com o Parecer PP-072; a medição "4" do CAT não é reprodutível por mim (`INFERÊNCIA`: advisory variável no tempo). Sem impacto no critério. — `ESTÁTICA` + `EXECUTADA` (audit-after)
+4. **T-R-01/T-R-02:** parser 11 arquivos / **35/35**; shared 10 arquivos / **58/58**, sob Vitest 5.0.3; iguais ao baseline; nenhum skip/only/todo novo (diff sem arquivos de teste). — `EXECUTADA`
+5. **Configs intactas (critério 4):** `git diff --quiet origin/main HEAD` nas duas `vitest.config.ts` = sem diff; nenhum arquivo em `apps/**`, `packages/*/src|test`, `.github`, `.githooks`, `package.json` raiz. — `ESTÁTICA`
+6. **Desvio 2 (aviso `configLoader: native`):** reproduzido na minha execução (ESM em config carregada como CommonJS, `vitest.config.ts:1:1`); não é falha, configs seguem carregando e a suite passa. Observação para o relatório, sem ação, como a Spec determina. — `EXECUTADA`
+7. **T-R-03:** `build` de `@cbtm/shared` e `@cbtm/parser` exit 0; `test:regression:critical` exit 0 (vitest 7/7 + 52/52 + 25/25) **depois de** `npm run prisma:generate` — sem gerar o cliente Prisma ele falha (`@prisma/client did not initialize yet`), ambiental e já conhecido da PP-072, não atribuível ao PR. — `EXECUTADA`
+8. **T-R-04 (parcial):** `npm --prefix apps/api test` **247/247**, exit 0 (a PP-072 registrou 239; o crescimento vem de `main`, o PR não toca `apps/**`). — `EXECUTADA`
+9. **Documentação e escopo de backlog:** `CLAUDE.md` PEND-CBTM-006 e linha PP-SEC-014 do backlog batem com o audit (0 críticas, `tinypool` fora, 35/35 e 58/58); PP-SEC-015 e PP-SEC-016 inseridas como na Spec, e as citações conferem (`node-version: 20` em `post-commit-validation.yml:28` e `production-drift-check.yml:75`; `npm ci --no-audit` em ambos). Ordem dos commits RED→GREEN→docs correta, e-mail do autor `gemaqueflores@gmail.com`. **Desvio 3 (scanner):** `npm run verify:security` rodado por mim = `security scan ok (0 candidate files)`, exit 0; o diff do PR não contém `dangerouslySetInnerHTML`; a menção em `CLAUDE.md` já existe em `origin/main` (PEND-CBTM-002) — não reproduzi o alerta; a classificação "falso positivo documental" não foi contraditada. — `ESTÁTICA` + `EXECUTADA`
+
+#### Cobertura de testes (T-* da Spec)
+- T-C-02 [corretude] — RED `58fb74c` → GREEN `25bc958`: RED real (`critical=2`, ordem verificada no `git log`): coberto ✅ (`ESTÁTICA` ordem; `EXECUTADA` GREEN pelo meu audit)
+- T-C-01 [corretude] — `EXECUTADA`: coberto ✅ (ressalva: BOM nos JSON, ❌ acima)
+- T-R-01 [regressão] / T-R-02 [regressão] — `EXECUTADA`: coberto ✅
+- T-R-03 [regressão] — `EXECUTADA`: coberto ✅
+- T-R-04 [regressão] — API `EXECUTADA`; worker com banco `NÃO_VERIFICADA` (⚠️)
+- T-C-03 / T-C-04 [corretude] — `NÃO_VERIFICADA` por mim (⚠️); depende do relatório
+- Casos ausentes que recomendo: nenhum
+
+#### Security review
+- Varredura manual A01–A10 (skill `/security-review` não rodada nesta sessão); foco A06/A08. Entrega só de devDependencies de teste: sem código de produção alterado, sem auth/input/segredo tocados (A01–A05, A07, A09–A10 inaplicáveis). A06: crítica de dev removida (2→0); nenhum advisory novo. A08: 33 pacotes novos com binários nativos (`rolldown`, `lightningcss`) entram só na árvore de teste, resolvidos de `registry.npmjs.org` com integridade no lock (`ESTÁTICA`). Sem achados Crítico/Alto novos; altas de produção remanescentes = PP-SEC-013, já rastreadas.
+
+`ESTADO`: ❌ por um único item mecânico (BOM nos dois JSON); nenhum código nem dependência precisa mudar. Correção: regravar `audit-before.json` e `audit-after.json` em UTF-8 sem BOM **com o mesmo conteúdo** (`JSON.parse` deve passar; os números `critical=2` e `critical=0` não mudam) e ajustar o relatório se citar o arquivo. Os ⚠️ viram backlog ou ficam registrados; merge e deploy são de Leo.
+
+##### Adendo (leitura de `validation.md` depois do fechamento acima — regra de catraca: só aperta)
+- Parecer mantido: ❌ (BOM). Nada no relatório afrouxa nenhum item.
+- **Aperta/confirma:** o relatório resume o lock como "93 entradas" (bate com minha contagem: 33 adicionadas + 46 removidas + 14 alteradas) e fala só em "troca do ecossistema", **sem listar os majors transitivos** exigidos pela Spec → o ⚠️ dos majors fica ativo e vira a correção 2.
+- **Confirma:** T-C-03/T-C-04 são só declaração no relatório (mutação do alias → falha por módulo ausente; sentinela → 1 teste falhando) — `NÃO_VERIFICADA` por mim; worker 101/101 é declaração do Codex (`EXECUTADA` por ele, sem log anexado neste PR, ao contrário da PP-072) — não reexecutado por mim. Continua ⚠️, sem efeito no veredito.
+- **Divergência a registrar:** o relatório diz que `verify:security` "sinaliza" `CLAUDE.md:33`; na minha execução saiu `ok (0 candidate files)`. Não reproduzi o alerta; o relatório classifica como falso positivo documental e eu não tenho evidência contrária.
+- Os JSON de evidência com BOM são citados no relatório como "referência reproduzível" — a reprodução por parser estrito falha (❌ acima).
+
+##### Correções obrigatórias da Rodada 1 (para o Codex — incorporadas à SPEC ATIVA, v2.1)
+1. Regravar `docs/evidence/PP-SEC-014/audit-before.json` e `audit-after.json` sem BOM, mesmo conteúdo; commit `docs:` separado; provar com `JSON.parse` do blob. Não alterar mais nada.
+2. Relatório (`validation.md`): listar os majors transitivos da lista ⚠️ acima, se ainda não constarem.

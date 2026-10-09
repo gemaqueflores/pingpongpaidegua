@@ -48,6 +48,12 @@ Vitest 5/Vite 8, incluindo a remoção de `tinypool`, `vite-node` e pacotes
 Rollup substituídos pela cadeia resolvida do Vite 8. Não foi declarado `vite`
 nem criado `overrides` em nenhum `package.json`.
 
+Além de `vitest`, `vite` e dos demais pacotes `@vitest/*`, os majors
+transitivos são: `@vitest/mocker` 3.2.7 → 5.0.3, `@vitest/spy` 3.2.7 → 5.0.3,
+`chai` 5.3.3 → 6.3.0, `es-module-lexer` 1.7.0 → 2.3.2,
+`magic-string` 0.30.21 → 1.4.3, `std-env` 3.10.0 → 4.3.0,
+`tinybench` 2.9.0 → 6.2.1 e `why-is-node-running` 2.3.0 → 3.2.1.
+
 Ambiente executado: Node `v24.13.0`, compatível com o engine do Vitest 5
 (`^22.12.0 || ^24.0.0 || >=26.0.0`). O Node 20 dos workflows não executa estas
 suites hoje e permanece registrado em PP-SEC-015 antes de futura inclusão.
