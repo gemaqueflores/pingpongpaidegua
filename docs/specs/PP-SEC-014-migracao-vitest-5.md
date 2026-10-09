@@ -334,3 +334,52 @@ Domínio instável "TDD Red-Green" — itens extras verificados: commit RED `58f
 ##### Correções obrigatórias da Rodada 1 (para o Codex — incorporadas à SPEC ATIVA, v2.1)
 1. Regravar `docs/evidence/PP-SEC-014/audit-before.json` e `audit-after.json` sem BOM, mesmo conteúdo; commit `docs:` separado; provar com `JSON.parse` do blob. Não alterar mais nada.
 2. Relatório (`validation.md`): listar os majors transitivos da lista ⚠️ acima, se ainda não constarem.
+
+### Parecer — Rodada 2 (2026-10-09) — ⚠️ aprovado com ressalvas — PR #65, topo `933cfe5`
+
+#### Pré-parecer
+- [x] Re-revisão completa, não só dos itens da Rodada 1: PR inteiro contra `origin/main` (13 arquivos, `git diff --stat origin/main...HEAD`) e delta da rodada `1ec8d9c..933cfe5` (4 arquivos: dois JSON de evidência, `validation.md`, Spec)
+- [x] Leitura física desta rodada: blobs dos dois JSON (bytes + `JSON.parse` + comparação de conteúdo com `1ec8d9c`), diff de `validation.md` e da Spec; lock, `package.json`, configs e `CLAUDE.md`/backlog verificados como **inalterados desde `1ec8d9c`** (`git diff --stat 1ec8d9c..HEAD` sem esses caminhos) e novamente comparados com `origin/main`
+- [x] Classes ativas: E01; domínio TDD Instável (RED→GREEN de `58fb74c`/`25bc958` inalterado)
+- [x] Execução própria nesta rodada (Node v24.13.0, árvore limpa): `npm ls`, `npm audit` completo, suites, builds, regressão crítica, API, `verify:security`
+- [x] O resumo repassado por Leo ("JSONs sem BOM…", "hook e regressão verdes") foi tratado só como dado a verificar; o relatório do Codex só foi lido depois de fixados os resultados abaixo
+- [x] `confere-citacoes.py` — ver linha final
+
+#### Score
+✅ 11 | ⚠️ 4 | ❌ 0 | Cobertura diff: 13/13 arquivos auditados
+Domínio instável "TDD Red-Green" — itens extras verificados: ordem RED→GREEN e natureza do RED (`critical=2`) sem alteração; nenhum commit novo toca código ou dependência.
+
+#### Itens ❌ (bloqueantes)
+- Nenhum.
+
+#### Itens ⚠️ (ressalvas)
+- **T-C-03 (alias exercido) e T-C-04 (sentinela falha):** continuam só como declaração no `validation.md` (mutações temporárias não commitadas, como manda a Spec); não reexecutados por mim. Contagem executada (35/58, suites reais) é a prova indireta de que não são vacuosas — rótulo: `EXECUTADA` (contagem) / `NÃO_VERIFICADA` (T-C-03/T-C-04 em si)
+- **Worker com banco/Redis (101/101):** declaração do Codex, sem log neste PR; o PR não toca `apps/**`, então não há caminho de regressão por diff; esta máquina continua sem PostgreSQL/Redis — rótulo: `ESTÁTICA` (diff vazio) / `NÃO_VERIFICADA`
+- **Altas de produção da PP-SEC-013:** meu `npm audit` completo = 7 (0 críticas, 5 altas, 1 moderada, 1 baixa; `prisma`, `@prisma/config`, `deepmerge-ts`, `effect`, `postcss`, `next`, `esbuild`) — exatamente as já registradas, nenhuma nova; exigem Prisma 7/Next 16, fora de escopo e aceitas por Leo — rótulo: `EXECUTADA`
+- **Proveniência do recarimbo `Aprovada por` da v2.1:** o campo foi escrito pela sessão do Codex e remete à aprovação de Leo; não vi a mensagem de Leo nesta sessão. O campo está fisicamente preenchido e a versão bate (`v2.1`), e a mudança é de evidência (sem código), então não bloqueia a homologação; Leo confirma que a aprovação é dele ao liberar o merge — rótulo: `NÃO_VERIFICADA` (origem da aprovação)
+
+#### Itens ✅ (verificados)
+1. **❌ da Rodada 1 fechado:** `audit-before.json` e `audit-after.json` agora sem BOM, LF, UTF-8, `JSON.parse` verde nos blobs de `933cfe5`; conteúdo **idêntico** ao de `1ec8d9c` após remover o BOM (comparação binária, EOL normalizado); totais lidos dos arquivos: `critical=2/total=10` (antes) e `critical=0/total=7` (depois). — `EXECUTADA`
+2. **Majors transitivos listados** em `validation.md` (diff da rodada): os 8 pacotes e versões batem exatamente com minha comparação programática dos locks (`@vitest/mocker`/`spy` 3.2.7→5.0.3, `chai` →6.3.0, `es-module-lexer` →2.3.2, `magic-string` →1.4.3, `std-env` →4.3.0, `tinybench` →6.2.1, `why-is-node-running` →3.2.1). — `ESTÁTICA` (lock) conferida contra o texto
+3. **Commit separado `docs:`** (`933cfe5`), tocando só 2 JSON, `validation.md` e a Spec; nenhuma alteração em lock, `package.json`, configs, `apps/**`, workflows. — `ESTÁTICA`
+4. **T-C-01:** meu `npm audit --json`: `critical=0`, total 7; `vitest`/`tinypool`/`@vitest/mocker` fora da lista; igual a `audit-after.json`. — `EXECUTADA`
+5. **T-R-01/T-R-02:** `npm ls`: `vitest@5.0.3` único, `vite@8.3.4`, `tinypool` ausente; parser 11 arquivos / **35/35**, shared 10 arquivos / **58/58**; sem skip novo. — `EXECUTADA`
+6. **T-R-03:** builds de `@cbtm/shared` e `@cbtm/parser` exit 0; `test:regression:critical` exit 0 (7/7 + 52/52 + 25/25). — `EXECUTADA`
+7. **T-R-04 (API):** `npm --prefix apps/api test` **247/247**, exit 0. — `EXECUTADA`
+8. **Configs e escopo:** `vitest.config.ts` dos dois pacotes sem diff contra `origin/main`; nenhum arquivo fora do escopo da Spec. — `ESTÁTICA`
+9. **T-C-02:** RED `58fb74c` precede GREEN `25bc958`; RED é audit real com `critical=2`; commit `docs:` posterior não altera esse histórico. — `ESTÁTICA`
+10. **Verificações determinísticas (blob em `933cfe5`):** os 12 arquivos de texto alterados (exceto lock) — sem BOM, LF, UTF-8 válido, sem mojibake. — `EXECUTADA`
+11. **Desvios declarados na Rodada 1** (2 críticas vs 4; aviso `configLoader`; `verify:security`) seguem verificados: `verify:security` = `ok (0 candidate files)` também nesta rodada; o aviso `configLoader` continua observação sem ação. — `EXECUTADA`
+
+#### Cobertura de testes (T-* da Spec)
+- T-C-02 [corretude] — `ESTÁTICA` (ordem RED→GREEN) + `EXECUTADA` (GREEN): coberto ✅
+- T-C-01 [corretude] — `EXECUTADA`: coberto ✅
+- T-R-01, T-R-02, T-R-03 [regressão] — `EXECUTADA`: coberto ✅
+- T-R-04 [regressão] — API `EXECUTADA` ✅; worker com banco `NÃO_VERIFICADA` ⚠️
+- T-C-03, T-C-04 [corretude] — `NÃO_VERIFICADA` por mim ⚠️ (declarados no relatório)
+- Casos ausentes que recomendo: nenhum
+
+#### Security review
+- Varredura manual A01–A10 (skill `/security-review` não rodada nesta sessão), foco A06/A08. Nenhum código de produção alterado; o commit desta rodada só toca evidência e documentação. Crítico de dev removido (2→0); nenhum advisory novo; altas de produção remanescentes = PP-SEC-013, rastreadas. Sem achados Crítico/Alto novos.
+
+`ESTADO`: nenhum item exige novo código. Merge liberável por Leo, que também faz o deploy. Pendências viram backlog (T-C-03/T-C-04 e worker são declarações do Codex).
