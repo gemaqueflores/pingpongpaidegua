@@ -1,0 +1,10 @@
+appcbtmeventos-monorepo@1.0.0
+├─┬ @cbtm/parser@1.0.0 -> ./packages/parser
+│ └─┬ vitest@5.0.3
+│   ├─┬ @vitest/mocker@5.0.3
+│   │ └── vite@8.3.4 deduped
+│   └── vite@8.3.4
+└─┬ @cbtm/shared@1.0.0 -> ./packages/shared
+  └── vitest@5.0.3 deduped
+
+`tinypool` is absent from the resolved dependency tree.

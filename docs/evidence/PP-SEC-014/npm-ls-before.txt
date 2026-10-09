@@ -1,0 +1,11 @@
+appcbtmeventos-monorepo@1.0.0
+├─┬ @cbtm/parser@1.0.0 -> ./packages/parser
+│ └─┬ vitest@3.2.7
+│   ├─┬ @vitest/mocker@3.2.7
+│   │ └── vite@7.3.6 deduped
+│   ├── tinypool@1.1.1
+│   ├─┬ vite-node@3.2.4
+│   │ └── vite@7.3.6 deduped
+│   └── vite@7.3.6
+└─┬ @cbtm/shared@1.0.0 -> ./packages/shared
+  └── vitest@3.2.7 deduped

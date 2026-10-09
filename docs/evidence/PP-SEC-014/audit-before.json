@@ -1,0 +1,370 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "@prisma/config": {
+      "name": "@prisma/config",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "deepmerge-ts",
+        "effect"
+      ],
+      "effects": [
+        "prisma"
+      ],
+      "range": "6.13.0-dev.1 - 8.1.0-dev.4",
+      "nodes": [
+        "node_modules/@prisma/config"
+      ],
+      "fixAvailable": true
+    },
+    "@vitest/mocker": {
+      "name": "@vitest/mocker",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1193684,
+          "name": "@vitest/mocker",
+          "dependency": "@vitest/mocker",
+          "title": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+          "url": "https://github.com/advisories/GHSA-82fw-gwwq-j7x9",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-22"
+          ],
+          "cvss": {
+            "score": 5.9,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N"
+          },
+          "range": ">=2.1.0 <4.1.11"
+        }
+      ],
+      "effects": [
+        "vitest"
+      ],
+      "range": "2.1.0 - 4.1.10",
+      "nodes": [
+        "node_modules/@vitest/mocker"
+      ],
+      "fixAvailable": {
+        "name": "vitest",
+        "version": "5.0.3",
+        "isSemVerMajor": true
+      }
+    },
+    "deepmerge-ts": {
+      "name": "deepmerge-ts",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1145093,
+          "name": "deepmerge-ts",
+          "dependency": "deepmerge-ts",
+          "title": "DeepmergeTS has stack exhaustion when merging recursive object graphs",
+          "url": "https://github.com/advisories/GHSA-ggr8-5vv4-36mx",
+          "severity": "high",
+          "cwe": [
+            "CWE-674"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<8.0.0"
+        }
+      ],
+      "effects": [
+        "@prisma/config"
+      ],
+      "range": "<8.0.0",
+      "nodes": [
+        "node_modules/deepmerge-ts"
+      ],
+      "fixAvailable": true
+    },
+    "effect": {
+      "name": "effect",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1115356,
+          "name": "effect",
+          "dependency": "effect",
+          "title": "Effect `AsyncLocalStorage` context lost/contaminated inside Effect fibers under concurrent load with RPC",
+          "url": "https://github.com/advisories/GHSA-38f7-945m-qr2g",
+          "severity": "high",
+          "cwe": [
+            "CWE-362"
+          ],
+          "cvss": {
+            "score": 7.4,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N"
+          },
+          "range": "<3.20.0"
+        }
+      ],
+      "effects": [
+        "@prisma/config"
+      ],
+      "range": "<3.20.0",
+      "nodes": [
+        "node_modules/effect"
+      ],
+      "fixAvailable": true
+    },
+    "esbuild": {
+      "name": "esbuild",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1120680,
+          "name": "esbuild",
+          "dependency": "esbuild",
+          "title": "esbuild allows arbitrary file read when running the development server on Windows",
+          "url": "https://github.com/advisories/GHSA-g7r4-m6w7-qqqr",
+          "severity": "low",
+          "cwe": [
+            "CWE-22"
+          ],
+          "cvss": {
+            "score": 2.5,
+            "vectorString": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:N"
+          },
+          "range": ">=0.27.3 <0.28.1"
+        }
+      ],
+      "effects": [],
+      "range": "0.27.3 - 0.28.0",
+      "nodes": [
+        "node_modules/esbuild"
+      ],
+      "fixAvailable": true
+    },
+    "next": {
+      "name": "next",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "postcss"
+      ],
+      "effects": [],
+      "range": "9.3.4-canary.0 - 16.3.0-preview.10",
+      "nodes": [
+        "node_modules/next"
+      ],
+      "fixAvailable": {
+        "name": "next",
+        "version": "16.4.0",
+        "isSemVerMajor": true
+      }
+    },
+    "postcss": {
+      "name": "postcss",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1117015,
+          "name": "postcss",
+          "dependency": "postcss",
+          "title": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+          "url": "https://github.com/advisories/GHSA-qx2v-qp2m-jg93",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-79"
+          ],
+          "cvss": {
+            "score": 6.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N"
+          },
+          "range": "<8.5.10"
+        },
+        {
+          "source": 1124252,
+          "name": "postcss",
+          "dependency": "postcss",
+          "title": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+          "url": "https://github.com/advisories/GHSA-6g55-p6wh-862q",
+          "severity": "high",
+          "cwe": [
+            "CWE-22",
+            "CWE-200"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+          },
+          "range": "<=8.5.11"
+        },
+        {
+          "source": 1130709,
+          "name": "postcss",
+          "dependency": "postcss",
+          "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+          "url": "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-22",
+            "CWE-200"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<=8.5.22"
+        },
+        {
+          "source": 1139510,
+          "name": "postcss",
+          "dependency": "postcss",
+          "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+          "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849",
+          "severity": "high",
+          "cwe": [
+            "CWE-22"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+          },
+          "range": "<=8.5.17"
+        }
+      ],
+      "effects": [
+        "next"
+      ],
+      "range": "<=8.5.22",
+      "nodes": [
+        "node_modules/postcss"
+      ],
+      "fixAvailable": {
+        "name": "next",
+        "version": "16.4.0",
+        "isSemVerMajor": true
+      }
+    },
+    "prisma": {
+      "name": "prisma",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@prisma/config"
+      ],
+      "effects": [],
+      "range": "6.13.0-dev.1 - 8.1.0-dev.4",
+      "nodes": [
+        "node_modules/prisma"
+      ],
+      "fixAvailable": true
+    },
+    "tinypool": {
+      "name": "tinypool",
+      "severity": "critical",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1241260,
+          "name": "tinypool",
+          "dependency": "tinypool",
+          "title": "Tinypool: Prototype Pollution gadget in worker options leads to Remote Code Execution",
+          "url": "https://github.com/advisories/GHSA-5gmw-xhrv-c9v3",
+          "severity": "critical",
+          "cwe": [
+            "CWE-1321"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<=2.1.0"
+        },
+        {
+          "source": 1241261,
+          "name": "tinypool",
+          "dependency": "tinypool",
+          "title": "Tinypool: Prototype Pollution Gadget to RCE in run() options",
+          "url": "https://github.com/advisories/GHSA-85c8-ppgw-ccpr",
+          "severity": "critical",
+          "cwe": [
+            "CWE-94",
+            "CWE-1321"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<2.1.2"
+        }
+      ],
+      "effects": [
+        "vitest"
+      ],
+      "range": "<=2.1.1",
+      "nodes": [
+        "node_modules/tinypool"
+      ],
+      "fixAvailable": {
+        "name": "vitest",
+        "version": "5.0.3",
+        "isSemVerMajor": true
+      }
+    },
+    "vitest": {
+      "name": "vitest",
+      "severity": "critical",
+      "isDirect": true,
+      "via": [
+        "@vitest/mocker",
+        {
+          "source": 1193683,
+          "name": "vitest",
+          "dependency": "vitest",
+          "title": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+          "url": "https://github.com/advisories/GHSA-82fw-gwwq-j7x9",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-22"
+          ],
+          "cvss": {
+            "score": 5.9,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N"
+          },
+          "range": ">=2.1.0 <4.1.11"
+        },
+        "tinypool"
+      ],
+      "effects": [],
+      "range": "0.0.95 - 4.1.10",
+      "nodes": [
+        "node_modules/vitest"
+      ],
+      "fixAvailable": {
+        "name": "vitest",
+        "version": "5.0.3",
+        "isSemVerMajor": true
+      }
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 1,
+      "moderate": 2,
+      "high": 5,
+      "critical": 2,
+      "total": 10
+    },
+    "dependencies": {
+      "prod": 248,
+      "dev": 140,
+      "optional": 100,
+      "peer": 15,
+      "peerOptional": 0,
+      "total": 446
+    }
+  }
+}
