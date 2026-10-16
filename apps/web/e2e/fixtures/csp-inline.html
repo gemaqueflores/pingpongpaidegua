@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head><meta charset="utf-8"><title>PP-059 CSP fixture</title></head>
+  <body>
+    <p id="allowed">aguardando</p>
+    <p id="blocked">bloqueado</p>
+    <p id="wrong-nonce">bloqueado</p>
+    <script nonce="{{NONCE}}">document.querySelector('#allowed').textContent = 'nonce executado';</script>
+    <script>document.querySelector('#blocked').textContent = 'executado indevidamente';</script>
+    <script nonce="incorrect-nonce">document.querySelector('#wrong-nonce').textContent = 'executado indevidamente';</script>
+  </body>
+</html>
