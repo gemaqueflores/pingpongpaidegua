@@ -8,7 +8,8 @@ test("PP-059 T-E-01 home renderiza e hidrata com nonce por request", async ({ pa
     }
   });
   // Keep the smoke independent of API availability and production data.
-  await page.route("https://api-pingpongpaidegua.duckdns.org/**", (route) =>
+  const apiOrigin = new URL(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").origin;
+  await page.route(`${apiOrigin}/**`, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   const response = await page.goto("/");
   expect(response?.status()).toBe(200);

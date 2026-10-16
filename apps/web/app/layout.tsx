@@ -9,6 +9,9 @@ import { siteContent } from "../lib/siteContent";
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "700"], display: "swap" });
 const montserrat = Montserrat({ subsets: ["latin"], weight: ["700", "800"], display: "swap" });
 
+// CSP nonces are request-specific; prerendered HTML cannot carry the current nonce.
+export const dynamic = "force-dynamic";
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
