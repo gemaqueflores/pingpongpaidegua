@@ -19,3 +19,13 @@ test("PP-059 T-U-01 nonce novo por request e headers internos consistentes", asy
   });
   assert.notEqual(nonces[0], nonces[1]);
 });
+
+test("PP-059 T-U-02 script-src permite apenas self e nonce", async () => {
+  const { middleware } = await import("../middleware");
+  const response = middleware(new NextRequest("https://example.test/"));
+  const policy = response.headers.get("Content-Security-Policy") ?? "";
+  const directive = policy.split("; ").find((value) => value.startsWith("script-src "));
+  assert.match(directive ?? "", /^script-src 'self' 'nonce-[A-Za-z0-9+/=]+'$/);
+  assert.ok(!directive?.includes("'unsafe-inline'"));
+  assert.ok(policy.includes("style-src 'self' 'unsafe-inline'"));
+});
