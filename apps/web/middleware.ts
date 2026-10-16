@@ -26,3 +26,7 @@ export function middleware(request: NextRequest) {
   response.headers.set("Content-Security-Policy", policy);
   return response;
 }
+
+export const config = {
+  matcher: ["/((?!api/pix-qrcode(?:/|$)|_next/static|_next/image|favicon.ico).*)"],
+};
