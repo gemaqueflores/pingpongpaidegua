@@ -8,7 +8,7 @@ export function middleware(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
   const policy = [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline' 'nonce-${nonce}'`,
+    `script-src 'self' 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
