@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { NextRequest } from "next/server";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 
 test("PP-059 T-U-01 nonce novo por request e headers internos consistentes", async () => {
   const { middleware } = await import("../middleware");
@@ -18,6 +19,19 @@ test("PP-059 T-U-01 nonce novo por request e headers internos consistentes", asy
     return nonce;
   });
   assert.notEqual(nonces[0], nonces[1]);
+});
+
+test("PP-059 T-U-03 matcher exclui pix-qrcode e assets, inclui paginas", async () => {
+  const { config } = await import("../middleware");
+  const matches = (url: string) => unstable_doesMiddlewareMatch({ config, nextConfig: {}, url });
+  assert.equal(matches("/api/pix-qrcode"), false);
+  assert.equal(matches("/api/pix-qrcode?text=teste"), false);
+  assert.equal(matches("/_next/static/chunk.js"), false);
+  assert.equal(matches("/_next/image?url=test"), false);
+  assert.equal(matches("/favicon.ico"), false);
+  assert.equal(matches("/"), true);
+  assert.equal(matches("/events/5826"), true);
+  assert.equal(matches("/admin"), true);
 });
 
 test("PP-059 T-U-02 script-src permite apenas self e nonce", async () => {
