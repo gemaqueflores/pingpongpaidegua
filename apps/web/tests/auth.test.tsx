@@ -26,12 +26,15 @@ function mockWindow(t: TestContext, sessionStorage: Storage, localStorage: Stora
 }
 
 test("PP-SEC-011 T-U-01 setAuthToken escreve somente em sessionStorage e remove legado", (t) => {
+  const sessionStorage = mockStorage();
+  const localStorage = mockStorage();
+  mockWindow(t, sessionStorage, localStorage);
+  const localWrite = t.mock.method(localStorage, "setItem");
   for (const legacyToken of [null, "residuo-legado"]) {
-    const sessionStorage = mockStorage();
-    const localStorage = mockStorage();
+    sessionStorage.clear();
+    localStorage.clear();
     if (legacyToken) localStorage.setItem("cbtm_token", legacyToken);
-    const localWrite = t.mock.method(localStorage, "setItem");
-    mockWindow(t, sessionStorage, localStorage);
+    localWrite.mock.resetCalls();
 
     setAuthToken("abc123");
 
