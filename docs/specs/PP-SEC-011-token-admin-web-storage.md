@@ -314,3 +314,24 @@ dependência nova. CSRF (item 3) fica fora de escopo por consequência (só se a
 Rascunho aprovado por Leo (✅). Escopo reduzido a B2 elimina a condição que obrigava o ciclo completo
 (sem DDL, sem mudança de contrato de API, componente único `apps/web/lib/auth.ts` + documentação) — Spec
 formal segue como fast-track, conforme o próprio rascunho já previa para esse cenário.
+
+### Parecer — Rodada 1 (2026-10-16) — ✅ aprovado
+
+PR #69, branch `fix/pp-sec-011-mitigacao-token-storage`, commit topo `274f02a`. Homologação independente:
+diff completo de `auth.ts`/`auth.test.tsx`/backlog lido arquivo por arquivo; Spec no PR confirmada
+byte-idêntica à aprovada (diff vazio). Reexecução em worktree isolada (`git worktree add --detach`,
+`npm install` próprio): `npm --prefix apps/web test` 67/67 (3 novos T-U inclusos); `npm run verify:security`
+escopado nos 4 arquivos da entrega, sem achados. Desvio de sequenciamento (comentário no commit RED)
+verificado por `git show e4b49b2` — confere com o declarado, inofensivo (ciclo é documentação/teste, não
+lógica). Bloqueio de `verify:changed` por encoding de untracked preexistentes fora do escopo, alternativa
+escopada usada corretamente.
+
+**Score:** ✅ 9 | ⚠️ 0 | ❌ 0 | Cobertura diff: 5/5 arquivos auditados.
+
+**Conclusão:** aprovado para merge.
+
+### Merge confirmado (2026-10-16)
+
+PR #69 mergeado em `origin/main` pelo commit `21dd9019b6b8b40c8ee550962aa9b19cba196073`. Checks aprovados
+(declaração do Codex, confirmada por `git fetch` + `git log origin/main` + `git merge --ff-only` por
+Claude). PP-SEC-011 fechado — decisão B2 registrada no backlog.
