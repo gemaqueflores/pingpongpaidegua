@@ -337,3 +337,23 @@ Resolução consolidada:
 
 Rascunho aprovado por Leo (✅). Ciclo tripartite completo (3 rodadas), conforme exigido por mudança de
 major de framework tocando middleware de segurança. Spec formal segue abaixo.
+
+### Parecer — Rodada 1 (2026-10-17) — ✅ aprovado
+
+PR #71, branch `fix/pp-sec-013-next-16-major`, commit topo `9ddaa78`, base `215acdd`.
+Homologação independente por Claude em worktree isolada: `npm install`, `npm audit --omit=dev`
+(0 crítica/4 altas/0 moderada, `next`/`postcss` saíram da lista), suite unitária 67/67, build verde com
+`.next/standalone`, servidor de produção real (`.next/standalone` com assets estáticos copiados) e
+suite E2E completa (T-E-01 a T-E-04, 4/4 passando, incluindo decodificador QR independente).
+
+**Score:** ✅ 11 | ⚠️ 0 | ❌ 0 | Cobertura diff: 13/13 arquivos auditados.
+
+**Confirmado fisicamente por Claude:** `apps/web/middleware.ts` permanece em Edge, `proxy.ts` não existe;
+Turbopack é o bundler padrão do build, `--webpack` usado só para análise de bundle.
+
+**Conclusão:** aprovado para merge.
+
+### Merge confirmado (2026-10-17)
+
+PR #71 mergeado em `main`, commit de merge `41d9c6d`. PP-SEC-013 fechada no escopo reduzido
+(migração Next 16 major); parte Prisma permanece separada em PP-SEC-017. Não representa deploy de produção.
