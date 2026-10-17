@@ -280,6 +280,50 @@ concluído" para abrir `## SPEC ATIVA` e seguir o fluxo normal (aprovação → 
 
 ---
 
+### Parecer — Rodada 1 (2026-10-16) — ✅ aprovado com ressalva não bloqueante
+
+PR #67 (draft), branch `fix/pp-059-csp-nonce-middleware`, commit de código/testes `2502461`, commit
+documental `8f5e2e7`. Homologação independente por Claude: `git diff main...pr-67-pp059` lido arquivo por
+arquivo (8 arquivos de código/config); `npm test` (apps/web) reexecutado — 64/64, incluindo os 3 T-U
+nominalmente confirmados; `npm run build --workspace apps-web` reexecutado — verde, todas as rotas
+`ƒ Dynamic` (exceto `/icon.png`), consistente com `force-dynamic`; `npm run verify:security` reexecutado
+nos 6 arquivos da entrega — sem achados; `npm audit --omit=dev` reexecutado — 6 vulnerabilidades (1
+moderada, 5 altas), idêntico ao já registrado em PP-SEC-013, sem regressão de produção introduzida por
+esta Spec. Smokes E2E (standalone/Vercel Preview) e suite API/worker completa não reexecutados por Claude
+(exigem Playwright/Chromium, Postgres isolado, deploy Vercel) — aceitos com rótulo `EXECUTADA` com base em
+comandos e saída real reportados no relatório do Codex (`docs/sessions/2026-10-16-retorno-codex-pp059-csp-nonce.md`).
+
+**Score:** ✅ 8 | ⚠️ 1 | ❌ 0 | Cobertura diff: 8/8 arquivos de código auditados.
+
+**Item ⚠️ (não bloqueante):** Q7 — dependência nova `@playwright/test@1.58.2` (devDependency) adicionada
+sem aprovação prévia na Spec (que só previa ativar a skill `e2e-playwright-agent`, não instalar pacote).
+Desvio declarado explicitamente pelo Codex (item 2 de "Desvios e assunções" do relatório), com
+justificativa técnica sólida (ausência de config Playwright em `apps/web`), versão fixa, escopo dev-only.
+**Leo ratificou a aprovação retroativamente nesta sessão (2026-10-16).**
+
+**Cobertura de testes:** T-U-01/02/03 e T-E-01/02 — coberto ✅ em todos, rótulos conforme acima. T-U-01
+trata corretamente `x-nonce` vindo do cliente como não confiável. T-U-03 confirma matcher real (inclui
+exclusão adicional de `_next/static`/`_next/image`/`favicon.ico`, refinamento não contrário ao critério da
+Spec, documentado no relatório). T-E-02 usa fixture isolada, nunca exposta como rota de produção
+(confirmado por Grep/Read). Nenhum caso ausente da Spec identificado.
+
+**Security review:** executado ✅ sem achados — `verify:security` limpo (reexecutado por Claude); `x-nonce`
+do cliente tratado como não confiável; matcher exclui corretamente `/api/pix-qrcode`; CSP final sem
+`unsafe-inline` em `script-src`.
+
+**Conclusão:** aprovado para merge. Leo autoriza promover o PR de draft para pronto e mergear.
+
+## Reverificação e liberação para implementação (2026-10-16)
+
+Evento 4TMB26 concluído (confirmado pelas sessões PP-063/PP-068 de 2026-09-22). Item 5 `[LEO DECIDE]`
+(timing) liberado. Reverificação física hoje: `apps/web/next.config.js` inalterado desde 2026-09-22 —
+`script-src 'self' 'unsafe-inline'` ainda na linha 11; `apps/web/middleware.ts` ainda não existe; Grep por
+`dangerouslySetInnerHTML`/`next/script`/`<script` em `apps/web/app` e `apps/web/components` não retornou
+nenhum arquivo. `## SPEC ATIVA` v1 permanece válida sem alteração. Backlog de segurança referencia este
+item como PP-SEC-011 (`docs/backlog-seguranca-qualidade.md`); arquivo mantém o nome PP-059 por já estar
+commitado e referenciado em outras Specs. Leo reconfirmou aprovação nesta sessão — Spec liberada para
+transporte ao Codex.
+
 ## Estado desta sessão (2026-09-19)
 
 - PEND-CBTM-006: decisão de Leo — adiar avaliação de migração Next 16 (residual `postcss` alto) para após
