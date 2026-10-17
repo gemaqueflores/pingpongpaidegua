@@ -139,3 +139,26 @@ test("PP-SEC-013 T-E-03 QRCode decodifica payload e trata entradas invalidas", a
   expect(oversized.status()).toBe(500);
   expect(await oversized.text()).toBe("Falha ao gerar QRCode.");
 });
+
+test("PP-SEC-013 T-E-04 login hidrata e preserva nonce dos scripts", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  const response = await page.goto("/admin/login");
+  expect(response?.status()).toBe(200);
+  const nonce = response?.headers()["content-security-policy"]?.match(/'nonce-([^']+)'/)?.[1];
+  expect(nonce).toBeTruthy();
+  await expect(page.getByRole("heading", { name: "Login Admin" })).toBeVisible();
+  const nonces = await page.locator("script:not([src])").evaluateAll((scripts) =>
+    scripts.map((script) => (script as HTMLScriptElement).nonce));
+  expect(nonces.length).toBeGreaterThan(0);
+  expect(nonces.every((value) => value === nonce)).toBe(true);
+  // State transition proves React event handlers hydrated; no real account needed.
+  await page.getByRole("button", { name: "Esqueci a senha" }).click();
+  await expect(page.getByRole("button", { name: "Enviar link de reset" })).toBeVisible();
+  await page.getByRole("button", { name: "Esqueci a senha" }).click();
+  await expect(page.getByRole("button", { name: "Enviar link de reset" })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
