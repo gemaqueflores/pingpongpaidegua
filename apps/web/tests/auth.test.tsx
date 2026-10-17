@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { getAuthToken, getHeaders, setAuthToken } from "../lib/auth";
 
 function mockStorage(): Storage {
@@ -14,7 +14,7 @@ function mockStorage(): Storage {
   };
 }
 
-function mockWindow(t: Parameters<Parameters<typeof test>[1]>[0], sessionStorage: Storage, localStorage: Storage) {
+function mockWindow(t: TestContext, sessionStorage: Storage, localStorage: Storage) {
   const original = Object.getOwnPropertyDescriptor(globalThis, "window");
   Object.defineProperty(globalThis, "window", {
     configurable: true, value: { sessionStorage, localStorage },
@@ -39,4 +39,15 @@ test("PP-SEC-011 T-U-01 setAuthToken escreve somente em sessionStorage e remove 
     assert.equal(localStorage.getItem("cbtm_token"), null);
     assert.equal(localWrite.mock.callCount(), 0);
   }
+});
+
+test("PP-SEC-011 T-U-02 getAuthToken migra legado para sessionStorage", (t) => {
+  const sessionStorage = mockStorage();
+  const localStorage = mockStorage();
+  localStorage.setItem("cbtm_token", "legado-xyz");
+  mockWindow(t, sessionStorage, localStorage);
+
+  assert.equal(getAuthToken(), "legado-xyz");
+  assert.equal(sessionStorage.getItem("cbtm_admin_token"), "legado-xyz");
+  assert.equal(localStorage.getItem("cbtm_token"), null);
 });
