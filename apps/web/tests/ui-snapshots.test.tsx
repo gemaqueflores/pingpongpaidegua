@@ -409,7 +409,7 @@ test("PP-051 T-U-03 ClubEfficiencyCareerPanel e AthleteSummaryCard renderizam cl
           nAtletasUltimoEvento: 1,
           proximoEventoNome: null,
           proximoEventoId: null,
-          nAtletasProximoEvento: null,
+          nAtletasProximoEvento: 0,
           medalhasTotais: { ouro: 1, prata: 1, bronze: 1, total: 3 },
         },
         broadcastByType: {

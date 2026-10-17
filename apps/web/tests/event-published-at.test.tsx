@@ -42,7 +42,7 @@ test("T-U-04 evento concluido sem timestamps retorna null", () => {
     concluido: true,
     publishedAt: null,
     lastScrapeAt: null,
-    _meta: { publishedAt: null },
+    _meta: {},
   };
 
   assert.equal(resolveEventPublishedAt(event, event.concluido), null);
