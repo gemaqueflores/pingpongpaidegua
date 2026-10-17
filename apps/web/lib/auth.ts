@@ -11,6 +11,9 @@ const DEFAULT_FETCH_BACKOFF_MS = 500;
 
 export type AuthRole = "ADMIN";
 
+// PP-SEC-011 (B2): sessionStorage reduz a persistência ao encerrar a aba,
+// mas é mitigação residual: um XSS ainda pode ler o token via JavaScript.
+// Cookie httpOnly aguarda topologia same-site (PEND-CBTM-001).
 function currentStorage(): Storage {
   return window.sessionStorage;
 }
@@ -48,6 +51,9 @@ export function getAuthToken(): string | null {
   return legacyToken;
 }
 
+// PP-SEC-011: manter escrita exclusiva em sessionStorage, sem promover o token
+// de volta a localStorage; a remoção abaixo apenas limpa o resíduo legado.
+// A leitura e migração de sessões legadas em getAuthToken permanece compatível.
 export function setAuthToken(token: string): void {
   if (typeof window === "undefined") {
     return;
