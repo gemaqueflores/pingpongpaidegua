@@ -51,3 +51,11 @@ test("PP-SEC-011 T-U-02 getAuthToken migra legado para sessionStorage", (t) => {
   assert.equal(sessionStorage.getItem("cbtm_admin_token"), "legado-xyz");
   assert.equal(localStorage.getItem("cbtm_token"), null);
 });
+
+test("PP-SEC-011 T-U-03 getHeaders preserva Authorization Bearer", (t) => {
+  const sessionStorage = mockStorage();
+  sessionStorage.setItem("cbtm_admin_token", "tok-1");
+  mockWindow(t, sessionStorage, mockStorage());
+
+  assert.equal(new Headers(getHeaders()).get("Authorization"), "Bearer tok-1");
+});
