@@ -53,6 +53,7 @@ export function getAuthToken(): string | null {
 
 // PP-SEC-011: manter escrita exclusiva em sessionStorage, sem promover o token
 // de volta a localStorage; a remoção abaixo apenas limpa o resíduo legado.
+// A leitura e migração de sessões legadas em getAuthToken permanece compatível.
 export function setAuthToken(token: string): void {
   if (typeof window === "undefined") {
     return;
