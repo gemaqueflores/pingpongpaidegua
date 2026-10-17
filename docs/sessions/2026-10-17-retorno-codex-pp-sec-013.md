@@ -11,3 +11,10 @@ A suite existente não apresenta falha funcional baseline; RED registra a pré-c
 ## Evidências locais
 
 Logs completos em `tmp/pp-sec-013/` (não versionados).
+
+## T-B-01 RED
+
+EXECUTADA: primeiro build Turbopack compilou em 7,8s e falhou no typecheck (exit 1).
+Erros em fixtures unitárias: tipos ausentes de react-dom/server, argumento ResolvingMetadata,
+null em publishedAt e nAtletasProximoEvento. Next ajustou jsx para react-jsx e incluiu tipos dev.
+Log: `tmp/pp-sec-013/build-turbopack-first.log`.
