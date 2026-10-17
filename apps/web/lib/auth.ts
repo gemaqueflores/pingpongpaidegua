@@ -13,6 +13,7 @@ export type AuthRole = "ADMIN";
 
 // PP-SEC-011 (B2): sessionStorage reduz a persistência ao encerrar a aba,
 // mas é mitigação residual: um XSS ainda pode ler o token via JavaScript.
+// Cookie httpOnly aguarda topologia same-site (PEND-CBTM-001).
 function currentStorage(): Storage {
   return window.sessionStorage;
 }
