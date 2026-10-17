@@ -11,6 +11,7 @@ A suite existente não apresenta falha funcional baseline; RED registra a pré-c
 ## Evidências locais
 
 Logs completos em `tmp/pp-sec-013/` (não versionados).
+Logs de web unitário/build/E2E versionados em [validation.md](../evidence/PP-SEC-013/validation.md).
 
 ## T-B-01 RED
 
@@ -76,6 +77,6 @@ sem alterar middleware, política ou testes T-E-01/T-E-02. Log final:
 | T-U-04 | apps/web/tests/**/*.test.tsx (suite existente) | 1d11026 (pré-condição) | 4e58606 | sem refactor |
 | T-B-01 | next build + inspeção .next/standalone | 7875458 | 0616f00 | sem refactor |
 | T-E-03 | apps/web/e2e/csp-nonce.spec.ts:126 | f5d5d08 (introdução, sem falha observada) | 2c8b640 | sem refactor |
-| T-E-04 | apps/web/e2e/csp-nonce.spec.ts:143 | a9705f7 (introdução, sem falha observada) | commit deste registro GREEN | sem refactor |
+| T-E-04 | apps/web/e2e/csp-nonce.spec.ts:143 | a9705f7 (introdução, sem falha observada) | 3323887 | sem refactor |
 
 Próximo responsável: Claude, revisão solicitada por Leo após abertura do PR.
