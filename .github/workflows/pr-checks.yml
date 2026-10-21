@@ -1,22 +1,18 @@
 name: PR Checks
-
 on:
   pull_request:
     branches: [main]
   push:
     branches: [main]
-
 permissions:
   contents: read
-
 concurrency:
   group: pr-checks-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/cbtm_test
     services:
@@ -26,8 +22,7 @@ jobs:
           POSTGRES_USER: ci
           POSTGRES_PASSWORD: ci
           POSTGRES_DB: cbtm_test
-        ports:
-          - 5432:5432
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U ci -d cbtm_test"
           --health-interval 5s
@@ -42,9 +37,11 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run prisma:generate
       - run: npm run prisma:deploy
-      - run: npm test
+      - name: Unit tests (API, worker, shared, parser)
+        run: npm test
+      - name: Web tests (previously omitted)
+        run: npm run test --workspace apps-web
       - run: npx tsx --test scripts/audit-gate.test.ts
-
   audit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -62,3 +59,16 @@ jobs:
           audit_status=0
           npm audit --json > audit-report.json || audit_status=$?
           npx tsx scripts/audit-gate.ts "$audit_status" < audit-report.json
+  gate:
+    name: gate
+    if: always()
+    needs: [test, audit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all mandatory checks
+        env:
+          TEST: ${{ needs.test.result }}
+          AUDIT: ${{ needs.audit.result }}
+        run: |
+          test "$TEST" = success
+          test "$AUDIT" = success
