@@ -1,4 +1,4 @@
-# appcbtmeventos (PingPong Paid'egua)
+# PingPong Paid’égua — appcbtmeventos
 
 Monorepo para captura, normalizacao, persistencia, auditoria e consulta publica de eventos CBTM, com foco em acompanhamento em tempo real e scout tecnico historico.
 
@@ -8,6 +8,20 @@ O projeto cobre o ciclo completo de um evento:
 - persistencia e reconciliacao no PostgreSQL
 - read models publicos e administrativos
 - frontend publico e painel administrativo
+
+## Leitura rápida
+
+| Aspecto | Descrição |
+|---|---|
+| Público | Atletas, clubes, treinadores e administração de eventos |
+| Problema | Dados competitivos dispersos e divergências entre capturas, resultados e projeções |
+| Solução | Pipeline de captura, normalização, reconciliação e consulta com histórico auditável |
+| Arquitetura | API, worker de ingestão, interface web e pacotes compartilhados |
+| Persistência | PostgreSQL como fonte persistida; Redis para filas e cache |
+
+O foco atual é engenharia de dados e software para acompanhamento esportivo. Scraping, regras determinísticas e automação operacional não implicam uso de modelos de IA no produto.
+
+Para executar localmente, consulte **Ambiente Local** e **Build e Testes** abaixo. Os comandos e descrições de validação devem ser confrontados com os resultados do commit e ambiente utilizados; não representam garantia de CI ou produção atuais.
 
 ## Objetivos de Produto
 - acompanhar eventos CBTM em tempo real via API publica e scraping resiliente
