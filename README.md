@@ -1,8 +1,20 @@
 # PingPong Paid’égua — appcbtmeventos
 
-Monorepo para captura, normalizacao, persistencia, auditoria e consulta publica de eventos CBTM, com foco em acompanhamento em tempo real e scout tecnico historico.
+## Status: desenvolvimento encerrado
 
-O projeto cobre o ciclo completo de um evento:
+**Encerramento registrado em 3 de novembro de 2026.**
+
+O PingPong Paid’égua foi desenvolvido para acompanhar competições de tênis de mesa e consolidar históricos de atletas e clubes. Diante das melhorias em implantação no portal oficial da CBTM, Leonardo Flores decidiu encerrar a evolução do projeto e disponibilizar o código publicamente como portfólio e referência técnica.
+
+O repositório preserva a implementação, as decisões de arquitetura e os aprendizados do projeto. Não há previsão de novas funcionalidades, correções ou suporte, nem compromisso de continuidade dos serviços hospedados.
+
+Este encerramento é uma decisão do autor e não representa anúncio, vínculo ou endosso da CBTM. As referências a ambientes, serviços, testes e procedimentos nas seções abaixo são documentação histórica; não comprovam disponibilidade ou validação atuais.
+
+## Sobre o projeto
+
+Monorepo desenvolvido para captura, normalização, persistência, auditoria e consulta pública de eventos CBTM, com foco em acompanhamento em tempo real e scout técnico histórico.
+
+A implementação foi organizada para cobrir o ciclo completo de um evento:
 - scraping de inscricoes, grupos e resultados
 - parse e normalizacao de dados oficiais
 - persistencia e reconciliacao no PostgreSQL
@@ -19,17 +31,17 @@ O projeto cobre o ciclo completo de um evento:
 | Arquitetura | API, worker de ingestão, interface web e pacotes compartilhados |
 | Persistência | PostgreSQL como fonte persistida; Redis para filas e cache |
 
-O foco atual é engenharia de dados e software para acompanhamento esportivo. Scraping, regras determinísticas e automação operacional não implicam uso de modelos de IA no produto.
+O trabalho desenvolvido concentra-se em engenharia de dados e software para acompanhamento esportivo. Scraping, regras determinísticas e automação operacional não implicam uso de modelos de IA no produto.
 
 Para executar localmente, consulte **Ambiente Local** e **Build e Testes** abaixo. Os comandos e descrições de validação devem ser confrontados com os resultados do commit e ambiente utilizados; não representam garantia de CI ou produção atuais.
 
-## Objetivos de Produto
+## Objetivos originais do produto
 - acompanhar eventos CBTM em tempo real via API publica e scraping resiliente
 - persistir historico de atletas para scout tecnico de medalhas, pontos, sets e desempenho competitivo
 - persistir historico de clubes refletindo os resultados obtidos por seus atletas representantes
 - destacar atletas e clubes com melhor desempenho anual e acumulado, sem mascarar divergencias com a origem oficial
 
-Diretrizes de produto que valem para qualquer evolucao:
+Diretrizes adotadas durante o desenvolvimento:
 - operar dentro dos limites da Oracle Cloud Always Free (`2 OCPU / 12 GB`)
 - priorizar experiencia mobile-first, responsiva e leve
 - preservar a autonomia operacional do sistema para receber, capturar, reconciliar e publicar eventos
@@ -300,7 +312,7 @@ Valores de conexao locais padrao nos `.env.example`:
 - Worker write: `connection_limit=4`
 - Worker read: `connection_limit=2`
 
-Perfil atual de producao na Oracle A1 (`2 OCPU / 12 GB`):
+Perfil de produção documentado na Oracle A1 (`2 OCPU / 12 GB`):
 - Postgres:
   - `max_connections=80`
   - `shared_buffers=512MB`
@@ -353,7 +365,7 @@ Essa suite trava as classes de bug mais caras que ja ocorreram no projeto, com f
 - sincronizacao destrutiva de inscricoes
 
 ## Operacao em VM
-A producao atual usa uma VM Oracle Cloud Always Free com Docker Compose.
+A infraestrutura de produção documentada utilizava uma VM Oracle Cloud Always Free com Docker Compose. Este registro não confirma que os serviços continuam ativos.
 Medidas operacionais importantes ja adotadas:
 - housekeeping leve de Docker
 - health check periodico da VM
@@ -440,7 +452,7 @@ Credenciais por canal:
     - `PPG_WHATSAPP_TEMPLATE_NAME_CRITICO`
     - `PPG_WHATSAPP_TEMPLATE_LANG_CRITICO`
 
-## Fluxo de Trabalho Recomendado
+## Fluxo histórico de desenvolvimento
 1. Auditar a implementacao atual.
 2. Identificar a camada do problema.
 3. Aplicar a menor correcao auditavel.
@@ -458,8 +470,9 @@ Fixtures usadas para parser e testes offline:
 - Divergencias com federacao ou site oficial devem ser explicadas com base em captura persistida, regra validada ou configuracao explicita.
 - Quando houver diferenca entre visao analitica do site e trofeu oficial, a diferenca deve ser documentada, nao mascarada.
 
-## Estado Atual
-Leitura honesta do estado atual do projeto:
+## Registro técnico anterior ao encerramento
+
+A avaliação abaixo é preservada como registro histórico da documentação anterior, sem revalidação nesta atualização:
 - infraestrutura e operacao autonoma: maduras
 - ingestao e reconciliacao de dados: confiaveis
 - eventos agregados e child events: cobertos por regressao critica
@@ -467,7 +480,9 @@ Leitura honesta do estado atual do projeto:
 - experiencia publica principal: orientada a leitura mobile e a consumo rapido de dados em evento
 - scouts historicos de atletas e clubes: presentes nas superficies publicas, com recortes acumulados e parte dos recortes anuais ja disponiveis no frontend
 
-Backlog tecnico residual mantido de forma explicita:
+### Backlog histórico — sem previsão de implementação
+
+Os itens abaixo foram preservados para referência e não constituem compromissos de manutenção:
 - consolidar e explicitar melhor, na documentacao e nas interfaces, a leitura de destaque anual para clubes e atletas
 - revisoes futuras de qualidade devem priorizar novos casos reais antes de expandir heuristicas
 - toda nova mudanca sensivel em eventos agregados deve manter ou ampliar a `test:regression:critical`
