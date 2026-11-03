@@ -6,9 +6,9 @@
 
 O PingPong Paid’égua foi desenvolvido para acompanhar competições de tênis de mesa e consolidar históricos de atletas e clubes. Diante das melhorias em implantação no portal oficial da CBTM, Leonardo Flores decidiu encerrar a evolução do projeto e disponibilizar o código publicamente como portfólio e referência técnica.
 
-O repositório preserva a implementação, as decisões de arquitetura e os aprendizados do projeto. Não há previsão de novas funcionalidades, correções ou suporte, nem compromisso de continuidade dos serviços hospedados.
+O repositório preserva a implementação, as decisões de arquitetura e os aprendizados do projeto. Não haverão de novas funcionalidades, correções ou suporte, nem compromisso de continuidade dos serviços hospedados.
 
-Este encerramento é uma decisão do autor e não representa anúncio, vínculo ou endosso da CBTM. As referências a ambientes, serviços, testes e procedimentos nas seções abaixo são documentação histórica; não comprovam disponibilidade ou validação atuais.
+Este encerramento é uma decisão do autor que colabora, coopera e apoia as iniciativas da CBTM, mantendo-se a disposição da entidade para demais melhorias. As referências a ambientes, serviços, testes e procedimentos nas seções abaixo são documentação histórica; não comprovam disponibilidade ou validação atuais.
 
 ## Sobre o projeto
 
